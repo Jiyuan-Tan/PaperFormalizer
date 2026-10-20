@@ -10,7 +10,7 @@ You run it through a coding agent (Claude Code or Codex) started in this
 repository: the agent runs the pipeline, acts at each halt, and brings up a local web page where
 you read the paper as the run marks it and make the decisions that are yours.
 
-https://github.com/user-attachments/assets/b113a4ce-0f0d-49af-b568-1502e39d6181
+https://github.com/user-attachments/assets/1fa20ae4-cb9c-40d0-95f3-33fbb3904d35
 
 *Install with your agent, ask it to verify a paper, and review the run on the local page. The run
 shown is the built-in demo (`theoremchecker demo`, see "Try the demo" below).*
