@@ -1,0 +1,822 @@
+/*!
+ * Transport-agnostic, multi-mode retrieval core over one or more per-declaration library
+ * indices (`library_index.json`-shaped files; see `library/sources.ts`).
+ *
+ * Motivation: an index nobody consumes does not help the agent loop — a scaffolder told to
+ * search by hand only finds declarations it thought to look up. This core turns the indices
+ * into ranked candidates so the plan/scaffold brief can PUSH the likely-relevant existing
+ * decls at the agent (concept mode), and so F3 can do goal-directed and type-pattern lemma
+ * search over libraries lean-lsp's search tools do not index.
+ *
+ * Multi-index: every source is scored with the same functions and every hit is tagged with
+ * its library. Pure-lexical results merge across libraries by score (the scale is shared);
+ * once a semantic tier contributes, per-library lists merge by rank (reciprocal-rank fusion).
+ *
+ * Three query modes share one index load + one Candidate shape:
+ *   - concept     : NL keyword + alias-lexicon expansion (the scaffold-reuse mode)
+ *   - typePattern : loogle-style symbol-set match over the Lean `statement`
+ *   - goal        : a `sorry`'s goal type → lemmas whose conclusion shape overlaps it
+ *
+ * Best-effort by construction: a missing / unreadable index yields an empty result for
+ * that source (never a throw), so retrieval can never break brief assembly.
+ */
+
+import { existsSync, readFileSync, readdirSync, statSync } from "node:fs";
+import { join } from "node:path";
+import { isTier1, type AreaSidecar, type LibDecl, type Library } from "../library/schema.js";
+import { indexSourceFromPath, type IndexSource } from "../library/sources.js";
+import { expandQuery, loadAliasFile, normalizeConcept, type AliasEntry } from "./aliases.js";
+import { stripNlCrosslinks } from "../shared/nl_crosslinks.js";
+import type { SemanticTier } from "./semantic_tier.js";
+
+// ─── public types ───────────────────────────────────────────────────────────
+
+export type Query =
+  | { mode: "concept"; title: string; label?: string; bodyTerms?: string[] }
+  | { mode: "typePattern"; pattern: string }
+  | { mode: "goal"; goalType: string };
+
+/** One library's semantic tier plus the query embedded with that library's encoder. */
+export interface SemanticChannel {
+  tier: SemanticTier;
+  queryVec: Float32Array;
+}
+
+export interface SearchOpts {
+  /** Restrict to one library (a loaded source's name); undefined = every library. */
+  library?: string;
+  /** Max candidates returned (default 5). */
+  topK?: number;
+  exclude?: Set<string>;
+  semantic?: {
+    /** Per-library channels, keyed by library name; a library without one is lexical-only. */
+    channels: ReadonlyMap<string, SemanticChannel>;
+    simFloor?: number;      // min cosine for a semantic candidate (default 0.1, tuned for the FT encoder)
+    kSem?: number;          // semantic candidates fused in (default 30, tuned for the FT encoder)
+    k0?: number;            // RRF damping constant (default 60)
+    lexConfident?: number;  // lexical top-score that protects lexical from dense (default LEX_CONFIDENT_DEFAULT)
+    graphProp?: number;     // Ch4 one-hop refs-graph propagation λ (0/undefined = off)
+    fusion?: "rrf" | "weighted"; // fusion method (default "rrf" — confidence-aware RRF)
+    wLex?: number;          // weighted-fusion lexical weight (default 0.3)
+    wDense?: number;        // weighted-fusion dense weight (default 0.7)
+  };
+}
+
+export interface Candidate {
+  /** Library the declaration comes from (the index source's name). */
+  library: string;
+  name: string;
+  statement: string;
+  docFirstPara: string;
+  module: string;
+  file: string;
+  tier1: boolean;
+  usesSorry: boolean;
+  score: number;
+  matchedVia: "name" | "doc" | "statement" | "alias" | "module-fallback" | "semantic";
+}
+
+/** One loaded index source. */
+export interface LoadedLibrary {
+  name: string;
+  source: IndexSource;
+  library: Library;
+}
+
+export interface Retrieval {
+  search(q: Query, opts?: SearchOpts): Candidate[];
+  /** First declaration with this exact name across the libraries, in source order. */
+  get(name: string): LibDecl | null;
+  /** The sources that loaded (a missing / unreadable index is skipped). Empty ⇒ no retrieval. */
+  readonly libraries: readonly LoadedLibrary[];
+  /** Union of the loaded sources' alias lexicons (query expansion + module hints). */
+  readonly aliases: readonly AliasEntry[];
+  /** Every indexed declaration name across the libraries, or undefined when none loaded. */
+  knownDecls(): Set<string> | undefined;
+}
+
+// ─── tokenization helpers ───────────────────────────────────────────────────
+
+const STOP = new Set([
+  "the", "a", "an", "of", "for", "to", "in", "on", "at", "and", "or", "is", "be",
+  "with", "by", "as", "its", "this", "that", "over", "under", "via", "per", "into",
+  "from", "each", "both", "all", "any", "not", "no", "given", "where", "when",
+]);
+
+/** Crude singular stem (plurals only); keeps short tokens intact. */
+function stem(t: string): string {
+  if (t.length > 4 && t.endsWith("ies")) return t.slice(0, -3) + "y";
+  if (t.length > 3 && t.endsWith("ss")) return t;
+  if (t.length > 3 && t.endsWith("s")) return t.slice(0, -1);
+  return t;
+}
+
+// Connective / structural words that occur INSIDE multi-word concept phrases (e.g.
+// "conditional independence of potential outcomes", "average treatment effect") but
+// are not themselves the discriminator. They are filtered from NAME matching when they
+// arrive via ALIAS expansion — in a terse identifier such a match is incidental and
+// buries the real concept decls (whose distinctive word often lives only in the
+// docstring). They are NOT filtered from doc/statement matching, and a token the user
+// TYPED keeps full name weight regardless.
+// Low-discriminating tokens. Used two ways: (1) dropped from ALIAS expansion so a
+// connective word in an alias phrase ("control" from "negative control") never injects
+// a name match; (2) counted at a FRACTIONAL weight in the name channel (see
+// `weightedNameOverlap`) so that several generic hits cannot outrank one specific hit —
+// e.g. "treatment"+"effect" on a Panel `TreatmentEffectFixed` must not beat "quantile"
+// on `Stat.quantile_le_iff`, and the 30-decl MTW `…Bridge…` family must not swamp a
+// proximal "bridge function" whose real signal lives in the body.
+const GENERIC_NAME_TOKENS = new Set([
+  "conditional", "independence", "independent", "potential", "outcome", "outcomes",
+  "average", "treatment", "effect", "effects", "mean", "common", "observed",
+  "response", "function", "functional", "model", "distribution", "condition", "parameter",
+  "general", "standard", "value", "values", "variable", "variables", "estimator",
+  "estimation", "regression", "sample", "control", "controls",
+  // "causal" matches the whole `…Causal…` module subtree; "method"/"approach" are
+  // connective words in alias phrases ("control function method", "synthetic control
+  // method") — both produce false name matches via alias expansion.
+  "causal", "method", "approach",
+  // Structural-metaphor / type-constructor tokens that name large, semantically-mixed
+  // families: "system" suffixes ~1100 PO/Estimation bundles; "bridge" names the MTW IV
+  // response-type family, Panel CellBridge, GoodmanBacon, AND proximal proxy bridges.
+  // The specific co-token (population, cell, balke) is what should discriminate.
+  "system", "bridge",
+  // number-word connectives in alias phrases ("two way fixed effects") that otherwise
+  // name-match unrelated decls (`TwoProxyAssumptions`, `oneLp`).
+  "two", "one",
+  // F1-plan template words: every P-/L- item body carries a "Type: …" field, so "type"
+  // spuriously matches `ResponseType…`/`EdgeType…` decls (and re-grants the tier bonus).
+  "type", "types",
+  // "set" is a ubiquitous structural noun (~200 decls: `identifiedSet`, `CriterionSet`,
+  // `RandomSet`, `ancestralSet`, …). "covariate set"/"adjustment set" must not let
+  // `CriterionSet.identifiedSet` outrank `backdoorAdjustment`; the co-token discriminates.
+  "set",
+]);
+
+/** Lowercase word tokens, stopword-filtered, plural-stemmed. */
+function tokenize(s: string): string[] {
+  return s
+    .toLowerCase()
+    .split(/[^a-z0-9]+/)
+    .filter((t) => t.length > 1 && !STOP.has(t))
+    .map(stem);
+}
+
+/** Tokens of a fully-qualified decl name, splitting dots AND camelCase. */
+function nameTokens(name: string): string[] {
+  return name
+    .split(".")
+    .flatMap((seg) => seg.replace(/([a-z0-9])([A-Z])/g, "$1 $2"))
+    .flatMap(tokenize);
+}
+
+/**
+ * Concatenated content of all `…`-backtick spans in an F1 item — where the plan writes
+ * Lean/math (`Submodule.orthogonalProjection`, `Set.Icc`, `‖h₀‖`, `⟨·,·⟩`). This is the
+ * raw material for the type-signature pass: word-poor geometry items carry their
+ * discriminating content here, not in prose.
+ */
+export function backtickSpans(text: string): string {
+  const out: string[] = [];
+  for (const m of text.matchAll(/`([^`]+)`/g)) out.push(m[1]);
+  return out.join(" ");
+}
+
+/** First paragraph of a docstring (the NL translation), whitespace-collapsed,
+ *  with NL↔Lean crosslink markup stripped (site-only rendering concern). */
+function firstPara(doc: string | null | undefined): string {
+  if (!doc) return "";
+  return stripNlCrosslinks(doc.split(/\n\s*\n/)[0]).replace(/\s+/g, " ").trim();
+}
+
+/** Notable unicode math operators worth matching structurally in a Lean statement. */
+const MATH_SYMBOLS = /[∀∃∫∑∏⨆⨅⊥≤≥≠∈∉⊆⊂∩∪→↔¬·×]/u;
+
+/**
+ * Vocabulary-independent "shape" of a Lean statement / type: identifier runs
+ * (incl. dotted names like `Set.Icc`) plus notable math operators. Holes/underscores
+ * are dropped so a `_`-pattern term matches anything.
+ */
+export function symbolSet(s: string): Set<string> {
+  const out = new Set<string>();
+  for (const m of s.matchAll(/[A-Za-z][A-Za-z0-9_.']*/g)) {
+    const tok = m[0].toLowerCase();
+    if (tok.length > 1) out.add(tok);
+    // Split qualified names: `MeasureTheory.condExp` also yields `measuretheory`
+    // and `condexp`, so a pattern/goal of `condExp` matches a namespaced statement.
+    if (tok.includes(".")) for (const part of tok.split(".")) if (part.length > 1) out.add(part);
+  }
+  for (const ch of s) if (MATH_SYMBOLS.test(ch)) out.add(ch);
+  return out;
+}
+
+function overlap(a: Set<string>, b: Set<string>): number {
+  let n = 0;
+  for (const t of a) if (b.has(t)) n++;
+  return n;
+}
+
+/**
+ * Name-channel overlap where a {@link GENERIC_NAME_TOKENS} hit counts for only a
+ * fraction of a specific hit. A decl name is short, so without this a couple of generic
+ * matches ("treatment"+"effect", "bridge") dominate a single high-signal match
+ * ("quantile", "population"). Four generic hits ≈ one specific hit.
+ */
+const GENERIC_NAME_WEIGHT = 0.25;
+function weightedNameOverlap(terms: Set<string>, nameT: Set<string>): number {
+  let w = 0;
+  for (const t of terms) if (nameT.has(t)) w += GENERIC_NAME_TOKENS.has(t) ? GENERIC_NAME_WEIGHT : 1;
+  return w;
+}
+
+// ─── precomputed per-decl index (memoized by root) ──────────────────────────
+
+interface IndexedDecl {
+  d: LibDecl;
+  library: string;
+  nameT: Set<string>;
+  docT: Set<string>;
+  stmtT: Set<string>;
+  sym: Set<string>;
+  tier1: boolean;
+}
+
+const libCache = new Map<string, Library | null>();
+const indexCache = new Map<string, IndexedDecl[] | null>();
+const ixByNameCache = new Map<string, Map<string, IndexedDecl>>();
+
+/** Cache key = index path + sidecar dir + index-file mtime, so a mid-run index regeneration
+ *  invalidates the in-process caches. Path-only keys served the PRE-regeneration index for the
+ *  life of the process — the plan gate's `knownDecls` then spuriously flagged just-built
+ *  decls as hallucinated (audit, 2026-08-26). */
+function retrievalCacheKey(src: IndexSource): string {
+  try {
+    return `${src.indexPath}|${src.reviewSidecars ?? ""}|${statSync(src.indexPath).mtimeMs}`;
+  } catch {
+    return `${src.indexPath}|${src.reviewSidecars ?? ""}|missing`;
+  }
+}
+
+function asSource(src: IndexSource | string): IndexSource {
+  return typeof src === "string" ? indexSourceFromPath(src) : src;
+}
+
+/**
+ * Lenient index load for retrieval (`src` = a source or an index file path). It never
+ * throws on sidecar integrity drift (stale headline/review entries vs the current index):
+ * it reads the index and treats the sidecars as a best-effort tier signal. A stale headline
+ * simply matches no decl. Strict integrity is the library's own lint's job, not retrieval's
+ * — coupling to it would silently disable the feature whenever the curation lags the code.
+ */
+export function loadLibraryLenient(srcIn: IndexSource | string): Library | null {
+  const src = asSource(srcIn);
+  if (!existsSync(src.indexPath)) return null;
+  let raw: {
+    commit?: string;
+    toolchain?: string;
+    entries?: (Omit<LibDecl, "proofRefs"> & { proofRefs?: unknown })[];
+    modules?: Record<string, string | null>;
+  };
+  try {
+    raw = JSON.parse(readFileSync(src.indexPath, "utf8"));
+  } catch {
+    return null;
+  }
+  const entries: LibDecl[] = Array.isArray(raw.entries)
+    ? raw.entries.map((e) => ({
+        ...e,
+        proofRefs: Array.isArray(e.proofRefs) ? e.proofRefs.filter((r): r is string => typeof r === "string") : [],
+      }))
+    : [];
+  if (entries.length === 0) return null;
+  const sidecars: Record<string, AreaSidecar> = {};
+  if (src.reviewSidecars) {
+    try {
+      for (const f of readdirSync(src.reviewSidecars).filter((x) => x.endsWith(".json"))) {
+        try {
+          const sc = JSON.parse(readFileSync(join(src.reviewSidecars, f), "utf8")) as Partial<AreaSidecar>;
+          sidecars[f.replace(/\.json$/, "")] = {
+            headline_theorems: Array.isArray(sc.headline_theorems) ? sc.headline_theorems : [],
+            reviews: Array.isArray(sc.reviews) ? sc.reviews : [],
+            flags: Array.isArray(sc.flags) ? sc.flags : [],
+          };
+        } catch {
+          /* skip a malformed sidecar — tier boost is best-effort */
+        }
+      }
+    } catch {
+      /* no review dir — fine */
+    }
+  }
+  return {
+    commit: typeof raw.commit === "string" ? raw.commit : "unknown",
+    toolchain: typeof raw.toolchain === "string" ? raw.toolchain : "unknown",
+    entries,
+    modules: raw.modules ?? {},
+    sidecars,
+  };
+}
+
+function getLibrary(src: IndexSource): Library | null {
+  const key = retrievalCacheKey(src);
+  if (libCache.has(key)) return libCache.get(key)!;
+  const lib = loadLibraryLenient(src);
+  libCache.set(key, lib);
+  return lib;
+}
+
+function getIndexed(src: IndexSource, library: string): IndexedDecl[] | null {
+  const key = `${retrievalCacheKey(src)}|${library}`;
+  if (indexCache.has(key)) return indexCache.get(key)!;
+  const lib = getLibrary(src);
+  if (!lib) {
+    indexCache.set(key, null);
+    return null;
+  }
+  const arr = lib.entries.map((d) => ({
+    d,
+    library,
+    nameT: new Set(nameTokens(d.name)),
+    docT: new Set(tokenize(firstPara(d.doc))),
+    stmtT: new Set(tokenize(d.statement)),
+    sym: symbolSet(d.statement),
+    tier1: isTier1(d, lib.sidecars),
+  }));
+  indexCache.set(key, arr);
+  return arr;
+}
+
+/** Name → IndexedDecl, memoized per source — lets semantic-only hits recover display metadata. */
+function getIndexedByName(src: IndexSource, library: string): Map<string, IndexedDecl> {
+  const key = `${retrievalCacheKey(src)}|${library}`;
+  let m = ixByNameCache.get(key);
+  if (!m) {
+    m = new Map((getIndexed(src, library) ?? []).map((ix) => [ix.d.name, ix]));
+    ixByNameCache.set(key, m);
+  }
+  return m;
+}
+
+/** The library name a source's hits carry: its configured name, else the dominant top-level
+ *  module segment of its index (e.g. `Foo` for an index of `Foo.*` modules). */
+export function sourceLibraryName(src: IndexSource, lib: Library): string {
+  if (src.library) return src.library;
+  const counts = new Map<string, number>();
+  for (const e of lib.entries) {
+    const root = e.module.split(".")[0] ?? "";
+    if (root) counts.set(root, (counts.get(root) ?? 0) + 1);
+  }
+  let best = "";
+  for (const [root, n] of counts) if (n > (counts.get(best) ?? 0)) best = root;
+  return best || "library";
+}
+
+/** Drop memoized library/index state (tests that mutate fixtures on disk). */
+export function clearRetrievalCache(): void {
+  libCache.clear();
+  indexCache.clear();
+  ixByNameCache.clear();
+  conceptCache = new WeakMap();
+}
+
+// ─── per-mode scoring ───────────────────────────────────────────────────────
+
+type Scored = { score: number; via: Candidate["matchedVia"] };
+
+// Reuse demerits, shared by all modes: a sorried decl imports proof debt; an
+// auto-generated `instance` (e.g. `instIsProbabilityMeasure…`) is implementation glue,
+// never an API-level reuse target.
+const penalty = (ix: IndexedDecl): number =>
+  (ix.d.usesSorry ? -3 : 0) + (ix.d.kind === "instance" ? -5 : 0);
+
+/** Query-dependent (decl-independent) token sets for a concept query. Computing these —
+ *  especially `expandQuery` over the alias lexicon — is the expensive part of concept
+ *  scoring, and it is identical for every decl in a search, so it is memoized by query
+ *  text. Without this it was recomputed once per decl (≈6.5k× per query), making the
+ *  eval O(nDecls·nQueries) in alias expansion. */
+interface PreparedConcept { terms: Set<string>; origTerms: Set<string>; specific: Set<string>; }
+let conceptCache = new WeakMap<readonly AliasEntry[], Map<string, PreparedConcept>>();
+function prepConcept(q: Extract<Query, { mode: "concept" }>, lexicon: readonly AliasEntry[]): PreparedConcept {
+  const queryText = [q.title, ...(q.bodyTerms ?? [])].join(" ");
+  let perLexicon = conceptCache.get(lexicon);
+  if (!perLexicon) {
+    perLexicon = new Map();
+    conceptCache.set(lexicon, perLexicon);
+  }
+  const hit = perLexicon.get(queryText);
+  if (hit) return hit;
+  const origTerms = new Set(tokenize(queryText));
+  // An alias-injected connective token (e.g. "control" from "negative control",
+  // "variable" from "proxy variables") is a weak discriminator everywhere — in names
+  // AND in prose it matches unrelated decls. Drop generics from the alias expansion;
+  // the user's own typed tokens always stay (so an explicit "control" still matches).
+  const aliasTerms = expandQuery(queryText, lexicon).terms.flatMap(tokenize).filter((t) => !GENERIC_NAME_TOKENS.has(t));
+  const terms = new Set([...origTerms, ...aliasTerms]);
+  // Specific (non-generic) signal — precomputed once, used for the tier-1 bonus gate below.
+  const specific = new Set([...terms].filter((t) => !GENERIC_NAME_TOKENS.has(t)));
+  const prepared = { terms, origTerms, specific };
+  perLexicon.set(queryText, prepared);
+  return prepared;
+}
+
+function scoreConcept(q: Extract<Query, { mode: "concept" }>, ix: IndexedDecl, lexicon: readonly AliasEntry[]): Scored {
+  const { terms, origTerms, specific } = prepConcept(q, lexicon);
+
+  const nameOv = weightedNameOverlap(terms, ix.nameT);
+  const docOv = overlap(terms, ix.docT);
+  const stmtOv = overlap(terms, ix.stmtT);
+  if (nameOv + docOv + stmtOv === 0) return { score: 0, via: "name" };
+
+  // Specific (non-generic) signal anywhere. A match driven ONLY by generic tokens
+  // (e.g. a tier-1 MTW `…Bridge…` decl hit solely by "bridge") is not a real fit, so it
+  // must not collect the curation bonus — otherwise 25 tier-1 decls float to the top of
+  // a symbol-heavy F1 item whose true content (inner products, projections) is word-poor.
+  // (`specific` is precomputed in prepConcept.)
+  const hasSpecific =
+    overlap(specific, ix.nameT) + overlap(specific, ix.docT) + overlap(specific, ix.stmtT) > 0;
+
+  const score =
+    3 * nameOv +
+    2 * Math.min(docOv, 4) +
+    1 * Math.min(stmtOv, 4) +
+    (ix.tier1 && hasSpecific ? 2 : 0) +
+    penalty(ix);
+
+  const origNameOv = overlap(origTerms, ix.nameT);
+  const via: Candidate["matchedVia"] =
+    nameOv > 0 ? (origNameOv > 0 ? "name" : "alias") : docOv > 0 ? "doc" : "statement";
+  return { score, via };
+}
+
+// Operators in almost every Prop — they carry no discriminating shape, so a pattern made
+// only of these (`→ ∀ ≤`) must not match the whole library. The structural operators
+// (∫ ⨆ ⨅ ⊥ ⊆ ∩ ∪ × ·) are kept: they ARE distinctive.
+const UBIQUITOUS_SYM = new Set(["→", "∀", "∃", "≤", "≥", "∈", "∉", "↔", "¬"]);
+
+function scoreTypePattern(pattern: string, ix: IndexedDecl): Scored {
+  const psym = symbolSet(pattern);
+  psym.delete("_");
+  for (const s of UBIQUITOUS_SYM) psym.delete(s);
+  if (psym.size === 0) return { score: 0, via: "statement" };
+  const n = overlap(psym, ix.sym);
+  if (n === 0) return { score: 0, via: "statement" };
+  const frac = n / psym.size;
+  const score = 4 * n + 8 * frac + (ix.tier1 ? 1 : 0) + penalty(ix);
+  return { score, via: "statement" };
+}
+
+// Generic shape tokens that carry little discriminating signal for goal matching.
+const GENERIC_SYM = new Set([
+  "→", "∀", "∃", "≤", "≥", "∈", "fun", "prop", "type", "real", "set", "nat",
+]);
+
+function scoreGoal(goalType: string, ix: IndexedDecl): Scored {
+  const gsym = symbolSet(goalType);
+  let n = 0;
+  let idHits = 0;
+  for (const s of gsym) {
+    if (!ix.sym.has(s)) continue;
+    n++;
+    if (/^[a-z]/i.test(s) && s.length > 2 && !GENERIC_SYM.has(s)) idHits++;
+  }
+  if (n === 0) return { score: 0, via: "statement" };
+  const score = 2 * n + 4 * idHits + (ix.tier1 ? 1 : 0) + penalty(ix);
+  return { score, via: "statement" };
+}
+
+function scoreDecl(q: Query, ix: IndexedDecl, lexicon: readonly AliasEntry[]): Scored {
+  switch (q.mode) {
+    case "concept":
+      return scoreConcept(q, ix, lexicon);
+    case "typePattern":
+      return scoreTypePattern(q.pattern, ix);
+    case "goal":
+      return scoreGoal(q.goalType, ix);
+  }
+}
+
+function toCandidate(ix: IndexedDecl, score: number, via: Candidate["matchedVia"]): Candidate {
+  return {
+    library: ix.library,
+    name: ix.d.name,
+    statement: ix.d.statement,
+    docFirstPara: firstPara(ix.d.doc),
+    module: ix.d.module,
+    file: ix.d.file,
+    tier1: ix.tier1,
+    usesSorry: ix.d.usesSorry,
+    score,
+    matchedVia: via,
+  };
+}
+
+// Reciprocal-Rank Fusion of the lexical and semantic ranked lists. The two score scales are
+// incomparable (lexical ~0-20, cosine 0-1), so we fuse by RANK, not score: a decl's blended
+// weight is Σ_lists 1/(k0 + rank). This is always-on (no thin-gate): the harness showed the
+// lexical-score "thin" signal fires ~3% of the time and misses the gap stratum where semantic
+// is ~4× better. Lexical candidates keep their metadata + matchedVia; semantic-only hits are
+// tagged "semantic". Exported for testing.
+/** Per-decl display metadata a semantic-only hit needs to render like a lexical one. */
+export type DeclMeta = Pick<Candidate, "library" | "statement" | "docFirstPara" | "module" | "file" | "tier1" | "usesSorry">;
+
+/** Lexical top-hit score at/above which lexical is treated as trustworthy and its hits are
+ *  protected from dense displacement. Re-tuned for the FINE-TUNED encoder (Phase 2): the
+ *  dense tier is now stronger than lexical almost everywhere, so lexical protection should
+ *  rarely fire — 40 is above nearly all real lexical scores, disabling protection except for
+ *  an exceptionally strong multi-token name match. (Under the old weak off-the-shelf encoder
+ *  the tuned value was 10; the fine-tune inverted which channel to trust.) Held-out sweep:
+ *  40 gave overall hit@3 0.609 vs 0.301 under the old throttled fusion. */
+export const LEX_CONFIDENT_DEFAULT = 40;
+
+export function blendSemantic(
+  lexical: Candidate[],
+  semantic: { name: string; sim: number }[],
+  topK: number,
+  k0 = 60,
+  resolve?: (name: string) => DeclMeta | null,
+  confidentScore = LEX_CONFIDENT_DEFAULT,
+): Candidate[] {
+  // Confidence-aware fusion. Lexical hits that clear `confidentScore` (name-strong) are pinned
+  // at the head in lexical order, so a dense-boosted but wrong decl can't displace a correct
+  // lexical top hit. When lexical is weak (gap queries — nothing clears the bar) the head is
+  // empty and dense drives the full RRF blend, preserving the gap-stratum win.
+  const head = lexical.filter((c) => c.score >= confidentScore);
+  const headNames = new Set(head.map((c) => c.name));
+
+  const rrf = new Map<string, number>();
+  lexical.forEach((c, i) => {
+    if (!headNames.has(c.name)) rrf.set(c.name, (rrf.get(c.name) ?? 0) + 1 / (k0 + i + 1));
+  });
+  semantic.forEach((h, i) => {
+    if (!headNames.has(h.name)) rrf.set(h.name, (rrf.get(h.name) ?? 0) + 1 / (k0 + i + 1));
+  });
+  const lexByName = new Map(lexical.map((c) => [c.name, c]));
+  const tail: Candidate[] = [...rrf].map(([name, score]) => {
+    const lex = lexByName.get(name);
+    if (lex) return { ...lex, score };
+    // Semantic-only hit: recover real statement/file/module so the F1 reuse
+    // contract has a signature to inspect. Without the resolver (or an unresolvable
+    // name) fall back to empty — never throw.
+    const meta = resolve?.(name) ?? null;
+    return {
+      library: meta?.library ?? "",
+      name,
+      statement: meta?.statement ?? "",
+      docFirstPara: meta?.docFirstPara ?? "",
+      module: meta?.module ?? "",
+      file: meta?.file ?? "",
+      tier1: meta?.tier1 ?? false,
+      usesSorry: meta?.usesSorry ?? false,
+      score,
+      matchedVia: "semantic" as const,
+    };
+  });
+  tail.sort((a, b) => b.score - a.score || a.name.localeCompare(b.name));
+  return [...head, ...tail].slice(0, topK);
+}
+
+/**
+ * Alternative to {@link blendSemantic}'s rank-based RRF: min-max-normalized WEIGHTED SCORE SUM
+ * (Phase 2d). RRF fuses by rank alone and discards the dense cosine's magnitude; with a strong
+ * fine-tuned encoder that magnitude is informative (0.9 ≫ 0.5). Each channel is min-max-normalized
+ * over its own present candidates, then `score = wLex·lexNorm + wDense·denseNorm` (a decl missing
+ * from a channel contributes 0 there). A decl present in both channels is rewarded by both.
+ * Exported for testing / the eval A/B; `blendSemantic` remains the production default.
+ */
+export function blendWeighted(
+  lexical: Candidate[],
+  semantic: { name: string; sim: number }[],
+  topK: number,
+  wLex = 0.3,
+  wDense = 0.7,
+  resolve?: (name: string) => DeclMeta | null,
+  confidentScore = LEX_CONFIDENT_DEFAULT,
+): Candidate[] {
+  // Same confidence-aware protection as blendSemantic: a name-strong lexical hit (score ≥
+  // confidentScore) is pinned at the head in lexical order, so dense magnitude can't displace a
+  // correct confident lexical top hit. This is what preserves the lexical-favouring anchor (real
+  // F1-item) distribution while dense magnitude drives the gap stratum where lexical is weak.
+  const head = lexical.filter((c) => c.score >= confidentScore);
+  const headNames = new Set(head.map((c) => c.name));
+  const lexTail = lexical.filter((c) => !headNames.has(c.name));
+  const semTail = semantic.filter((h) => !headNames.has(h.name));
+
+  const lexByName = new Map(lexTail.map((c) => [c.name, c]));
+  const simByName = new Map(semTail.map((h) => [h.name, h.sim]));
+  const lexVals = lexTail.map((c) => c.score);
+  const simVals = semTail.map((h) => h.sim);
+  const norm = (v: number, vals: number[]): number => {
+    if (vals.length === 0) return 0;
+    let mn = vals[0], mx = vals[0];
+    for (const x of vals) { if (x < mn) mn = x; if (x > mx) mx = x; }
+    return mx > mn ? (v - mn) / (mx - mn) : 1; // all-equal present channel → full credit (no div0)
+  };
+  const names = new Set([...lexByName.keys(), ...simByName.keys()]);
+  const tail: Candidate[] = [...names].map((name) => {
+    const lex = lexByName.get(name);
+    const sim = simByName.get(name);
+    const score = (lex ? wLex * norm(lex.score, lexVals) : 0) + (sim !== undefined ? wDense * norm(sim, simVals) : 0);
+    if (lex) return { ...lex, score };
+    const meta = resolve?.(name) ?? null;
+    return {
+      library: meta?.library ?? "",
+      name,
+      statement: meta?.statement ?? "",
+      docFirstPara: meta?.docFirstPara ?? "",
+      module: meta?.module ?? "",
+      file: meta?.file ?? "",
+      tier1: meta?.tier1 ?? false,
+      usesSorry: meta?.usesSorry ?? false,
+      score,
+      matchedVia: "semantic" as const,
+    };
+  });
+  tail.sort((a, b) => b.score - a.score || a.name.localeCompare(b.name));
+  return [...head, ...tail].slice(0, topK);
+}
+
+export interface RankedName {
+  name: string;
+  score: number;
+}
+
+/** Aggregate proof-term premises from a ranked neighbour list.
+ *  Neighbour rank is 0-based and contributes weight 1/(rank+2). Exported for tests. */
+export function rankPremisesFromProofRefs(neighbours: { proofRefs: string[]; name?: string }[]): RankedName[] {
+  const scores = new Map<string, number>();
+  neighbours.forEach((n, i) => {
+    const w = 1 / (i + 2);
+    for (const p of n.proofRefs) scores.set(p, (scores.get(p) ?? 0) + w);
+  });
+  return [...scores]
+    .map(([name, score]) => ({ name, score }))
+    .sort((a, b) => b.score - a.score || a.name.localeCompare(b.name));
+}
+
+/** Reciprocal-rank fusion over ranked name lists, using 0-based ranks as specified.
+ *  A duplicate within one list contributes only at its first rank. Exported for tests. */
+export function fuseRankedListsRrf(lists: string[][], k0: number, topK: number): RankedName[] {
+  const scores = new Map<string, number>();
+  for (const list of lists) {
+    const seen = new Set<string>();
+    list.forEach((name, rank) => {
+      if (seen.has(name)) return;
+      seen.add(name);
+      scores.set(name, (scores.get(name) ?? 0) + 1 / (k0 + rank));
+    });
+  }
+  return [...scores]
+    .map(([name, score]) => ({ name, score }))
+    .sort((a, b) => b.score - a.score || a.name.localeCompare(b.name))
+    .slice(0, topK);
+}
+
+// ─── factory ────────────────────────────────────────────────────────────────
+
+/** Rank-based merge of per-library ranked lists (reciprocal-rank fusion, k0 = 60). */
+function mergeByRank(lists: Candidate[][], topK: number): Candidate[] {
+  const scored: Candidate[] = [];
+  for (const list of lists) list.forEach((c, i) => scored.push({ ...c, score: 1 / (60 + i + 1) }));
+  scored.sort((a, b) => b.score - a.score || a.library.localeCompare(b.library) || a.name.localeCompare(b.name));
+  return scored.slice(0, topK);
+}
+
+/** Score-based merge of per-library lexical lists (one scoring function ⇒ one scale). */
+function mergeByScore(lists: Candidate[][], topK: number): Candidate[] {
+  return lists
+    .flat()
+    .sort((a, b) => b.score - a.score || a.library.localeCompare(b.library) || a.name.localeCompare(b.name))
+    .slice(0, topK);
+}
+
+/**
+ * Bind a retrieval instance to one or more index sources (`library/sources.ts`). Each index
+ * load is memoized per source. The returned object is the transport-agnostic surface the
+ * brief renderer, the plan gate and the search CLI share.
+ */
+export function createRetrieval(sourcesIn: IndexSource | readonly IndexSource[]): Retrieval {
+  const sources = Array.isArray(sourcesIn) ? (sourcesIn as readonly IndexSource[]) : [sourcesIn as IndexSource];
+  const libraries: LoadedLibrary[] = [];
+  for (const source of sources) {
+    const library = getLibrary(source);
+    if (library) libraries.push({ name: sourceLibraryName(source, library), source, library });
+  }
+  const aliases: AliasEntry[] = libraries.flatMap((l) => (l.source.aliasFile ? loadAliasFile(l.source.aliasFile) : []));
+  const byName = libraries.map((l) => new Map(l.library.entries.map((e) => [e.name, e] as const)));
+
+  /** Ranked candidates from ONE library (the pre-multi-index algorithm, unchanged). */
+  const searchOne = (li: number, q: Query, opts: SearchOpts): Candidate[] => {
+    const lib = libraries[li];
+    const indexed = getIndexed(lib.source, lib.name);
+    if (!indexed) return [];
+    const topK = opts.topK ?? 5;
+    const out: Candidate[] = [];
+    for (const ix of indexed) {
+      if (opts.exclude?.has(ix.d.name)) continue;
+      const { score, via } = scoreDecl(q, ix, aliases);
+      if (score > 0) out.push(toCandidate(ix, score, via));
+    }
+    out.sort((a, b) => b.score - a.score || a.name.localeCompare(b.name));
+    const lexical = out;
+    const channel = opts.semantic?.channels.get(lib.name);
+    if (q.mode === "goal") {
+      if (!channel) return lexical.slice(0, topK);
+      const neighbours = searchOne(li, { mode: "concept", title: q.goalType }, { ...opts, topK: 40 })
+        .map((c) => byName[li].get(c.name) ?? null)
+        .filter((d): d is LibDecl =>
+          d !== null &&
+          d.kind === "theorem" &&
+          d.proofRefs.length > 0 &&
+          !(opts.exclude?.has(d.name) ?? false),
+        )
+        .slice(0, 30);
+      const premiseNames = rankPremisesFromProofRefs(neighbours).map((p) => p.name);
+      const fused = fuseRankedListsRrf(
+        [premiseNames, lexical.map((c) => c.name)],
+        10,
+        premiseNames.length + lexical.length,
+      );
+      const lexByName = new Map(lexical.map((c) => [c.name, c]));
+      const ixByName = getIndexedByName(lib.source, lib.name);
+      return fused.flatMap(({ name, score }) => {
+        const lex = lexByName.get(name);
+        if (lex) return [{ ...lex, score }];
+        const ix = ixByName.get(name);
+        if (!ix) return [];
+        if (opts.exclude?.has(ix.d.name)) return [];
+        return [toCandidate(ix, score, "semantic")];
+      }).slice(0, topK);
+    }
+    if (!channel) return lexical.slice(0, topK);
+    const s = opts.semantic!;
+    const semantic = channel.tier.topK(channel.queryVec, {
+      // Defaults re-tuned for the fine-tuned encoder (Phase 2): a much stronger dense tier
+      // wants more candidates fused (kSem 10→30) and a far lower floor (0.3→0.1) — the old
+      // 0.3 floor filtered out many correct fine-tuned hits before fusion could see them.
+      k: s.kSem ?? 30,
+      floor: s.simFloor ?? 0.1,
+      exclude: opts.exclude ?? new Set(),
+      graphProp: s.graphProp,
+    });
+    const ixByName = getIndexedByName(lib.source, lib.name);
+    const resolve = (name: string): DeclMeta | null => {
+      const ix = ixByName.get(name);
+      return ix
+        ? {
+            library: ix.library,
+            statement: ix.d.statement,
+            docFirstPara: firstPara(ix.d.doc),
+            module: ix.d.module,
+            file: ix.d.file,
+            tier1: ix.tier1,
+            usesSorry: ix.d.usesSorry,
+          }
+        : null;
+    };
+    return s.fusion === "weighted"
+      ? blendWeighted(lexical, semantic, topK, s.wLex ?? 0.3, s.wDense ?? 0.7, resolve)
+      : blendSemantic(lexical, semantic, topK, s.k0 ?? 60, resolve, s.lexConfident);
+  };
+
+  const search = (q: Query, opts: SearchOpts = {}): Candidate[] => {
+    const lists = libraries.flatMap((l, li) => (opts.library === undefined || opts.library === l.name ? [searchOne(li, q, opts)] : []));
+    if (lists.length === 0) return [];
+    if (lists.length === 1) return lists[0];
+    const topK = opts.topK ?? 5;
+    // Lexical scores share one scale across libraries; a semantic- or goal-fused list does not.
+    const fused = opts.semantic !== undefined && libraries.some((l) => opts.semantic!.channels.has(l.name));
+    return fused ? mergeByRank(lists, topK) : mergeByScore(lists, topK);
+  };
+
+  return {
+    libraries,
+    aliases,
+    get(name) {
+      for (const m of byName) {
+        const d = m.get(name);
+        if (d) return d;
+      }
+      return null;
+    },
+    knownDecls() {
+      if (libraries.length === 0) return undefined;
+      return new Set(libraries.flatMap((l) => l.library.entries.map((e) => e.name)));
+    },
+    search,
+  };
+}
+
+// ─── F1 plan items ──────────────────────────────────────────────────────────
+
+export interface F1Item {
+  /** P (definition), L (statement), or A (assumption). */
+  kind: "P" | "L" | "A";
+  /** The core node id. */
+  label: string;
+  /** Concept title: the id's slug and the node's kind or name. */
+  title: string;
+  /** The node's text, for extra query terms (often where the concept actually is). */
+  body: string;
+}
+
+// re-export so consumers (brief renderer, tests) have one import surface.
+export { expandQuery, normalizeConcept };

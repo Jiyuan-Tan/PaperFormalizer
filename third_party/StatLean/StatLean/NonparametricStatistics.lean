@@ -1,0 +1,48 @@
+module
+-- Area umbrella: StatLean.NonparametricStatistics
+-- Maintained by the laptop session only (see CLAUDE.md §10). Imported by StatLean.lean once
+-- the batch merges to main; until then it serves as the batch build target.
+public import StatLean.NonparametricStatistics.ForMathlib.GaussianExpSq
+public import StatLean.NonparametricStatistics.ForMathlib.MaxExpSquare
+public import StatLean.NonparametricStatistics.ForMathlib.MinkowskiIntegral
+public import StatLean.NonparametricStatistics.ForMathlib.TailSumRpow
+public import StatLean.NonparametricStatistics.ForMathlib.TaylorIntegralRemainder
+public import StatLean.NonparametricStatistics.ForMathlib.TaylorLagrangeTwoSided
+public import StatLean.NonparametricStatistics.ForMathlib.TranslationL2
+public import StatLean.NonparametricStatistics.ForMathlib.TrigDiscreteSums
+public import StatLean.NonparametricStatistics.KernelDensity.AuxiliaryKernel
+public import StatLean.NonparametricStatistics.KernelDensity.Bias
+public import StatLean.NonparametricStatistics.KernelDensity.Defs
+public import StatLean.NonparametricStatistics.KernelDensity.ExactMISE
+public import StatLean.NonparametricStatistics.KernelDensity.IntegratedBias
+public import StatLean.NonparametricStatistics.KernelDensity.IntegratedVariance
+public import StatLean.NonparametricStatistics.KernelDensity.LawTransfer
+public import StatLean.NonparametricStatistics.KernelDensity.MISEBias
+public import StatLean.NonparametricStatistics.KernelDensity.MISEVariance
+public import StatLean.NonparametricStatistics.KernelDensity.PointwiseRate
+public import StatLean.NonparametricStatistics.KernelDensity.UniformDensityBound
+public import StatLean.NonparametricStatistics.KernelDensity.Variance
+public import StatLean.NonparametricStatistics.LocalPolynomial.Defs
+public import StatLean.NonparametricStatistics.LocalPolynomial.L2Risk
+public import StatLean.NonparametricStatistics.LocalPolynomial.PointwiseRisk
+public import StatLean.NonparametricStatistics.LocalPolynomial.Quadratic
+public import StatLean.NonparametricStatistics.LocalPolynomial.Reproduction
+public import StatLean.NonparametricStatistics.LocalPolynomial.SupNorm.Increments
+public import StatLean.NonparametricStatistics.LocalPolynomial.SupNorm.StochasticTerm
+public import StatLean.NonparametricStatistics.LocalPolynomial.SupNorm.SupNormRate
+public import StatLean.NonparametricStatistics.LocalPolynomial.WeightBounds
+public import StatLean.NonparametricStatistics.Projection.Aliasing
+public import StatLean.NonparametricStatistics.Projection.CoefficientRisk
+public import StatLean.NonparametricStatistics.Projection.Defs
+public import StatLean.NonparametricStatistics.Projection.DiscreteOrthogonality
+public import StatLean.NonparametricStatistics.Projection.MISEDecomposition
+public import StatLean.NonparametricStatistics.Projection.SobolevRate
+public import StatLean.NonparametricStatistics.Projection.TrigOrthogonality
+public import StatLean.NonparametricStatistics.RKHS
+public import StatLean.NonparametricStatistics.Regression.Defs
+public import StatLean.NonparametricStatistics.Regression.NWKernelRepresentation
+public import StatLean.NonparametricStatistics.SmoothnessClasses.Defs
+public import StatLean.NonparametricStatistics.SmoothnessClasses.HolderTaylor
+public import StatLean.NonparametricStatistics.SmoothnessClasses.NikolskiTaylor
+
+@[expose] public section

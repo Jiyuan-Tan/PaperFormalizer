@@ -1,0 +1,2163 @@
+{
+ "cns": {
+  "resid2_env": "prop:resid2",
+  "tex": {
+   "thm:dml": "\\begin{theorem}[Finite sample Gaussian approximation]\\label{thm:dml}Suppose Assumption~\\ref{assumption:cont} holds,\n$\nE[\\{Y-\\gamma_0(W)\\}^2 \\mid W]\\leq \\bar{\\sigma}^2,$\nand\n$\\|\\alpha^{\\min}_0\\|_{\\infty}\\leq\\bar{\\alpha}.\n$\nThen with probability $1-\\epsilon$,\n$$\n\\sup_{z\\in\\mathbb{R}} \\left| \\text{\\normalfont pr} \\left\\{\\frac{n^{1/2}}{\\sigma}(\\hat{\\theta}-\\theta_0)\\leq z\\right\\}-\\Phi(z)\\right|\\leq c^{BE}\\left(\\frac{\\kappa}{\\sigma}\\right)^3 n^{-1/2}+\\frac{\\Delta}{(2\\pi)^{1/2}}+\\epsilon,\n$$\nwhere $\\Phi(z)$ is the standard Gaussian cumulative distribution function and\n$$\n\\Delta=\\frac{3 L}{\\epsilon   \\sigma}\\left[(\\bar{Q}^{1/2}+\\bar{\\alpha})\\{\\mathcal{R}(\\hat{\\gamma}_{\\ell})\\}^{q/2}+\\bar{\\sigma}\\{\\mathcal{R}(\\hat{\\alpha}_{\\ell})\\}^{1/2}+\\{n \\mathcal{R}(\\hat{\\gamma}_{\\ell}) \\mathcal{R}(\\hat{\\alpha}_{\\ell}) \\}^{1/2}\\right].\n$$\nIf in addition $\\|\\hat{\\alpha}_{\\ell}\\|_{\\infty}\\leq\\bar{\\alpha}'$ then the same result holds updating $\\Delta$ to be\n$$\n\\frac{4 L}{\\epsilon^{1/2}  \\sigma}\\left[(\\bar{Q}^{1/2}+\\bar{\\alpha}+\\bar{\\alpha}')\\{\\mathcal{R}(\\hat{\\gamma}_{\\ell})\\}^{q/2}\n    +\\bar{\\sigma}\\{\\mathcal{R}(\\hat{\\alpha}_{\\ell})\\}^{1/2}\\right]+\\frac{1}{\\sigma}[\\{n\\mathcal{P}(\\hat{\\gamma}_{\\ell})\\mathcal{R}(\\hat{\\alpha}_{\\ell})\\}^{1/2} \\wedge \\{n\\mathcal{R}(\\hat{\\gamma}_{\\ell})\\mathcal{P}(\\hat{\\alpha}_{\\ell})\\}^{1/2}].\n$$\nFor local functionals, further suppose approximation error of size $\\Delta_h=\nn^{1/2} \\sigma_h^{-1}|\\theta_0^h-\\theta_0^{\\lim}|$. Then the same result holds replacing $(\\hat{\\theta},\\theta_0,\\Delta)$ with $(\\hat{\\theta}^h,\\theta_0^{\\lim},\\Delta+\\Delta_h)$.\n\\end{theorem}",
+   "prop:resid2": "\\begin{proposition}[Residuals]\\label{prop:resid2}\nSuppose Assumption~\\ref{assumption:cont} holds and\n$$\nE[\\{Y-\\gamma_0(W)\\} \\mid W ]^2\\leq \\bar{\\sigma}^2,\\quad \\|\\hat{\\alpha}_{\\ell}\\|_{\\infty}\\leq\\bar{\\alpha}'.\n$$\nThen with probability $1-\\epsilon'/(2L)$,\n\\begin{align*}\n    \\Delta_{4\\ell}&\\leq t_4=\\frac{6L}{\\epsilon'}\\bar{Q}\\mathcal{R}(\\hat{\\gamma}_{\\ell})^q; \\\\\n     \\Delta_{5\\ell}&\\leq t_5=\\frac{6L}{\\epsilon'}(\\bar{\\alpha}')^2\\mathcal{R}(\\hat{\\gamma}_{\\ell}); \\\\\n     \\Delta_{6\\ell}&\\leq t_6=\\frac{6L}{\\epsilon'}\\bar{\\sigma}^2\\mathcal{R}(\\hat{\\alpha}_{\\ell}). \n\\end{align*}\n\\end{proposition}",
+   "lemma:global": "\\begin{lemma}[Oracle moments for global functionals]\\label{lemma:global}\nSuppose the weighting is bounded,  namely $\\ell_h \\leq C<\\infty$, and $\\Gamma\\subset \\mathbb{L}_2$. Suppose $\\alpha_0^{\\min}$ exists. Further suppose there exist $(c,\\tilde{c},\\bar c)$ bounded away from zero and above such that the following conditions hold.\n\\begin{enumerate}\n    \\item Control of representer moments. For $q=3,4$\n    $$\n\\|\\alpha_0^{\\min}\\|_{\\text{\\normalfont pr},q}\\leq c \\left( \\|\\alpha_0^{\\min}\\|^2_{\\text{\\normalfont pr},2} \\vee 1\\right).\n$$\n    \\item Bounded moments. For $q=2,3,4$,\n    $$\n    U_1=m(W,\\gamma_0)-E\\{m(W,\\gamma_0)\\},\\quad \\|U_1\\|_{\\text{\\normalfont pr},q}\\leq \\bar{c}.\n    $$\n    \\item Bounded heteroscedasticity. For $q=2,3,4$,\n    $$\n    U_2=Y-\\gamma_0(W),\\quad \\tilde{c}\\leq \\|U_2 \\mid W\\|_{\\text{\\normalfont pr},q}\\leq \\bar{c}.\n    $$\n\\end{enumerate}\nThen\n    $$\n    \\tilde{c}  \\bar{M}   \\leq \\sigma  \\leq  \\bar c  \\sqrt{1+ \\bar{M}^2}, \n \\quad \\kappa,\\zeta  \\leq  \\bar c   \\{1+ c (\\bar{M}^2 \\vee 1) \\}.\n    $$\nIn summary,\n$$\n\\frac{\\kappa}{\\sigma} \\lesssim \\sigma \\asymp \\bar{M} < \\infty,\\quad \\kappa, \\zeta\\lesssim \\bar{M}^2 < \\infty.\n$$\n\\end{lemma}",
+   "lemma:bounded_RR_local": "\\begin{lemma}[Bounded Riesz representer for local functionals]\\label{lemma:bounded_RR_local}\nSuppose $\\alpha_0^{\\min}$ exists and $\\Gamma\\subset \\mathbb{L}_2$. Further suppose there exist $(\\tilde{f}, \\bar f, \\bar f', h_0,\\bar{K})$ bounded away from zero and above such that the following conditions hold.\n\\begin{enumerate}\n  \\item Valid neighborhood. There exists $N_{h_0}(v)=(v':|v'-v|\\leq h)\\subset \\mathcal{V}$.\n    \\item Bounded density. The density $f_V$ obeys, for all $v'$ in $N_{h_0}(v)$,\n    $$\n  0< \\tilde{f} \\leq f_V(v') \\leq \\bar f,\\quad |\\partial f_V(v')| \\leq \\bar f'.\n    $$\n    \\item Bounded kernel. $|K(u)|\\leq \\bar{K}$.\n    \\item The conditions of Lemma~\\ref{lemma:bounded_RR_global} hold, allowing bandwidth to vanish.\n\\end{enumerate}\nThen the finite sample bound in the proof holds. In summary,\n$$\n\\bar{\\alpha}_h\\lesssim h^{-1}\\rightarrow \\infty.\n$$\n\\end{lemma}",
+   "lemma:bounded_RR_global": "\\begin{lemma}[Bounded Riesz representer for global functionals]\\label{lemma:bounded_RR_global}\nThe following conditions are sufficient for $\\bar{\\alpha}<\\infty$ in Examples~\\ref{ex:CATE},~\\ref{ex:RDD},~\\ref{ex:elasticity}, and~\\ref{ex:deriv} with $\\ell_h \\leq C<\\infty$ and $\\Gamma=\\mathbb{L}_2$.\n\\begin{enumerate}\n    \\item Example~\\ref{ex:CATE}. $\\pi_0(v,x)$ is bounded away from zero and one.\n    \\item Example~\\ref{ex:RDD}. The bandwidth is fixed.\n    \\item Example~\\ref{ex:elasticity}. $\\alpha_0^{\\min}$ that solves\n    $\n    -\\partial_d \\log f(d \\mid x)=E\\{\\alpha(X,Z) \\mid D=d,X=x\\}\n    $ is bounded above.\n    \\item Example~\\ref{ex:deriv}. $\n    -\\partial_d \\log f(d \\mid v,x)\n    $ is bounded above.\n\\end{enumerate}\n\\end{lemma}",
+   "thm:local": "\\begin{theorem}[Characterization of key quantities]\\label{thm:local}\nIf noise has finite variance then $\\bar{\\sigma}^2<\\infty$. Suppose bounded moment and heteroscedasticity conditions defined in Supplement~2 hold. Then for global functionals\n$\n\\kappa/\\sigma \\lesssim \\sigma \\asymp \\bar{M} < \\infty$; $\\kappa, \\zeta\\lesssim \\bar{M}^2\\leq \\bar{Q}<\\infty$; and $\\bar{\\alpha}<\\infty.$\nSuppose bounded moment, heteroscedasticity, density, and derivative conditions defined in Supplement~2 hold. Then for local functionals\n$\n\\kappa_h/\\sigma_h \\lesssim h^{-1/6}$, $\\sigma_h \\asymp \\bar{M}_h \\asymp h^{-1/2} $, $\\kappa_h\\lesssim h^{-2/3}$, $\\zeta_h\\lesssim h^{-3/4}$, \n$\n\\bar{Q}_h\\lesssim h^{-2}$, $\\bar{\\alpha}_h\\lesssim h^{-1}$, and $\\Delta_h \\lesssim n^{1/2} h^{\\mathsf{v}+1/2}\n$\nwhere $\\mathsf{v}$ is the order of differentiability defined in Supplement~2.\n\\end{theorem}",
+   "lemma:local": "\\begin{lemma}[Oracle moments for local functionals]\\label{lemma:local}\nSuppose $\\alpha_0^{\\min}$ exists and $\\Gamma=\\mathbb{L}_2$. Further suppose there exist $(\\tilde{\\alpha}, \\check{\\alpha}, \\tilde{c}, \\bar c, \\tilde{f}, \\bar f, \\bar f', h_0)$ bounded away from zero and above such that the following conditions hold.\n\\begin{enumerate}\n    \\item Control of representer absolute value:\n    $$\n0< \\tilde{\\alpha} \\leq \\alpha_0(w) \\leq \\check{\\alpha}.\n$$\n  \\item Valid neighborhood. There exists $N_{h_0}(v)=(v':|v'-v|\\leq h)\\subset \\mathcal{V}$.\n    \\item Bounded moments. For all $ h\\leq h_0$ and for $q=2,3,4$, \n    $$\n    U_1=m_h(W,\\gamma_0)-E\\{m_h(W,\\gamma_0)\\},\\quad \\|U_1\\|_{\\text{\\normalfont pr},q}\\leq \\bar{c}\\|\\ell\\|_{\\text{\\normalfont pr},q}.\n    $$\n    \\item Bounded heteroscedasticity. For $q=2,3,4$,\n    $$\n    U_2=Y-\\gamma_0(W),\\quad \\tilde{c}\\leq \\|U_2 \\mid W\\|_{\\text{\\normalfont pr},q}\\leq \\bar{c}.\n    $$\n    \\item Bounded density. The density $f_V$ obeys, for all $v'$ in $N_{h_0}(v)$,\n    $$\n  0< \\tilde{f} \\leq f_V(v') \\leq \\bar f,\\quad |\\partial f_V(v')| \\leq \\bar f'.\n    $$\n\\end{enumerate}\nThen finite sample bounds in the proof hold. In summary,\n$$\n\\frac{\\kappa_h}{\\sigma_h} \\lesssim h^{-1/6} \\lesssim \\sigma_h \\asymp \\bar{M}_h \\asymp h^{-1/2} \\rightarrow \\infty,\\quad \\kappa_h\\lesssim h^{-2/3} \\rightarrow \\infty,\\quad \\zeta_h\\lesssim h^{-3/4} \\rightarrow \\infty.\n$$\n\n\\end{lemma}",
+   "lemma:cont_local": "\\begin{lemma}[Mean square continuity for local functionals]\\label{lemma:cont_local}\nSuppose $\\alpha_0^{\\min}$ exists and $\\Gamma\\subset \\mathbb{L}_2$. Further suppose there exist $(\\tilde{f}, \\bar f, \\bar f', h_0)$ bounded away from zero and above such that the following conditions hold.\n\\begin{enumerate}\n  \\item Valid neighborhood. There exists $N_{h_0}(v)=(v':|v'-v|\\leq h)\\subset \\mathcal{V}$.\n    \\item Bounded density. The density $f_V$ obeys, for all $v'$ in $N_{h_0}(v)$,\n    $$\n  0< \\tilde{f} \\leq f_V(v') \\leq \\bar f,\\quad |\\partial f_V(v')| \\leq \\bar f'.\n    $$\n    \\item The conditions of Lemma~\\ref{lemma:cont} hold.\n\\end{enumerate}\nThen the finite sample bound in the proof holds for Examples~\\ref{ex:CATE} and~\\ref{ex:RDD}. In summary,\n$$\n\\bar{Q}_h\\lesssim h^{-2} \\rightarrow \\infty.\n$$\n\\end{lemma}",
+   "lemma:approx": "\\begin{lemma}[Approximation error from localization \\cite{chernozhukov2018global}]\\label{lemma:approx}\nSuppose there exist constants $(h_0,K, \\mathsf{v}, \\bar g_{\\mathsf{v}}$,  $\\bar f_{\\mathsf{v}}$, $\\tilde{f}, \\bar{g})$ bounded away from zero and above such that the following conditions hold.\n\\begin{enumerate}\n  \\item Valid neighborhood. There exists $N_{h_0}(v)=(v':|v'-v|\\leq h)\\subset \\mathcal{V}$.\n    \\item Differentiability. On $N_{h_0}(v)$, $m(v')$ and $f_V(v')$ are differentiable to the integer order $\\mathsf{sm}$.\n    \\item Bounded derivatives. Let $\\mathsf{v}= \\mathsf{sm} \\wedge \\mathsf{o}$ where $\\mathsf{o}$ is the order of the kernel $K$. Let $\\partial^\\mathsf{v}_d$ denote the $\\mathsf{v}$ order derivative $\\partial^{\\mathsf{v}}/(\\partial d)^{\\mathsf{v}}$. Assume\n    $$\n\\sup_{ v' \\in N_{h_0}(v)}  \\| \\partial^{\\mathsf{v}}_v (m(v') f_V(v')) \\|_{op} \\leq \\bar g_{\\mathsf{v}}, \\quad \\sup_{ v' \\in N_{h_0}(v) } \\|\\partial^{\\mathsf{v}}_v f_V(v')  \\|_{op} \\leq \\bar f_{\\mathsf{v}},\n \\quad  \\inf_{ v' \\in N_{h_0}(v) } f_V(v') \\geq \\tilde{f}.\n$$ \n\\item Bounded conditional formula.\n$\nm(v)f_V(v)\\leq \\bar{g}.\n$\n\\end{enumerate}\nThen there exist constants $(C,h_1)$ depending only on $(h_0,K, \\mathsf{v}, \\bar g_{\\mathsf{v}}$,  $\\bar f_{\\mathsf{v}}$, $\\tilde{f}, \\bar{g})$ such that for all $h_1$ in $(h,h_0)$, $|\\theta_0^h-\\theta_0^{\\lim}|\\leq C h^\\mathsf{v}.$\nIn summary,\n$$\n\\Delta_h \\lesssim n^{1/2} h^{\\mathsf{v}+1/2}.\n$$\n\\end{lemma}"
+  },
+  "refs": {
+   "statements": [
+    {
+     "id": "thm:dml-alt1",
+     "kind": "theorem",
+     "env": "thm:dml",
+     "status": "to-prove",
+     "depends_on": [
+      "prop:delta",
+      "lem:berry",
+      "def:algorithm-target",
+      "def:mean-square-error",
+      "ass:cont-linearity",
+      "ass:cont-mean-square",
+      "ass:dml-noise",
+      "ass:dml-representer-bound"
+     ],
+     "hypotheses": [
+      "ass:cont-linearity",
+      "ass:cont-mean-square",
+      "ass:dml-noise",
+      "ass:dml-representer-bound"
+     ],
+     "clause": {
+      "from": "Suppose Assumption~\\ref{assumption:cont} holds,",
+      "to": "\\right].\n$$"
+     },
+     "free_symbols": [
+      "\\hat{\\theta}",
+      "\\theta_0",
+      "\\sigma",
+      "\\kappa",
+      "\\Delta",
+      "\\mathcal{R}",
+      "\\mathcal{P}",
+      "\\Delta_h"
+     ]
+    },
+    {
+     "id": "thm:dml-alt2",
+     "kind": "theorem",
+     "env": "thm:dml",
+     "status": "to-prove",
+     "depends_on": [
+      "prop:delta",
+      "prop:delta-alt",
+      "lem:berry",
+      "def:algorithm-target",
+      "def:mean-square-error",
+      "ass:cont-linearity",
+      "ass:cont-mean-square",
+      "ass:dml-noise",
+      "ass:dml-representer-bound",
+      "ass:dml-estimated-representer-bound"
+     ],
+     "hypotheses": [
+      "ass:cont-linearity",
+      "ass:cont-mean-square",
+      "ass:dml-noise",
+      "ass:dml-representer-bound",
+      "ass:dml-estimated-representer-bound"
+     ],
+     "clause": {
+      "from": "If in addition $\\|\\hat{\\alpha}_{\\ell}\\|_{\\infty}\\leq\\bar{\\alpha}'$",
+      "to": "\\mathcal{P}(\\hat{\\alpha}_{\\ell})\\}^{1/2}].\n$$"
+     },
+     "free_symbols": [
+      "\\hat{\\theta}",
+      "\\theta_0",
+      "\\sigma",
+      "\\kappa",
+      "\\Delta",
+      "\\mathcal{R}",
+      "\\mathcal{P}",
+      "\\Delta_h"
+     ]
+    },
+    {
+     "id": "thm:dml-alt3",
+     "kind": "theorem",
+     "env": "thm:dml",
+     "status": "to-prove",
+     "depends_on": [
+      "prop:delta",
+      "lem:berry",
+      "def:algorithm-target",
+      "def:mean-square-error",
+      "ass:cont-linearity",
+      "ass:cont-mean-square",
+      "ass:dml-noise",
+      "ass:dml-representer-bound",
+      "ass:dml-local-error"
+     ],
+     "hypotheses": [
+      "ass:cont-linearity",
+      "ass:cont-mean-square",
+      "ass:dml-noise",
+      "ass:dml-representer-bound",
+      "ass:dml-local-error"
+     ],
+     "clause": {
+      "from": "For local functionals, further suppose",
+      "to": "\\Delta+\\Delta_h)$."
+     },
+     "free_symbols": [
+      "\\hat{\\theta}",
+      "\\theta_0",
+      "\\sigma",
+      "\\kappa",
+      "\\Delta",
+      "\\mathcal{R}",
+      "\\mathcal{P}",
+      "\\Delta_h"
+     ]
+    },
+    {
+     "id": "thm:dml-alt4",
+     "kind": "theorem",
+     "env": "thm:dml",
+     "status": "to-prove",
+     "depends_on": [
+      "prop:delta",
+      "prop:delta-alt",
+      "lem:berry",
+      "def:algorithm-target",
+      "def:mean-square-error",
+      "ass:cont-linearity",
+      "ass:cont-mean-square",
+      "ass:dml-noise",
+      "ass:dml-representer-bound",
+      "ass:dml-estimated-representer-bound",
+      "ass:dml-local-error"
+     ],
+     "hypotheses": [
+      "ass:cont-linearity",
+      "ass:cont-mean-square",
+      "ass:dml-noise",
+      "ass:dml-representer-bound",
+      "ass:dml-estimated-representer-bound",
+      "ass:dml-local-error"
+     ],
+     "clause": {
+      "from": "For local functionals, further suppose",
+      "to": "\\Delta+\\Delta_h)$."
+     },
+     "free_symbols": [
+      "\\hat{\\theta}",
+      "\\theta_0",
+      "\\sigma",
+      "\\kappa",
+      "\\Delta",
+      "\\mathcal{R}",
+      "\\mathcal{P}",
+      "\\Delta_h"
+     ]
+    },
+    {
+     "id": "thm:local",
+     "kind": "theorem",
+     "env": "thm:local",
+     "status": "to-prove",
+     "depends_on": [
+      "ass:thm-local-global-conditions"
+     ],
+     "hypotheses": [
+      "ass:thm-local-global-conditions"
+     ],
+     "clause": {
+      "from": "Suppose bounded moment and heteroscedasticity conditions",
+      "to": "and $\\bar{\\alpha}<\\infty.$"
+     },
+     "free_symbols": [
+      "\\bar{\\sigma}",
+      "\\kappa",
+      "\\sigma",
+      "\\zeta",
+      "\\bar{M}",
+      "\\bar{Q}",
+      "\\bar{\\alpha}"
+     ]
+    },
+    {
+     "id": "thm:local-finite-noise",
+     "kind": "theorem",
+     "env": "thm:local",
+     "status": "to-prove",
+     "depends_on": [
+      "ass:thm-local-finite-noise"
+     ],
+     "hypotheses": [
+      "ass:thm-local-finite-noise"
+     ],
+     "clause": {
+      "from": "If noise has finite variance",
+      "to": "$\\bar{\\sigma}^2<\\infty$."
+     },
+     "free_symbols": [
+      "\\bar{\\sigma}"
+     ]
+    },
+    {
+     "id": "thm:local-local-clause",
+     "kind": "theorem",
+     "env": "thm:local",
+     "status": "to-prove",
+     "depends_on": [
+      "ass:thm-local-local-conditions"
+     ],
+     "hypotheses": [
+      "ass:thm-local-local-conditions"
+     ],
+     "clause": {
+      "from": "Suppose bounded moment, heteroscedasticity, density, and derivative conditions",
+      "to": "where $\\mathsf{v}$ is the order of differentiability defined in Supplement~2."
+     },
+     "free_symbols": [
+      "\\kappa_h",
+      "\\sigma_h",
+      "\\zeta_h",
+      "\\bar{M}_h",
+      "\\bar{Q}_h",
+      "\\bar{\\alpha}_h",
+      "h",
+      "\\Delta_h",
+      "\\mathsf{v}"
+     ]
+    },
+    {
+     "id": "lem:global",
+     "kind": "lemma",
+     "env": "lemma:global",
+     "status": "to-prove",
+     "depends_on": [
+      "ass:global-weighting",
+      "ass:global-space",
+      "ass:global-representer-exists",
+      "ass:global-constants",
+      "ass:global-representer-moments",
+      "ass:global-bounded-moments",
+      "ass:global-heteroscedasticity"
+     ],
+     "hypotheses": [
+      "ass:global-weighting",
+      "ass:global-space",
+      "ass:global-representer-exists",
+      "ass:global-constants",
+      "ass:global-representer-moments",
+      "ass:global-bounded-moments",
+      "ass:global-heteroscedasticity"
+     ],
+     "free_symbols": [
+      "\\ell_h",
+      "\\Gamma",
+      "\\alpha_0^{\\min}",
+      "\\bar{M}",
+      "\\sigma",
+      "\\kappa",
+      "\\zeta"
+     ]
+    },
+    {
+     "id": "lem:bounded-rr-global",
+     "kind": "lemma",
+     "env": "lemma:bounded_RR_global",
+     "status": "to-prove",
+     "depends_on": [
+      "lem:rr-exists",
+      "ass:brr-global-setup",
+      "ass:brr-global-space",
+      "ass:brr-global-cate-propensity"
+     ],
+     "hypotheses": [
+      "ass:brr-global-setup",
+      "ass:brr-global-space",
+      "ass:brr-global-cate-propensity"
+     ],
+     "free_symbols": [
+      "\\bar{\\alpha}",
+      "\\alpha_0^{\\min}",
+      "f",
+      "\\ell_h",
+      "\\Gamma"
+     ]
+    },
+    {
+     "id": "lem:bounded-rr-global-rdd",
+     "kind": "lemma",
+     "env": "lemma:bounded_RR_global",
+     "status": "to-prove",
+     "depends_on": [
+      "lem:rr-exists-rdd",
+      "ass:brr-global-setup",
+      "ass:brr-global-space",
+      "ass:brr-global-rdd-bandwidth"
+     ],
+     "hypotheses": [
+      "ass:brr-global-setup",
+      "ass:brr-global-space",
+      "ass:brr-global-rdd-bandwidth"
+     ],
+     "free_symbols": [
+      "\\bar{\\alpha}",
+      "\\alpha_0^{\\min}",
+      "f",
+      "\\ell_h",
+      "\\Gamma"
+     ]
+    },
+    {
+     "id": "lem:bounded-rr-global-elasticity",
+     "kind": "lemma",
+     "env": "lemma:bounded_RR_global",
+     "status": "to-prove",
+     "depends_on": [
+      "lem:rr-exists-elasticity-iv",
+      "ass:brr-global-setup",
+      "ass:brr-global-space",
+      "ass:brr-global-elasticity-bound"
+     ],
+     "hypotheses": [
+      "ass:brr-global-setup",
+      "ass:brr-global-space",
+      "ass:brr-global-elasticity-bound"
+     ],
+     "free_symbols": [
+      "\\bar{\\alpha}",
+      "\\alpha_0^{\\min}",
+      "f",
+      "\\ell_h",
+      "\\Gamma"
+     ]
+    },
+    {
+     "id": "lem:bounded-rr-global-deriv",
+     "kind": "lemma",
+     "env": "lemma:bounded_RR_global",
+     "status": "to-prove",
+     "depends_on": [
+      "lem:rr-exists-deriv",
+      "ass:brr-global-space",
+      "ass:brr-global-deriv-bound",
+      "ass:brr-global-setup"
+     ],
+     "hypotheses": [
+      "ass:brr-global-space",
+      "ass:brr-global-deriv-bound",
+      "ass:brr-global-setup"
+     ],
+     "free_symbols": [
+      "\\bar{\\alpha}",
+      "\\alpha_0^{\\min}",
+      "f",
+      "\\ell_h",
+      "\\Gamma"
+     ]
+    },
+    {
+     "id": "lem:local",
+     "kind": "lemma",
+     "env": "lemma:local",
+     "status": "to-prove",
+     "depends_on": [
+      "ass:local-representer-exists",
+      "ass:local-space",
+      "ass:local-constants",
+      "ass:local-representer-absolute-value",
+      "ass:local-neighborhood",
+      "ass:local-bounded-moments",
+      "ass:local-heteroscedasticity",
+      "ass:local-density"
+     ],
+     "hypotheses": [
+      "ass:local-representer-exists",
+      "ass:local-space",
+      "ass:local-constants",
+      "ass:local-representer-absolute-value",
+      "ass:local-neighborhood",
+      "ass:local-bounded-moments",
+      "ass:local-heteroscedasticity",
+      "ass:local-density"
+     ],
+     "free_symbols": [
+      "\\alpha_0^{\\min}",
+      "\\Gamma",
+      "\\ell_h",
+      "\\sigma_h",
+      "\\kappa_h",
+      "\\zeta_h",
+      "\\bar{M}_h",
+      "h",
+      "f_V"
+     ]
+    },
+    {
+     "id": "lem:cont-local",
+     "kind": "lemma",
+     "env": "lemma:cont_local",
+     "status": "to-prove",
+     "depends_on": [
+      "ass:cont-local-representer-exists",
+      "ass:cont-local-space",
+      "ass:cont-local-constants",
+      "ass:cont-local-neighborhood",
+      "ass:cont-local-density",
+      "lem:cont",
+      "lem:local"
+     ],
+     "hypotheses": [
+      "ass:cont-local-representer-exists",
+      "ass:cont-local-space",
+      "ass:cont-local-constants",
+      "ass:cont-local-neighborhood",
+      "ass:cont-local-density"
+     ],
+     "free_symbols": [
+      "\\alpha_0^{\\min}",
+      "\\Gamma",
+      "f_V",
+      "\\bar{Q}_h",
+      "h"
+     ]
+    },
+    {
+     "id": "lem:bounded-rr-local-alt1",
+     "kind": "lemma",
+     "env": "lemma:bounded_RR_local",
+     "status": "to-prove",
+     "depends_on": [
+      "ass:bounded-local-representer-exists",
+      "ass:bounded-local-space",
+      "ass:bounded-local-constants",
+      "ass:bounded-local-neighborhood",
+      "ass:bounded-local-density",
+      "ass:bounded-local-kernel",
+      "ass:bounded-local-global-conditions",
+      "ass:brr-global-setup",
+      "ass:brr-global-space",
+      "ass:brr-global-cate-propensity"
+     ],
+     "hypotheses": [
+      "ass:bounded-local-representer-exists",
+      "ass:bounded-local-space",
+      "ass:bounded-local-constants",
+      "ass:bounded-local-neighborhood",
+      "ass:bounded-local-density",
+      "ass:bounded-local-kernel",
+      "ass:bounded-local-global-conditions",
+      "ass:brr-global-setup",
+      "ass:brr-global-space",
+      "ass:brr-global-cate-propensity"
+     ],
+     "free_symbols": [
+      "\\alpha_0^{\\min}",
+      "\\Gamma",
+      "f_V",
+      "K",
+      "\\bar{\\alpha}",
+      "h"
+     ]
+    },
+    {
+     "id": "lem:cont-local-rdd",
+     "kind": "lemma",
+     "env": "lemma:cont_local",
+     "status": "to-prove",
+     "depends_on": [
+      "ass:cont-local-representer-exists",
+      "ass:cont-local-space",
+      "ass:cont-local-constants",
+      "ass:cont-local-neighborhood",
+      "ass:cont-local-density",
+      "lem:cont-rdd",
+      "lem:local"
+     ],
+     "hypotheses": [
+      "ass:cont-local-representer-exists",
+      "ass:cont-local-space",
+      "ass:cont-local-constants",
+      "ass:cont-local-neighborhood",
+      "ass:cont-local-density"
+     ],
+     "free_symbols": [
+      "\\alpha_0^{\\min}",
+      "\\Gamma",
+      "f_V",
+      "\\bar{Q}",
+      "h"
+     ]
+    },
+    {
+     "id": "lem:bounded-rr-local-alt2",
+     "kind": "lemma",
+     "env": "lemma:bounded_RR_local",
+     "status": "to-prove",
+     "depends_on": [
+      "ass:bounded-local-representer-exists",
+      "ass:bounded-local-space",
+      "ass:bounded-local-constants",
+      "ass:bounded-local-neighborhood",
+      "ass:bounded-local-density",
+      "ass:bounded-local-kernel",
+      "ass:bounded-local-global-conditions",
+      "ass:brr-global-setup",
+      "ass:brr-global-space"
+     ],
+     "hypotheses": [
+      "ass:bounded-local-representer-exists",
+      "ass:bounded-local-space",
+      "ass:bounded-local-constants",
+      "ass:bounded-local-neighborhood",
+      "ass:bounded-local-density",
+      "ass:bounded-local-kernel",
+      "ass:bounded-local-global-conditions",
+      "ass:brr-global-setup",
+      "ass:brr-global-space"
+     ],
+     "free_symbols": [
+      "\\alpha_0^{\\min}",
+      "\\Gamma",
+      "f_V",
+      "K",
+      "\\bar{\\alpha}",
+      "h"
+     ]
+    },
+    {
+     "id": "lem:bounded-rr-local-alt3",
+     "kind": "lemma",
+     "env": "lemma:bounded_RR_local",
+     "status": "to-prove",
+     "depends_on": [
+      "ass:bounded-local-representer-exists",
+      "ass:bounded-local-space",
+      "ass:bounded-local-constants",
+      "ass:bounded-local-neighborhood",
+      "ass:bounded-local-density",
+      "ass:bounded-local-kernel",
+      "ass:bounded-local-global-conditions",
+      "ass:brr-global-setup",
+      "ass:brr-global-space",
+      "ass:brr-global-elasticity-bound"
+     ],
+     "hypotheses": [
+      "ass:bounded-local-representer-exists",
+      "ass:bounded-local-space",
+      "ass:bounded-local-constants",
+      "ass:bounded-local-neighborhood",
+      "ass:bounded-local-density",
+      "ass:bounded-local-kernel",
+      "ass:bounded-local-global-conditions",
+      "ass:brr-global-setup",
+      "ass:brr-global-space",
+      "ass:brr-global-elasticity-bound"
+     ],
+     "free_symbols": [
+      "\\alpha_0^{\\min}",
+      "\\Gamma",
+      "f_V",
+      "K",
+      "\\bar{\\alpha}_h",
+      "h"
+     ]
+    },
+    {
+     "id": "lem:bounded-rr-local-alt4",
+     "kind": "lemma",
+     "env": "lemma:bounded_RR_local",
+     "status": "to-prove",
+     "depends_on": [
+      "ass:bounded-local-representer-exists",
+      "ass:bounded-local-space",
+      "ass:bounded-local-constants",
+      "ass:bounded-local-neighborhood",
+      "ass:bounded-local-density",
+      "ass:bounded-local-kernel",
+      "ass:bounded-local-global-conditions",
+      "ass:brr-global-setup",
+      "ass:brr-global-space",
+      "ass:brr-global-deriv-bound"
+     ],
+     "hypotheses": [
+      "ass:bounded-local-representer-exists",
+      "ass:bounded-local-space",
+      "ass:bounded-local-constants",
+      "ass:bounded-local-neighborhood",
+      "ass:bounded-local-density",
+      "ass:bounded-local-kernel",
+      "ass:bounded-local-global-conditions",
+      "ass:brr-global-setup",
+      "ass:brr-global-space",
+      "ass:brr-global-deriv-bound"
+     ],
+     "free_symbols": [
+      "\\alpha_0^{\\min}",
+      "\\Gamma",
+      "f_V",
+      "K",
+      "\\bar{\\alpha}_h",
+      "h"
+     ]
+    },
+    {
+     "id": "lem:approx",
+     "kind": "lemma",
+     "env": "lemma:approx",
+     "status": "to-prove",
+     "depends_on": [
+      "ass:approx-constants",
+      "ass:approx-neighborhood",
+      "ass:approx-differentiability",
+      "ass:approx-derivative-bounds",
+      "ass:approx-conditional-formula",
+      "def:approx-conditional-formula"
+     ],
+     "hypotheses": [
+      "ass:approx-constants",
+      "ass:approx-neighborhood",
+      "ass:approx-differentiability",
+      "ass:approx-derivative-bounds",
+      "ass:approx-conditional-formula"
+     ],
+     "free_symbols": [
+      "h",
+      "K",
+      "f_V",
+      "\\theta_0^h",
+      "\\theta_0^{\\lim}",
+      "\\Delta_h"
+     ]
+    },
+    {
+     "id": "prop:resid2",
+     "kind": "proposition",
+     "env": "prop:resid2",
+     "status": "to-prove",
+     "depends_on": [
+      "ass:cont-linearity",
+      "ass:cont-mean-square",
+      "ass:var-estimated-representer-bound",
+      "ass:resid2-noise",
+      "prop:foldwise2"
+     ],
+     "hypotheses": [
+      "ass:cont-linearity",
+      "ass:cont-mean-square",
+      "ass:var-estimated-representer-bound",
+      "ass:resid2-noise"
+     ],
+     "free_symbols": [
+      "\\bar{Q}",
+      "\\bar{\\sigma}",
+      "\\bar{\\alpha}'",
+      "\\mathcal{R}"
+     ]
+    }
+   ],
+   "assumptions": [
+    {
+     "id": "ass:brr-global-space",
+     "source": {
+      "env": "lemma:bounded_RR_global",
+      "slice": {
+       "from": "and $\\Gamma=\\mathbb{L}_2$.",
+       "to": "and $\\Gamma=\\mathbb{L}_2$."
+      }
+     },
+     "kind": "space",
+     "free_symbols": [
+      "\\Gamma"
+     ],
+     "novel": {
+      "flag": true,
+      "justification": "Common setup of Lemma lemma:bounded_RR_global."
+     }
+    },
+    {
+     "id": "ass:dml-noise",
+     "source": {
+      "env": "thm:dml",
+      "slice": {
+       "from": "E[\\{Y-\\gamma_0(W)\\}^2 \\mid W]",
+       "to": "\\bar{\\sigma}^2,"
+      }
+     },
+     "kind": "moment",
+     "free_symbols": [
+      "Y",
+      "W",
+      "\\gamma_0",
+      "\\bar{\\sigma}"
+     ],
+     "novel": {
+      "flag": true,
+      "justification": "Inline premise of Theorem thm:dml."
+     }
+    },
+    {
+     "id": "ass:dml-representer-bound",
+     "source": {
+      "env": "thm:dml",
+      "slice": {
+       "from": "and\n$\\|\\alpha^{\\min}_0\\|_{\\infty}",
+       "to": "\\bar{\\alpha}.\n$"
+      }
+     },
+     "kind": "boundedness",
+     "free_symbols": [
+      "\\alpha_0^{\\min}",
+      "\\bar{\\alpha}"
+     ],
+     "novel": {
+      "flag": true,
+      "justification": "Inline premise of Theorem thm:dml."
+     }
+    },
+    {
+     "id": "ass:dml-estimated-representer-bound",
+     "source": {
+      "env": "thm:dml",
+      "slice": {
+       "from": "If in addition",
+       "to": "\\bar{\\alpha}'$"
+      }
+     },
+     "kind": "boundedness",
+     "free_symbols": [
+      "\\hat{\\alpha}_{\\ell}",
+      "\\bar{\\alpha}'"
+     ],
+     "novel": {
+      "flag": true,
+      "justification": "Inline premise of the alternative clause."
+     }
+    },
+    {
+     "id": "ass:dml-local-error",
+     "source": {
+      "env": "thm:dml",
+      "slice": {
+       "from": "For local functionals, further suppose",
+       "to": "|\\theta_0^h-\\theta_0^{\\lim}|$."
+      }
+     },
+     "kind": "approximation",
+     "free_symbols": [
+      "\\Delta_h",
+      "\\theta_0^h",
+      "\\theta_0^{\\lim}",
+      "h",
+      "\\sigma_h"
+     ],
+     "novel": {
+      "flag": true,
+      "justification": "Inline premise of the local clause."
+     }
+    },
+    {
+     "id": "ass:global-weighting",
+     "source": {
+      "env": "lemma:global",
+      "slice": {
+       "from": "Suppose the weighting is bounded",
+       "to": "$\\ell_h \\leq C<\\infty$,"
+      }
+     },
+     "kind": "boundedness",
+     "free_symbols": [
+      "\\ell_h"
+     ],
+     "novel": {
+      "flag": true,
+      "justification": "Inline premise of Lemma lemma:global."
+     }
+    },
+    {
+     "id": "ass:global-space",
+     "source": {
+      "env": "lemma:global",
+      "slice": {
+       "from": "and $\\Gamma\\subset \\mathbb{L}_2$.",
+       "to": "and $\\Gamma\\subset \\mathbb{L}_2$."
+      }
+     },
+     "kind": "space",
+     "free_symbols": [
+      "\\Gamma"
+     ],
+     "novel": {
+      "flag": true,
+      "justification": "Inline premise of Lemma lemma:global."
+     }
+    },
+    {
+     "id": "ass:global-representer-exists",
+     "source": {
+      "env": "lemma:global",
+      "sentences": [
+       2,
+       2
+      ]
+     },
+     "kind": "existence",
+     "free_symbols": [
+      "\\alpha_0^{\\min}"
+     ],
+     "novel": {
+      "flag": true,
+      "justification": "Inline premise of Lemma lemma:global."
+     }
+    },
+    {
+     "id": "ass:global-constants",
+     "source": {
+      "env": "lemma:global",
+      "sentences": [
+       3,
+       3
+      ]
+     },
+     "kind": "regularity",
+     "free_symbols": [],
+     "novel": {
+      "flag": true,
+      "justification": "Inline premise of Lemma lemma:global."
+     }
+    },
+    {
+     "id": "ass:local-representer-exists",
+     "source": {
+      "env": "lemma:local",
+      "slice": {
+       "from": "Suppose $\\alpha_0^{\\min}$ exists",
+       "to": "Suppose $\\alpha_0^{\\min}$ exists"
+      }
+     },
+     "kind": "existence",
+     "free_symbols": [
+      "\\alpha_0^{\\min}"
+     ],
+     "novel": {
+      "flag": true,
+      "justification": "Inline premise of Lemma lemma:local."
+     }
+    },
+    {
+     "id": "ass:local-space",
+     "source": {
+      "env": "lemma:local",
+      "slice": {
+       "from": "and $\\Gamma=\\mathbb{L}_2$.",
+       "to": "and $\\Gamma=\\mathbb{L}_2$."
+      }
+     },
+     "kind": "space",
+     "free_symbols": [
+      "\\Gamma"
+     ],
+     "novel": {
+      "flag": true,
+      "justification": "Inline premise of Lemma lemma:local."
+     }
+    },
+    {
+     "id": "ass:local-constants",
+     "source": {
+      "env": "lemma:local",
+      "sentences": [
+       2,
+       2
+      ]
+     },
+     "kind": "regularity",
+     "free_symbols": [],
+     "novel": {
+      "flag": true,
+      "justification": "Inline premise of Lemma lemma:local."
+     }
+    },
+    {
+     "id": "ass:local-representer-absolute-value",
+     "source": {
+      "env": "lemma:local",
+      "slice": {
+       "from": "0< \\tilde{\\alpha}",
+       "to": "\\check{\\alpha}."
+      }
+     },
+     "kind": "boundedness",
+     "free_symbols": [
+      "\\alpha_0",
+      "\\tilde{\\alpha}",
+      "\\check{\\alpha}"
+     ],
+     "novel": {
+      "flag": true,
+      "justification": "First listed condition of Lemma lemma:local."
+     }
+    },
+    {
+     "id": "ass:local-neighborhood",
+     "source": {
+      "env": "lemma:local",
+      "sentences": [
+       5,
+       5
+      ]
+     },
+     "kind": "support",
+     "free_symbols": [
+      "h"
+     ],
+     "novel": {
+      "flag": true,
+      "justification": "Second listed condition of Lemma lemma:local."
+     }
+    },
+    {
+     "id": "ass:local-bounded-moments",
+     "source": {
+      "env": "lemma:local",
+      "slice": {
+       "from": "For all $ h\\leq ",
+       "to": "\\bar{c}\\|\\ell\\|_{\\text{\\normalfont pr},q}.\n    $$"
+      }
+     },
+     "kind": "moment",
+     "free_symbols": [
+      "m",
+      "W",
+      "\\gamma_0",
+      "\\ell_h",
+      "\\bar{c}",
+      "q",
+      "h"
+     ],
+     "novel": {
+      "flag": true,
+      "justification": "Third listed condition of Lemma lemma:local."
+     }
+    },
+    {
+     "id": "ass:local-heteroscedasticity",
+     "source": {
+      "env": "lemma:local",
+      "slice": {
+       "from": "For $q=2,3,4$,\n ",
+       "to": "\\tilde{c}\\leq \\|U_2 \\mid W\\|_{\\text{\\normalfont pr},q}\\leq \\bar{c}.\n    $$"
+      }
+     },
+     "kind": "moment",
+     "free_symbols": [
+      "Y",
+      "W",
+      "\\gamma_0",
+      "\\tilde{c}",
+      "\\bar{c}",
+      "q"
+     ],
+     "novel": {
+      "flag": true,
+      "justification": "Fourth listed condition of Lemma lemma:local."
+     }
+    },
+    {
+     "id": "ass:local-density",
+     "source": {
+      "env": "lemma:local",
+      "slice": {
+       "from": "The density $f_V",
+       "to": "|\\partial f_V(v')| \\leq \\bar f'.\n    $$"
+      }
+     },
+     "kind": "regularity",
+     "free_symbols": [
+      "f_V"
+     ],
+     "novel": {
+      "flag": true,
+      "justification": "Fifth listed condition of Lemma lemma:local."
+     }
+    },
+    {
+     "id": "ass:cont-local-representer-exists",
+     "source": {
+      "env": "lemma:cont_local",
+      "slice": {
+       "from": "Suppose $\\alpha_0^{\\min}$ exists",
+       "to": "Suppose $\\alpha_0^{\\min}$ exists"
+      }
+     },
+     "kind": "existence",
+     "free_symbols": [
+      "\\alpha_0^{\\min}"
+     ],
+     "novel": {
+      "flag": true,
+      "justification": "Inline premise of Lemma lemma:cont_local."
+     }
+    },
+    {
+     "id": "ass:cont-local-space",
+     "source": {
+      "env": "lemma:cont_local",
+      "slice": {
+       "from": "and $\\Gamma\\subset \\mathbb{L}_2$.",
+       "to": "and $\\Gamma\\subset \\mathbb{L}_2$."
+      }
+     },
+     "kind": "space",
+     "free_symbols": [
+      "\\Gamma"
+     ],
+     "novel": {
+      "flag": true,
+      "justification": "Inline premise of Lemma lemma:cont_local."
+     }
+    },
+    {
+     "id": "ass:cont-local-constants",
+     "source": {
+      "env": "lemma:cont_local",
+      "sentences": [
+       2,
+       2
+      ]
+     },
+     "kind": "regularity",
+     "free_symbols": [
+      "h"
+     ],
+     "novel": {
+      "flag": true,
+      "justification": "Inline premise of Lemma lemma:cont_local."
+     }
+    },
+    {
+     "id": "ass:cont-local-neighborhood",
+     "source": {
+      "env": "lemma:cont_local",
+      "sentences": [
+       4,
+       4
+      ]
+     },
+     "kind": "support",
+     "free_symbols": [
+      "h"
+     ],
+     "novel": {
+      "flag": true,
+      "justification": "First listed condition of Lemma lemma:cont_local."
+     }
+    },
+    {
+     "id": "ass:cont-local-density",
+     "source": {
+      "env": "lemma:cont_local",
+      "slice": {
+       "from": "The density $f_V",
+       "to": "|\\partial f_V(v')| \\leq \\bar f'.\n    $$"
+      }
+     },
+     "kind": "regularity",
+     "free_symbols": [
+      "f_V"
+     ],
+     "novel": {
+      "flag": true,
+      "justification": "Second listed condition of Lemma lemma:cont_local."
+     }
+    },
+    {
+     "id": "ass:bounded-local-representer-exists",
+     "source": {
+      "env": "lemma:bounded_RR_local",
+      "slice": {
+       "from": "Suppose $\\alpha_0^{\\min}$ exists",
+       "to": "Suppose $\\alpha_0^{\\min}$ exists"
+      }
+     },
+     "kind": "existence",
+     "free_symbols": [
+      "\\alpha_0^{\\min}"
+     ],
+     "novel": {
+      "flag": true,
+      "justification": "Inline premise of Lemma lemma:bounded_RR_local."
+     }
+    },
+    {
+     "id": "ass:bounded-local-space",
+     "source": {
+      "env": "lemma:bounded_RR_local",
+      "slice": {
+       "from": "and $\\Gamma\\subset \\mathbb{L}_2$.",
+       "to": "and $\\Gamma\\subset \\mathbb{L}_2$."
+      }
+     },
+     "kind": "space",
+     "free_symbols": [
+      "\\Gamma"
+     ],
+     "novel": {
+      "flag": true,
+      "justification": "Inline premise of Lemma lemma:bounded_RR_local."
+     }
+    },
+    {
+     "id": "ass:bounded-local-constants",
+     "source": {
+      "env": "lemma:bounded_RR_local",
+      "sentences": [
+       2,
+       2
+      ]
+     },
+     "kind": "regularity",
+     "free_symbols": [
+      "h",
+      "K"
+     ],
+     "novel": {
+      "flag": true,
+      "justification": "Inline premise of Lemma lemma:bounded_RR_local."
+     }
+    },
+    {
+     "id": "ass:bounded-local-neighborhood",
+     "source": {
+      "env": "lemma:bounded_RR_local",
+      "sentences": [
+       4,
+       4
+      ]
+     },
+     "kind": "support",
+     "free_symbols": [
+      "h"
+     ],
+     "novel": {
+      "flag": true,
+      "justification": "First listed condition of Lemma lemma:bounded_RR_local."
+     }
+    },
+    {
+     "id": "ass:bounded-local-density",
+     "source": {
+      "env": "lemma:bounded_RR_local",
+      "slice": {
+       "from": "The density $f_V",
+       "to": "|\\partial f_V(v')| \\leq \\bar f'.\n    $$"
+      }
+     },
+     "kind": "regularity",
+     "free_symbols": [
+      "f_V"
+     ],
+     "novel": {
+      "flag": true,
+      "justification": "Second listed condition of Lemma lemma:bounded_RR_local."
+     }
+    },
+    {
+     "id": "ass:bounded-local-kernel",
+     "source": {
+      "env": "lemma:bounded_RR_local",
+      "sentences": [
+       8,
+       8
+      ]
+     },
+     "kind": "boundedness",
+     "free_symbols": [
+      "K"
+     ],
+     "novel": {
+      "flag": true,
+      "justification": "Third listed condition of Lemma lemma:bounded_RR_local."
+     }
+    },
+    {
+     "id": "ass:bounded-local-global-conditions",
+     "source": {
+      "env": "lemma:bounded_RR_local",
+      "sentences": [
+       9,
+       9
+      ]
+     },
+     "kind": "regularity",
+     "free_symbols": [],
+     "novel": {
+      "flag": true,
+      "justification": "Fourth listed condition of Lemma lemma:bounded_RR_local."
+     }
+    },
+    {
+     "id": "ass:approx-constants",
+     "source": {
+      "env": "lemma:approx",
+      "sentences": [
+       1,
+       1
+      ]
+     },
+     "kind": "regularity",
+     "free_symbols": [
+      "h",
+      "K"
+     ],
+     "novel": {
+      "flag": true,
+      "justification": "Inline premise of Lemma lemma:approx."
+     }
+    },
+    {
+     "id": "ass:approx-neighborhood",
+     "source": {
+      "env": "lemma:approx",
+      "sentences": [
+       3,
+       3
+      ]
+     },
+     "kind": "support",
+     "free_symbols": [
+      "h"
+     ],
+     "novel": {
+      "flag": true,
+      "justification": "First listed condition of Lemma lemma:approx."
+     }
+    },
+    {
+     "id": "ass:approx-differentiability",
+     "source": {
+      "env": "lemma:approx",
+      "sentences": [
+       5,
+       5
+      ]
+     },
+     "kind": "smoothness",
+     "free_symbols": [
+      "f_V"
+     ],
+     "novel": {
+      "flag": true,
+      "justification": "Second listed condition of Lemma lemma:approx."
+     }
+    },
+    {
+     "id": "ass:approx-derivative-bounds",
+     "source": {
+      "env": "lemma:approx",
+      "slice": {
+       "from": "Assume\n    $$\n\\sup_{ v' \\in N_{h_0}(v)}",
+       "to": "\\inf_{ v' \\in N_{h_0}(v) } f_V(v') \\geq \\tilde{f}.\n$$"
+      }
+     },
+     "kind": "regularity",
+     "free_symbols": [
+      "f_V"
+     ],
+     "novel": {
+      "flag": true,
+      "justification": "Third listed condition of Lemma lemma:approx."
+     }
+    },
+    {
+     "id": "ass:approx-conditional-formula",
+     "source": {
+      "env": "lemma:approx",
+      "slice": {
+       "from": "$\nm(v)f_V(v)\\leq",
+       "to": "\\bar{g}.\n$"
+      }
+     },
+     "kind": "boundedness",
+     "free_symbols": [],
+     "novel": {
+      "flag": true,
+      "justification": "Fourth listed condition of Lemma lemma:approx."
+     }
+    },
+    {
+     "id": "ass:thm-local-global-conditions",
+     "source": {
+      "env": "thm:local",
+      "sentences": [
+       2,
+       2
+      ]
+     },
+     "kind": "regularity",
+     "free_symbols": [],
+     "novel": {
+      "flag": true,
+      "justification": "Inline premise of the global-functional clause of Theorem thm:local."
+     }
+    },
+    {
+     "id": "ass:thm-local-finite-noise",
+     "source": {
+      "env": "thm:local",
+      "slice": {
+       "from": "If noise has finite variance",
+       "to": "finite variance"
+      }
+     },
+     "kind": "regularity",
+     "free_symbols": [],
+     "novel": {
+      "flag": true,
+      "justification": "Inline premise of the finite-noise clause of Theorem thm:local."
+     }
+    },
+    {
+     "id": "ass:thm-local-local-conditions",
+     "source": {
+      "env": "thm:local",
+      "slice": {
+       "from": "Suppose bounded moment, heteroscedasticity, density, and derivative conditions",
+       "to": "defined in Supplement~2 hold."
+      }
+     },
+     "kind": "regularity",
+     "free_symbols": [],
+     "novel": {
+      "flag": true,
+      "justification": "Inline premise of the local-functional clause of Theorem thm:local."
+     }
+    },
+    {
+     "id": "ass:global-representer-moments",
+     "source": {
+      "env": "lemma:global",
+      "slice": {
+       "from": "For $q=3,4$\n    ",
+       "to": "\\|\\alpha_0^{\\min}\\|^2_{\\text{\\normalfont pr},2} \\vee 1\\right).\n$$"
+      }
+     },
+     "kind": "moment",
+     "free_symbols": [
+      "\\alpha_0^{\\min}",
+      "c",
+      "q"
+     ],
+     "novel": {
+      "flag": true,
+      "justification": "First listed condition of Lemma lemma:global."
+     }
+    },
+    {
+     "id": "ass:global-bounded-moments",
+     "source": {
+      "env": "lemma:global",
+      "slice": {
+       "from": "For $q=2,3,4$,\n ",
+       "to": "\\|U_1\\|_{\\text{\\normalfont pr},q}\\leq \\bar{c}.\n    $$"
+      }
+     },
+     "kind": "moment",
+     "free_symbols": [
+      "m",
+      "W",
+      "\\gamma_0",
+      "\\bar{c}",
+      "q"
+     ],
+     "novel": {
+      "flag": true,
+      "justification": "Second listed condition of Lemma lemma:global."
+     }
+    },
+    {
+     "id": "ass:global-heteroscedasticity",
+     "source": {
+      "env": "lemma:global",
+      "slice": {
+       "from": "For $q=2,3,4$,\n    $$\n    U_2=",
+       "to": "\\tilde{c}\\leq \\|U_2 \\mid W\\|_{\\text{\\normalfont pr},q}\\leq \\bar{c}.\n    $$"
+      }
+     },
+     "kind": "moment",
+     "free_symbols": [
+      "Y",
+      "W",
+      "\\gamma_0",
+      "\\tilde{c}",
+      "\\bar{c}",
+      "q"
+     ],
+     "novel": {
+      "flag": true,
+      "justification": "Third listed condition of Lemma lemma:global."
+     }
+    },
+    {
+     "id": "ass:brr-global-setup",
+     "source": {
+      "env": "lemma:bounded_RR_global",
+      "slice": {
+       "from": "with $\\ell_h \\leq C<\\infty$",
+       "to": "with $\\ell_h \\leq C<\\infty$"
+      }
+     },
+     "kind": "regularity",
+     "free_symbols": [
+      "\\ell_h"
+     ],
+     "novel": {
+      "flag": true,
+      "justification": "Opening setup of Lemma lemma:bounded_RR_global."
+     }
+    },
+    {
+     "id": "ass:brr-global-cate-propensity",
+     "source": {
+      "env": "lemma:bounded_RR_global",
+      "sentences": [
+       3,
+       3
+      ]
+     },
+     "kind": "support",
+     "free_symbols": [],
+     "novel": {
+      "flag": true,
+      "justification": "CATE condition of Lemma lemma:bounded_RR_global."
+     }
+    },
+    {
+     "id": "ass:brr-global-rdd-bandwidth",
+     "source": {
+      "env": "lemma:bounded_RR_global",
+      "sentences": [
+       5,
+       5
+      ]
+     },
+     "kind": "regularity",
+     "free_symbols": [],
+     "novel": {
+      "flag": true,
+      "justification": "RDD condition of Lemma lemma:bounded_RR_global."
+     }
+    },
+    {
+     "id": "ass:brr-global-elasticity-bound",
+     "source": {
+      "env": "lemma:bounded_RR_global",
+      "sentences": [
+       7,
+       7
+      ]
+     },
+     "kind": "boundedness",
+     "free_symbols": [
+      "\\alpha_0^{\\min}",
+      "f"
+     ],
+     "novel": {
+      "flag": true,
+      "justification": "Elasticity condition of Lemma lemma:bounded_RR_global."
+     }
+    },
+    {
+     "id": "ass:brr-global-deriv-bound",
+     "source": {
+      "env": "lemma:bounded_RR_global",
+      "sentences": [
+       9,
+       9
+      ]
+     },
+     "kind": "boundedness",
+     "free_symbols": [
+      "f"
+     ],
+     "novel": {
+      "flag": true,
+      "justification": "Derivative condition of Lemma lemma:bounded_RR_global."
+     }
+    },
+    {
+     "id": "ass:resid2-noise",
+     "kind": "premise",
+     "source": {
+      "env": "prop:resid2",
+      "slice": {
+       "from": "E[\\{Y-\\gamma_0(W)\\} \\mid W ]^2\\leq \\bar{\\sigma}^2",
+       "to": "E[\\{Y-\\gamma_0(W)\\} \\mid W ]^2\\leq \\bar{\\sigma}^2"
+      }
+     },
+     "free_symbols": [
+      "Y",
+      "W",
+      "\\gamma_0",
+      "\\bar{\\sigma}"
+     ],
+     "novel": {
+      "flag": true,
+      "justification": "a premise the paper states that no node carried (referee fix)"
+     }
+    }
+   ]
+  },
+  "patches": [
+   {
+    "node": "thm:local-local-clause",
+    "corrected_statement": "Suppose bounded moment, heteroscedasticity, density, and derivative conditions defined in Supplement~2 hold. Suppose the conditions of Lemmas~\\ref{lemma:local},~\\ref{lemma:cont_local},~\\ref{lemma:bounded_RR_local}, and~\\ref{lemma:approx} hold. Then for local functionals\n$\n\\kappa_h/\\sigma_h \\lesssim h^{-1/6}$, $\\sigma_h \\asymp \\bar{M}_h \\asymp h^{-1/2} $, $\\kappa_h\\lesssim h^{-2/3}$, $\\zeta_h\\lesssim h^{-3/4}$,\n$\n\\bar{Q}_h\\lesssim h^{-2}$, $\\bar{\\alpha}_h\\lesssim h^{-1}$, and $\\Delta_h \\lesssim n^{1/2} h^{\\mathsf{v}+1/2}\n$\nwhere $\\mathsf{v}$ is the order of differentiability defined in Supplement~2 and $\\Delta_h=n^{1/2}\\sigma_h^{-1}|\\theta_0^h-\\theta_0^{\\lim}|$.",
+    "add_assumptions": [],
+    "remove_depends_on": [],
+    "proof_note": "Lemma~\\ref{lemma:local} gives positive constants $c_1,C_1$ such that $c_1h^{-1/2}\\leq\\sigma_h,\\bar M_h\\leq C_1h^{-1/2}$, together with $\\kappa_h\\leq C_1h^{-2/3}$ and $\\zeta_h\\leq C_1h^{-3/4}$ for sufficiently small $h$. Therefore $\\sigma_h\\asymp\\bar M_h\\asymp h^{-1/2}$ and $\\kappa_h/\\sigma_h\\leq(C_1/c_1)h^{-2/3+1/2}=(C_1/c_1)h^{-1/6}$. Lemma~\\ref{lemma:cont_local} gives $\\bar Q_h\\lesssim h^{-2}$, and Lemma~\\ref{lemma:bounded_RR_local} gives $\\bar\\alpha_h\\lesssim h^{-1}$. Lemma~\\ref{lemma:approx} gives $|\\theta_0^h-\\theta_0^{\\lim}|\\lesssim h^{\\mathsf v}$ and $\\sigma_h^{-1}\\lesssim h^{1/2}$; multiplying these bounds by $n^{1/2}$ gives $\\Delta_h\\lesssim n^{1/2}h^{\\mathsf v+1/2}$. The cited lemmas state the normalizer, kernel-integral, and variance bounds used in these inequalities.",
+    "owner_explanation": "Claim: The local clause of Theorem~\\ref{thm:local} asserts the displayed oracle moment, representer, continuity, and standardized-bias rates. What is wrong: (a) The kernel-norm step applies neighborhood density bounds at $v-hu$ for every nonzero kernel weight, including points outside that neighborhood; this works from those bounds alone only when all relevant weights stay inside it. (b) The lower variance rate uses control of the full oracle score, including its covariance. (c) Using $\\sigma$ in the approximation subsection and $\\sigma_h$ for the local target is a clarification. Why: With a bounded symmetric pulse kernel and a density singularity away from $v$, $\\omega_{h_n}\\rightarrow\\infty$ along a bandwidth sequence and $h_n\\sigma_{h_n}^2\\rightarrow0$, contradicting $\\sigma_{h_n}\\asymp h_n^{-1/2}$. Proposed fix: The statement invokes the Supplement~2 lemmas that control density-weighted kernel integrals, the normalizer, the full-score variance, and localization bias without requiring compact kernel support; their rates protect Corollary~\\ref{cor:CI_local}."
+   },
+   {
+    "node": "lem:global",
+    "corrected_statement": "\\label{lemma:global}\nSuppose the weighting is bounded, namely $\\ell_h\\leq C<\\infty$, and $\\Gamma\\subset\\mathbb{L}_2$. Suppose $\\alpha_0^{\\min}$ exists. Further suppose there exist $(c,\\tilde c,\\bar c)$ bounded away from zero and above such that the following conditions hold.\n\\begin{enumerate}\n\\item Control of representer moments. For $q=3,4$,\n$$\\|\\alpha_0^{\\min}\\|_{\\text{\\normalfont pr},q}\\leq c\\left(\\|\\alpha_0^{\\min}\\|_{\\text{\\normalfont pr},2}^2\\vee1\\right).$$\n\\item Bounded moments. For $q=2,3,4$,\n$$U_1=m(W,\\gamma_0)-E\\{m(W,\\gamma_0)\\},\\quad\\|U_1\\|_{\\text{\\normalfont pr},q}\\leq\\bar c.$$\n\\item Bounded heteroscedasticity. For $q=2,3,4$,\n$$U_2=Y-\\gamma_0(W),\\quad\\tilde c\\leq\\|U_2\\mid W\\|_{\\text{\\normalfont pr},q}\\leq\\bar c.$$\n\\end{enumerate}\nPut $A=\\|\\alpha_0^{\\min}\\|_{\\text{\\normalfont pr},2}$. Then\n$$[\\tilde cA-\\bar c]_+\\leq\\sigma\\leq\\bar c(1+A),\\quad\\kappa,\\zeta\\leq\\bar c\\{1+c(A^2\\vee1)\\}.$$\nIn summary,\n$$\\sigma<\\infty,\\quad\\kappa,\\zeta<\\infty.$$",
+    "add_assumptions": [],
+    "remove_depends_on": [],
+    "proof_edits": [
+     {
+      "anchor": {
+       "env": "lemma:global",
+       "sentences": [
+        4,
+        6
+       ]
+      },
+      "original": "$E(U_2 \\mid W)=0$ by definition of $U_2$. Note that\n$$\n0 \\leq E\\{E(U_1^2 \\mid W)\\} \\leq \\bar{c}^2,\n$$\nand\n$$\n\\tilde{c}^2 \\bar{M}^2 \\leq E\\{\\alpha_0^{\\min}(W)^2 E(U_2^2 \\mid W)\\} \\leq \\bar{c}^2\\bar{M}^2.\n$$\nIn summary\n$$\n\\tilde{c}^2 \\bar{M}^2 \\leq \\sigma^2 \\leq \\bar{c}^2 (1+\\bar{M}^2).\n$$",
+      "replacement": "Retain the covariance term. Put $A=\\|\\alpha_0^{\\min}\\|_2$. The conditional second-moment bounds give $\\tilde cA\\leq\\|\\alpha_0^{\\min}U_2\\|_2\\leq\\bar cA$, while $\\|U_1\\|_2\\leq\\bar c$. Reverse Minkowski gives $\\sigma=\\|U_1+\\alpha_0^{\\min}U_2\\|_2\\geq[\\tilde cA-\\bar c]_+$; Minkowski gives $\\sigma\\leq\\bar c(1+A)$. These inequalities retain any covariance between the two score terms."
+     },
+     {
+      "anchor": {
+       "env": "lemma:global",
+       "sentences": [
+        7,
+        7
+       ]
+      },
+      "original": "By triangle inequality,\n\\begin{align*}\n   \\|\\psi_0\\|_{\\text{ \\normalfont pr},q} &\n   \\leq \\|U_1\\|_{\\text{ \\normalfont pr},q} + \\|\\alpha_0^{\\min}(W)U_2\\|_{\\text{ \\normalfont pr},q}  \\\\\n    &=\\|U_1\\|_{\\text{ \\normalfont pr},q} + [E\\{\\alpha_0^{\\min}(W)^q E( U_2^q \\mid W)\\}]^{1/q} \\\\\n    &\\leq \\bar{c}+ \\bar{c} \\|\\alpha^{\\min}_0\\|_{\\text{ \\normalfont pr},q}   \\\\\n    &\\leq \\bar{c}(1+c(\\bar{M}^2\\vee 1)).\n\\end{align*}",
+      "replacement": "By Minkowski and conditional expectation, for $q=3,4$,\n\\begin{align*}\n\\|\\psi_0\\|_{\\text{\\normalfont pr},q}&\\leq\\|U_1\\|_{\\text{\\normalfont pr},q}+\\|\\alpha_0^{\\min}(W)U_2\\|_{\\text{\\normalfont pr},q}\\\\\n&=\\|U_1\\|_{\\text{\\normalfont pr},q}+\\left[E\\{|\\alpha_0^{\\min}(W)|^qE(|U_2|^q\\mid W)\\}\\right]^{1/q}\\\\\n&\\leq\\bar c+\\bar c\\|\\alpha_0^{\\min}\\|_{\\text{\\normalfont pr},q}\\leq\\bar c\\{1+c(A^2\\vee1)\\}.\n\\end{align*}"
+     }
+    ],
+    "proof_note": "We extend \\cite[Lemma 3.3]{chernozhukov2018global}. Write\n$$\n\\psi_0(W)=U_1+\\alpha_0^{\\min}(W)U_2.\n$$\nBy law of iterated expectations,\n\\begin{align*}\n    \\sigma^2\n&=E(U_1^2)+2E\\{U_1\\alpha_0^{\\min}(W)U_2\\}+ E(\\{\\alpha_0^{\\min}(W)U_2\\}^2) \\\\\n&=E\\{E(U_1^2 \\mid W)\\}+2E\\{U_1\\alpha_0^{\\min}(W) E(U_2 \\mid W)\\}+ E\\{\\alpha_0^{\\min}(W)^2 E(U_2^2 \\mid W)\\}.\n\\end{align*} Retain the covariance term. Put $A=\\|\\alpha_0^{\\min}\\|_2$. The conditional second-moment bounds give $\\tilde cA\\leq\\|\\alpha_0^{\\min}U_2\\|_2\\leq\\bar cA$, while $\\|U_1\\|_2\\leq\\bar c$. Reverse Minkowski gives $\\sigma=\\|U_1+\\alpha_0^{\\min}U_2\\|_2\\geq[\\tilde cA-\\bar c]_+$; Minkowski gives $\\sigma\\leq\\bar c(1+A)$. These inequalities retain any covariance between the two score terms.\n$$ By Minkowski and conditional expectation, for $q=3,4$,\n\\begin{align*}\n\\|\\psi_0\\|_{\\text{\\normalfont pr},q}&\\leq\\|U_1\\|_{\\text{\\normalfont pr},q}+\\|\\alpha_0^{\\min}(W)U_2\\|_{\\text{\\normalfont pr},q}\\\\\n&=\\|U_1\\|_{\\text{\\normalfont pr},q}+\\left[E\\{|\\alpha_0^{\\min}(W)|^qE(|U_2|^q\\mid W)\\}\\right]^{1/q}\\\\\n&\\leq\\bar c+\\bar c\\|\\alpha_0^{\\min}\\|_{\\text{\\normalfont pr},q}\\leq\\bar c\\{1+c(A^2\\vee1)\\}.\n\\end{align*}\n\\end{align*}",
+    "owner_explanation": "Claim: Lemma~\\ref{lemma:global} bounds the oracle standard deviation and higher moments using the functional operator norm $\\bar M$. What is wrong: (a) The variance step drops $E(U_1\\alpha_0^{\\min}U_2)$ by treating $E(U_2\\mid W)$ as zero, which need not hold for a projection residual. (b) It substitutes $\\bar M$ for the correction representer's norm, although an instrumental-variable inverse equation can make those norms different. Why: With $W=X$, $\\Gamma$ the constants, $U_1=X$, $U_2=-X+Z/2$, and $\\alpha_0^{\\min}=\\bar M=1$, the covariance is $-1$ and $\\sigma=1/2<\\tilde c\\bar M=1$. Proposed fix: The variance calculation retains the covariance and bounds the full score using $A=\\|\\alpha_0^{\\min}\\|_2$; this preserves the finite oracle-moment control used in Theorem~\\ref{thm:dml}."
+   },
+   {
+    "node": "lem:bounded-rr-local-alt1",
+    "corrected_statement": null,
+    "add_assumptions": [
+     {
+      "id": "ass:patch-local-normalizer",
+      "condition": "For the bandwidths in the lemma, $\\omega_h=E[h^{-1}K((V-v)/h)]$ satisfies $\\inf_{0<h<h_0}|\\omega_h|>0$.",
+      "wire_into": [
+       "lem:local",
+       "lem:bounded-rr-local-alt1",
+       "lem:bounded-rr-local-alt2",
+       "lem:bounded-rr-local-alt3",
+       "lem:bounded-rr-local-alt4",
+       "lem:translate-rr",
+       "lem:translate-rr-alt2",
+       "lem:translate-rr-alt3",
+       "lem:translate-rr-alt4",
+       "lem:approx",
+       "thm:local-local-clause",
+       "thm:ci-local",
+       "thm:ci-local-cate-alt2",
+       "thm:ci-local-cate-alt3",
+       "thm:ci-local-cate-alt4",
+       "thm:ci-local-rdd-alt1",
+       "thm:ci-local-rdd-alt2",
+       "thm:ci-local-rdd-alt3",
+       "thm:ci-local-rdd-alt4",
+       "lem:cont-local",
+       "lem:cont-local-rdd"
+      ],
+      "reason": "The proof uses $\\|\\ell_h\\|_\\infty\\leq\\bar K/(h|\\omega_h|)$ and needs a positive lower bound on its denominator to obtain a uniform $O(h^{-1})$ rate. Neighborhood density bounds alone do not ensure this for signed kernels with distant mass; the signed-kernel witness violates the condition. No particular multiple of $\\tilde f$ is needed."
+     }
+    ],
+    "remove_depends_on": [],
+    "proof_edits": [
+     {
+      "anchor": {
+       "env": "lemma:bounded_RR_local",
+       "sentences": [
+        2,
+        2
+       ]
+      },
+      "original": "By the proof of Lemma~\\ref{lemma:local},\n$$\n\\|\\ell\\|_{\\infty}=\\left\\| \\frac{1}{h\\omega}K\\left(\\frac{v'-v}{h}\\right) \\right\\|_{\\infty}\\leq \\bar{K}\\frac{1}{h\\omega}\\leq \\bar{K}\\frac{2}{h \\tilde{f}}.\n$$",
+      "replacement": "Put $c_\\omega=\\inf_{0<t<h_0}|\\omega_t|>0$. The weighting formula and $|K|\\leq\\bar K$ give $\\|\\ell_h\\|_\\infty\\leq\\bar K/(h|\\omega_h|)\\leq\\bar K/(c_\\omega h)$. In the full-$\\mathbb L_2$ CATE setting, $\\alpha_0^{\\min,h}=\\ell_h\\alpha_0^{\\min}$; the global propensity bound gives $\\|\\alpha_0^{\\min}\\|_\\infty\\leq\\check\\alpha$. Consequently $\\|\\alpha_0^{\\min,h}\\|_\\infty\\leq\\check\\alpha\\bar K/(c_\\omega h)$."
+     },
+     {
+      "anchor": {
+       "env": "lemma:bounded_RR_local",
+       "sentences": [
+        3,
+        3
+       ]
+      },
+      "original": "Therefore\n$$\n\\|\\alpha_0^{\\min,h}\\|_{\\infty}\\leq \\check{\\alpha}\\bar{K}\\frac{2}{h \\tilde{f}}\\lesssim h^{-1}.\n$$",
+      "replacement": "$$ Therefore\\quad \\|\\alpha_0^{\\min,h}\\|_\\infty\\leq\\frac{\\check\\alpha\\bar K}{c_\\omega h}\\lesssim h^{-1}. $$ The constant depends on the normalizer bound $c_\\omega$; the stated local density bound alone does not give $c_\\omega\\geq\\tilde f/2$."
+     }
+    ],
+    "proof_note": "Write\n$$\n\\|\\alpha_0^{\\min,h}\\|_{\\infty}\\leq \\check{\\alpha}\\|\\ell\\|_{\\infty}.\nPut $c_\\omega=\\inf_{0<t<h_0}|\\omega_t|>0$. The weighting formula and $|K|\\leq\\bar K$ give $\\|\\ell_h\\|_\\infty\\leq\\bar K/(h|\\omega_h|)\\leq\\bar K/(c_\\omega h)$. In the full-$\\mathbb L_2$ CATE setting, $\\alpha_0^{\\min,h}=\\ell_h\\alpha_0^{\\min}$; the global propensity bound gives $\\|\\alpha_0^{\\min}\\|_\\infty\\leq\\check\\alpha$. Consequently $\\|\\alpha_0^{\\min,h}\\|_\\infty\\leq\\check\\alpha\\bar K/(c_\\omega h)$.\n$$ Therefore\\quad \\|\\alpha_0^{\\min,h}\\|_\\infty\\leq\\frac{\\check\\alpha\\bar K}{c_\\omega h}\\lesssim h^{-1}. $$ The constant depends on the normalizer bound $c_\\omega$; the stated local density bound alone does not give $c_\\omega\\geq\\tilde f/2$.\n$$",
+    "owner_explanation": "Claim: The CATE clause asserts an $h^{-1}$ bound for the localized Riesz representer. What is wrong: The last line uses $|\\omega_h|\\geq\\tilde f/2$, although local density control does not imply that numerical bound when kernel mass reaches beyond the controlled neighborhood. Why: In the nonnegative-kernel example, $\\omega_h=0.05$ and the local density lower bound is $\\tilde f=1/2$, making the displayed finite-sample bound five times too small. Proposed fix: The proof retains the $h^{-1}$ rate with constant $\\check\\alpha\\bar K/c_\\omega$, where $c_\\omega=\\inf_{0<h<h_0}|\\omega_h|$.",
+    "serves_check": "The $h^{-1}$ rate remains available to the CATE and RDD local confidence-interval arguments."
+   },
+   {
+    "node": "lem:bounded-rr-local-alt2",
+    "corrected_statement": null,
+    "add_assumptions": [],
+    "remove_depends_on": [],
+    "proof_edits": [
+     {
+      "anchor": {
+       "env": "lemma:bounded_RR_local",
+       "sentences": [
+        2,
+        2
+       ]
+      },
+      "original": "By the proof of Lemma~\\ref{lemma:local},\n$$\n\\|\\ell\\|_{\\infty}=\\left\\| \\frac{1}{h\\omega}K\\left(\\frac{v'-v}{h}\\right) \\right\\|_{\\infty}\\leq \\bar{K}\\frac{1}{h\\omega}\\leq \\bar{K}\\frac{2}{h \\tilde{f}}.\n$$",
+      "replacement": "Apply ass:patch-local-normalizer separately to the two RDD normalizers, with positive lower bounds $c_\\omega^+$ and $c_\\omega^-$. Then $\\|\\ell_h^\\pm\\|_\\infty\\leq\\bar K/(c_\\omega^\\pm h)$. The full-$\\mathbb L_2$ RDD representer is $\\ell_h^+-\\ell_h^-$, so its sup norm is at most $\\bar K(c_\\omega^{+\\,-1}+c_\\omega^{-\\,-1})/h$."
+     },
+     {
+      "anchor": {
+       "env": "lemma:bounded_RR_local",
+       "sentences": [
+        3,
+        3
+       ]
+      },
+      "original": "Therefore\n$$\n\\|\\alpha_0^{\\min,h}\\|_{\\infty}\\leq \\check{\\alpha}\\bar{K}\\frac{2}{h \\tilde{f}}\\lesssim h^{-1}.\n$$",
+      "replacement": "$$ Therefore\\quad\\|\\alpha_0^{\\min,h}\\|_\\infty\\leq\\frac{\\bar K}{h}\\left(\\frac1{c_\\omega^+}+\\frac1{c_\\omega^-}\\right)\\lesssim h^{-1}. $$"
+     }
+    ],
+    "proof_note": "Write\n$$\n\\|\\alpha_0^{\\min,h}\\|_{\\infty}\\leq \\check{\\alpha}\\|\\ell\\|_{\\infty}.\nApply ass:patch-local-normalizer separately to the two RDD normalizers, with positive lower bounds $c_\\omega^+$ and $c_\\omega^-$. Then $\\|\\ell_h^\\pm\\|_\\infty\\leq\\bar K/(c_\\omega^\\pm h)$. The full-$\\mathbb L_2$ RDD representer is $\\ell_h^+-\\ell_h^-$, so its sup norm is at most $\\bar K(c_\\omega^{+\\,-1}+c_\\omega^{-\\,-1})/h$.\n$$ Therefore\\quad\\|\\alpha_0^{\\min,h}\\|_\\infty\\leq\\frac{\\bar K}{h}\\left(\\frac1{c_\\omega^+}+\\frac1{c_\\omega^-}\\right)\\lesssim h^{-1}. $$\n$$",
+    "consequence_of": [
+     "lem:bounded-rr-local-alt1"
+    ],
+    "reason": "The proof uses each RDD normalizer's actual positive lower bound."
+   },
+   {
+    "node": "lem:bounded-rr-local-alt3",
+    "corrected_statement": "\\label{lemma:bounded_RR_local}\nSuppose $\\alpha_0^{\\min}$ exists and $\\Gamma\\subset\\mathbb{L}_2$. Further suppose there exist $(\\tilde f,\\bar f,\\bar f',h_0,\\bar K)$ bounded away from zero and above such that the following conditions hold.\n\\begin{enumerate}\n\\item Valid neighborhood. There exists $N_{h_0}(v)=\\{v':|v'-v|\\leq h_0\\}\\subset\\mathcal V$.\n\\item Bounded density. The density $f_V$ obeys, for all $v'$ in $N_{h_0}(v)$,\n$$0<\\tilde f\\leq f_V(v')\\leq\\bar f,\\quad|\\partial f_V(v')|\\leq\\bar f'.$$\n\\item Bounded kernel. $|K(u)|\\leq\\bar K$.\n\\item The conditions of Lemma~\\ref{lemma:bounded_RR_global} hold, allowing bandwidth to vanish. For Example~\\ref{ex:elasticity}, $\\alpha_0^{\\min}$ that solves $-\\partial_d\\log f(d\\mid x)=E\\{\\alpha(X,Z)\\mid D=d,X=x\\}$ is bounded above.\n\\end{enumerate}\nSuppose in addition that $\\partial_d\\ell_h(V)=0$ almost everywhere, $\\|\\alpha_0^{\\min}\\|_\\infty\\leq\\check\\alpha<\\infty$, and $c_\\omega=\\inf_{0<h<h_0}|\\omega_h|>0$. Then the finite sample bound\n$$\\|\\alpha_0^{\\min,h}\\|_\\infty\\leq\\frac{\\check\\alpha\\bar K}{c_\\omega h}$$\nholds. In summary,\n$$\\bar\\alpha_h\\lesssim h^{-1}\\rightarrow\\infty.$$",
+    "add_assumptions": [
+     {
+      "id": "ass:patch-elasticity-absolute",
+      "condition": "$\\|\\alpha_0^{\\min}\\|_\\infty\\leq\\check\\alpha<\\infty$.",
+      "wire_into": [
+       "lem:bounded-rr-local-alt3",
+       "lem:translate-rr-alt3",
+       "thm:ci-local-cate-alt3",
+       "thm:ci-local-rdd-alt3"
+      ],
+      "reason": "The product sup-norm step needs both tails of the global correction representer controlled; a one-sided bound does not provide this, and a score unbounded below violates it."
+     },
+     {
+      "id": "ass:patch-elasticity-weight-constant-in-d",
+      "condition": "$\\partial_d\\ell_h(V)=0$ almost everywhere.",
+      "wire_into": [
+       "lem:bounded-rr-local-alt3",
+       "lem:translate-rr-alt3",
+       "thm:ci-local-cate-alt3",
+       "thm:ci-local-rdd-alt3"
+      ],
+      "reason": "Integration by parts yields the product representer only when differentiation does not act on the weight; localization at $D$ violates this condition and creates an $h^{-2}$ term."
+     }
+    ],
+    "remove_depends_on": [],
+    "proof_edits": [
+     {
+      "anchor": {
+       "env": "lemma:bounded_RR_local",
+       "sentences": [
+        1,
+        3
+       ]
+      },
+      "original": "Write\n$$\n\\|\\alpha_0^{\\min,h}\\|_{\\infty}\\leq \\check{\\alpha}\\|\\ell\\|_{\\infty}.\n$$\nBy the proof of Lemma~\\ref{lemma:local},\n$$\n\\|\\ell\\|_{\\infty}=\\left\\| \\frac{1}{h\\omega}K\\left(\\frac{v'-v}{h}\\right) \\right\\|_{\\infty}\\leq \\bar{K}\\frac{1}{h\\omega}\\leq \\bar{K}\\frac{2}{h \\tilde{f}}.\n$$\nTherefore\n$$\n\\|\\alpha_0^{\\min,h}\\|_{\\infty}\\leq \\check{\\alpha}\\bar{K}\\frac{2}{h \\tilde{f}}\\lesssim h^{-1}.\n$$",
+      "replacement": "Since $\\partial_d\\ell_h=0$, integration by parts gives $\\alpha_0^{\\min,h}=\\ell_h\\alpha_0^{\\min}$. Hence $\\|\\alpha_0^{\\min,h}\\|_\\infty\\leq\\|\\alpha_0^{\\min}\\|_\\infty\\|\\ell_h\\|_\\infty\\leq\\check\\alpha\\bar K/(h|\\omega_h|)\\leq\\check\\alpha\\bar K/(c_\\omega h)\\lesssim h^{-1}$."
+     }
+    ],
+    "proof_note": "Since $\\partial_d\\ell_h=0$, integration by parts gives $\\alpha_0^{\\min,h}=\\ell_h\\alpha_0^{\\min}$. Hence $\\|\\alpha_0^{\\min,h}\\|_\\infty\\leq\\|\\alpha_0^{\\min}\\|_\\infty\\|\\ell_h\\|_\\infty\\leq\\check\\alpha\\bar K/(h|\\omega_h|)\\leq\\check\\alpha\\bar K/(c_\\omega h)\\lesssim h^{-1}$.\n$$",
+    "owner_explanation": "Claim: The elasticity clause of Lemma~\\ref{lemma:bounded_RR_local} asserts $\\bar\\alpha_h\\lesssim h^{-1}$. What is wrong: The first proof step treats the localized elasticity representer as $\\ell_h\\alpha_0^{\\min}$; integration by parts also differentiates $\\ell_h$ when localization is at $D$, producing a term of order $h^{-2}$. Why: With localization at $D$, a smooth nonconstant kernel has $\\|\\partial_d\\ell_h(D)\\|_\\infty$ of order $h^{-2}$. Proposed fix: The suggested weaker version requires localization to be constant in $d$, an absolute bound on the global correction representer, and a positive normalizer bound.",
+    "accepted_weakening": true,
+    "given_up": "The $h^{-1}$ bound for elasticity localized at its differentiation variable.",
+    "narrowed_by": "runner"
+   },
+   {
+    "node": "lem:bounded-rr-local-alt4",
+    "corrected_statement": "\\label{lemma:bounded_RR_local}\nSuppose $\\alpha_0^{\\min}$ exists and $\\Gamma\\subset\\mathbb{L}_2$. Further suppose there exist $(\\tilde f,\\bar f,\\bar f',h_0,\\bar K)$ bounded away from zero and above such that the following conditions hold.\n\\begin{enumerate}\n\\item Valid neighborhood. There exists $N_{h_0}(v)=\\{v':|v'-v|\\leq h_0\\}\\subset\\mathcal V$.\n\\item Bounded density. The density $f_V$ obeys, for all $v'$ in $N_{h_0}(v)$,\n$$0<\\tilde f\\leq f_V(v')\\leq\\bar f,\\quad|\\partial f_V(v')|\\leq\\bar f'.$$\n\\item Bounded kernel. $|K(u)|\\leq\\bar K$.\n\\item The conditions of Lemma~\\ref{lemma:bounded_RR_global} hold, allowing bandwidth to vanish. For Example~\\ref{ex:deriv}, $-\\partial_d\\log f(d\\mid v,x)$ is bounded above.\n\\end{enumerate}\nSuppose in addition that $\\|\\partial_d\\log f(D\\mid V,X)\\|_\\infty\\leq\\check\\alpha<\\infty$ and $c_\\omega=\\inf_{0<h<h_0}|\\omega_h|>0$. Then the finite sample bound\n$$\\|\\alpha_0^{\\min,h}\\|_\\infty\\leq\\frac{\\check\\alpha\\bar K}{c_\\omega h}$$\nholds. In summary,\n$$\\bar\\alpha_h\\lesssim h^{-1}\\rightarrow\\infty.$$",
+    "add_assumptions": [
+     {
+      "id": "ass:patch-deriv-score-absolute-local",
+      "condition": "$\\|\\partial_d\\log f(D\\mid V,X)\\|_\\infty\\leq\\check\\alpha<\\infty$.",
+      "wire_into": [
+       "lem:bounded-rr-local-alt4",
+       "lem:translate-rr-alt4",
+       "thm:ci-local-cate-alt4",
+       "thm:ci-local-rdd-alt4"
+      ],
+      "reason": "The absolute sup norm of the localized representer uses the absolute sup norm of the derivative score; the one-sided gamma-score instance violates it."
+     }
+    ],
+    "remove_depends_on": [],
+    "proof_edits": [
+     {
+      "anchor": {
+       "env": "lemma:bounded_RR_local",
+       "sentences": [
+        1,
+        3
+       ]
+      },
+      "original": "Write\n$$\n\\|\\alpha_0^{\\min,h}\\|_{\\infty}\\leq \\check{\\alpha}\\|\\ell\\|_{\\infty}.\n$$\nBy the proof of Lemma~\\ref{lemma:local},\n$$\n\\|\\ell\\|_{\\infty}=\\left\\| \\frac{1}{h\\omega}K\\left(\\frac{v'-v}{h}\\right) \\right\\|_{\\infty}\\leq \\bar{K}\\frac{1}{h\\omega}\\leq \\bar{K}\\frac{2}{h \\tilde{f}}.\n$$\nTherefore\n$$\n\\|\\alpha_0^{\\min,h}\\|_{\\infty}\\leq \\check{\\alpha}\\bar{K}\\frac{2}{h \\tilde{f}}\\lesssim h^{-1}.\n$$",
+      "replacement": "Because $V$ differs from the differentiation variable $D$, integration by parts gives $\\alpha_0^{\\min,h}=-\\ell_h(V)\\partial_d\\log f(D\\mid V,X)$. Thus $\\|\\alpha_0^{\\min,h}\\|_\\infty\\leq\\check\\alpha\\|\\ell_h\\|_\\infty\\leq\\check\\alpha\\bar K/(h|\\omega_h|)\\leq\\check\\alpha\\bar K/(c_\\omega h)\\lesssim h^{-1}$."
+     }
+    ],
+    "proof_note": "Because $V$ differs from the differentiation variable $D$, integration by parts gives $\\alpha_0^{\\min,h}=-\\ell_h(V)\\partial_d\\log f(D\\mid V,X)$. Thus $\\|\\alpha_0^{\\min,h}\\|_\\infty\\leq\\check\\alpha\\|\\ell_h\\|_\\infty\\leq\\check\\alpha\\bar K/(h|\\omega_h|)\\leq\\check\\alpha\\bar K/(c_\\omega h)\\lesssim h^{-1}$.\n$$",
+    "owner_explanation": "Claim: The derivative clause of Lemma~\\ref{lemma:bounded_RR_local} asserts a finite localized representer bound of order $h^{-1}$. What is wrong: The product sup-norm step treats an upper bound on $-\\partial_d\\log f$ as a bound on its absolute value; that holds only when the score is bounded on both sides. Why: For gamma-distributed $D$ and independent uniform $V$, $-\\partial_d\\log f(D)$ is bounded above but unbounded below, so $\\|\\ell_h(V)\\partial_d\\log f(D)\\|_\\infty=\\infty$. Proposed fix: The suggested weaker version requires an absolute score bound and uses the actual positive normalizer bound.",
+    "accepted_weakening": true,
+    "given_up": "The $h^{-1}$ representer bound under a merely one-sided derivative-score bound.",
+    "narrowed_by": "runner"
+   },
+   {
+    "node": "prop:resid2",
+    "corrected_statement": "\\label{prop:resid2}\nSuppose Assumption~\\ref{assumption:cont} holds and\n$$\nE[\\{Y-\\gamma_0(W)\\}^2\\mid W]\\leq\\bar{\\sigma}^2,\\quad\\|\\hat{\\alpha}_{\\ell}\\|_{\\infty}\\leq\\bar{\\alpha}'.\n$$\nSuppose in addition that, for every fold $\\ell$, $\\hat{\\gamma}_{\\ell}-\\gamma_0\\in\\Gamma$ almost surely. Then with probability $1-\\epsilon'/(2L)$,\n\\begin{align*}\n\\Delta_{4\\ell}&\\leq t_4=\\frac{6L}{\\epsilon'}\\bar{Q}\\mathcal{R}(\\hat{\\gamma}_{\\ell})^q;\\\\\n\\Delta_{5\\ell}&\\leq t_5=\\frac{6L}{\\epsilon'}(\\bar{\\alpha}')^2\\mathcal{R}(\\hat{\\gamma}_{\\ell});\\\\\n\\Delta_{6\\ell}&\\leq t_6=\\frac{6L}{\\epsilon'}\\bar{\\sigma}^2\\mathcal{R}(\\hat{\\alpha}_{\\ell}).\n\\end{align*}",
+    "add_assumptions": [
+     {
+      "id": "ass:patch-fitted-errors-in-gamma",
+      "condition": "For every fold $\\ell$, $\\hat\\gamma_\\ell-\\gamma_0\\in\\Gamma$ almost surely.",
+      "wire_into": [
+       "prop:resid",
+       "prop:resid-alt",
+       "prop:resid2",
+       "prop:delta",
+       "prop:delta-alt",
+       "prop:delta2",
+       "thm:dml-alt1",
+       "thm:dml-alt2",
+       "thm:dml-alt3",
+       "thm:dml-alt4",
+       "thm:var",
+       "thm:ci",
+       "thm:ci-local-clause",
+       "thm:ci-local",
+       "thm:ci-local-cate-alt2",
+       "thm:ci-local-cate-alt3",
+       "thm:ci-local-cate-alt4",
+       "thm:ci-local-rdd-alt1",
+       "thm:ci-local-rdd-alt2",
+       "thm:ci-local-rdd-alt3",
+       "thm:ci-local-rdd-alt4"
+      ],
+      "reason": "The residual bounds apply Assumption 1 to $u=\\hat\\gamma_\\ell-\\gamma_0$, but it controls $m(W,u)$ only for $u\\in\\Gamma$. Without membership or an equivalent extension of Assumption 1, that step has no bound; the Bernoulli fitted-error instance lies outside its constant-function $\\Gamma$."
+     },
+     {
+      "id": "ass:patch-resid2-conditional-second-moment",
+      "condition": "$E[\\{Y-\\gamma_0(W)\\}^2\\mid W]\\leq\\bar\\sigma^2$ almost surely.",
+      "wire_into": [
+       "prop:resid2",
+       "prop:delta2",
+       "thm:var",
+       "thm:ci",
+       "thm:ci-local-clause",
+       "thm:ci-local",
+       "thm:ci-local-cate-alt2",
+       "thm:ci-local-cate-alt3",
+       "thm:ci-local-cate-alt4",
+       "thm:ci-local-rdd-alt1",
+       "thm:ci-local-rdd-alt2",
+       "thm:ci-local-rdd-alt3",
+       "thm:ci-local-rdd-alt4"
+      ],
+      "reason": "Bounding $\\Delta_{6\\ell}$ uses the conditional second moment. The square of the conditional mean can vanish with arbitrarily large variance, so it cannot supply that bound; the zero-mean high-variance instance violates the printed premise's intended implication.",
+      "restates": "Spells out the paper's conditional-noise bound in Theorem~\\ref{thm:var}."
+     }
+    ],
+    "remove_depends_on": [
+     "ass:resid2-noise"
+    ],
+    "proof_edits": [
+     {
+      "anchor": {
+       "env": "prop:resid2",
+       "sentences": [
+        7,
+        7
+       ]
+      },
+      "original": "Hence by assumption of finite $(\\bar{Q},\\bar{\\sigma},\\bar{\\alpha}')$\n    $$\n        E(|\\Delta_{4\\ell}|\\mid I^c_{\\ell})= E(\\Delta_{4\\ell}\\mid I^c_{\\ell})\n        =E[\\{m(W,u)\\}^2\\mid I^c_{\\ell}]\n        \\leq  \\bar{Q} \\mathcal{R}(\\hat{\\gamma}_{\\ell})^q.\n   $$",
+      "replacement": "Conditional on $I_\\ell^c$, $u=\\hat\\gamma_\\ell-\\gamma_0$ is fixed and belongs to $\\Gamma$ by ass:patch-fitted-errors-in-gamma. Assumption~\\ref{assumption:cont} gives $E(\\Delta_{4\\ell}\\mid I_\\ell^c)=E\\{m(W,u)^2\\mid I_\\ell^c\\}\\leq\\bar Q\\{E[u(W)^2\\mid I_\\ell^c]\\}^q=\\bar Q\\mathcal R(\\hat\\gamma_\\ell)^q$."
+     },
+     {
+      "anchor": {
+       "env": "prop:resid2",
+       "sentences": [
+        9,
+        9
+       ]
+      },
+      "original": "Finally \n    \\begin{align*}\n       E(|\\Delta_{6\\ell}|\\mid I^c_{\\ell})&=\n       E(\\Delta_{6\\ell}\\mid I^c_{\\ell}) \\\\\n        &=E[v(W)^2\\{Y-\\gamma_0(W)\\}^2\\mid I^c_{\\ell}] \\\\\n        &=E\\{v(W)^2 E[\\{Y-\\gamma_0(W)\\}^2\\mid W,I^c_{\\ell}]\\mid I^c_{\\ell}\\} \\\\\n        &\\leq \\bar{\\sigma}^2 \\mathcal{R}(\\hat{\\alpha}_{\\ell}).\n    \\end{align*}",
+      "replacement": "Finally, with $v=\\hat\\alpha_\\ell-\\alpha_0^{\\min}$ fixed given training data, iterated expectation and ass:patch-resid2-conditional-second-moment give $E(\\Delta_{6\\ell}\\mid I_\\ell^c)=E[v(W)^2E\\{(Y-\\gamma_0(W))^2\\mid W\\}\\mid I_\\ell^c]\\leq\\bar\\sigma^2E[v(W)^2\\mid I_\\ell^c]=\\bar\\sigma^2\\mathcal R(\\hat\\alpha_\\ell)$. Conditional Markov inequality at each displayed threshold gives failure probability at most $\\epsilon'/(6L)$; the union bound over the three thresholds gives $\\epsilon'/(2L)$."
+     }
+    ],
+    "proof_note": "We proceed in steps analogous to Proposition~\\ref{prop:resid}.\n\\begin{enumerate}\n    \\item Markov inequality implies\n     \\begin{align*}\n        \\text{pr}(|\\Delta_{4\\ell}|>t_4)&\\leq \\frac{E(|\\Delta_{4\\ell}|)}{t_4};\\\\\n        \\text{pr}(|\\Delta_{5\\ell}|>t_5)&\\leq \\frac{E(|\\Delta_{5\\ell}|)}{t_5}; \\\\\n        \\text{pr}(|\\Delta_{6\\ell}|>t_6)&\\leq \\frac{E(|\\Delta_{6\\ell}|)}{t_6}.\n    \\end{align*}\n    \\item Law of iterated expectations implies\n    \\begin{align*}\n        E(|\\Delta_{4\\ell}|)&=E\\{E(|\\Delta_{4\\ell}|\\mid I^c_{\\ell})\\};\\\\\n        E(|\\Delta_{5\\ell}|)&=E\\{E(|\\Delta_{5\\ell}|\\mid I^c_{\\ell})\\}; \\\\\n        E(|\\Delta_{6\\ell}|)&=E\\{E(|\\Delta_{6\\ell}|\\mid I^c_{\\ell})\\}.\n    \\end{align*}\n    \\item Bounding conditional moments.\n    \n     Conditional on $I_{\\ell}^c$, $(u,v)$ are nonrandom. Moreover, observations within fold $I_{\\ell}$ are independent and identically distributed. Conditional on $I_\\ell^c$, $u=\\hat\\gamma_\\ell-\\gamma_0$ is fixed and belongs to $\\Gamma$ by ass:patch-fitted-errors-in-gamma. Assumption~\\ref{assumption:cont} gives $E(\\Delta_{4\\ell}\\mid I_\\ell^c)=E\\{m(W,u)^2\\mid I_\\ell^c\\}\\leq\\bar Q\\{E[u(W)^2\\mid I_\\ell^c]\\}^q=\\bar Q\\mathcal R(\\hat\\gamma_\\ell)^q$.\n   $$\n   Similarly\n    $$\n       E(|\\Delta_{5\\ell}|\\mid I^c_{\\ell})= E(\\Delta_{5\\ell}\\mid I^c_{\\ell})\n        =E[\\{\\hat{\\alpha}_{\\ell}(W)u(W)\\}^2\\mid I^c_{\\ell}]\n        \\leq  (\\bar{\\alpha}')^2 \\mathcal{R}(\\hat{\\gamma}_{\\ell}).\n   $$ Finally, with $v=\\hat\\alpha_\\ell-\\alpha_0^{\\min}$ fixed given training data, iterated expectation and ass:patch-resid2-conditional-second-moment give $E(\\Delta_{6\\ell}\\mid I_\\ell^c)=E[v(W)^2E\\{(Y-\\gamma_0(W))^2\\mid W\\}\\mid I_\\ell^c]\\leq\\bar\\sigma^2E[v(W)^2\\mid I_\\ell^c]=\\bar\\sigma^2\\mathcal R(\\hat\\alpha_\\ell)$. Conditional Markov inequality at each displayed threshold gives failure probability at most $\\epsilon'/(6L)$; the union bound over the three thresholds gives $\\epsilon'/(2L)$.\n    \\end{align*}\n    \\item Collecting results gives\n     \\begin{align*}\n        \\text{pr}(|\\Delta_{4\\ell}|>t_4)&\\leq \\frac{\\bar{Q} \\mathcal{R}(\\hat{\\gamma}_{\\ell})^q}{t_4}=\\frac{\\epsilon'}{6L}\\\\\n        \\text{pr}(|\\Delta_{5\\ell}|>t_5)&\\leq \\frac{(\\bar{\\alpha}')^2 \\mathcal{R}(\\hat{\\gamma}_{\\ell})}{t_5}=\\frac{\\epsilon'}{6L} \\\\\n        \\text{pr}(|\\Delta_{6\\ell}|>t_6)&\\leq \\frac{\\bar{\\sigma}^2 \\mathcal{R}(\\hat{\\alpha}_{\\ell})}{t_6}=\\frac{\\epsilon'}{6L}\n    \\end{align*}\n    Therefore with probability $1-\\epsilon'/(2L)$, the following inequalities hold:\n\\begin{align*}\n    |\\Delta_{4\\ell}|&\\leq t_4=\\frac{6L}{\\epsilon'}\\bar{Q} \\mathcal{R}(\\hat{\\gamma}_{\\ell})^q;\\\\\n    |\\Delta_{5\\ell}|&\\leq t_5=\\frac{6L}{\\epsilon'}(\\bar{\\alpha}')^2 \\mathcal{R}(\\hat{\\gamma}_{\\ell});\\\\\n    |\\Delta_{6\\ell}|&\\leq t_6=\\frac{6L}{\\epsilon'}\\bar{\\sigma}^2 \\mathcal{R}(\\hat{\\alpha}_{\\ell}).\n\\end{align*}\n\\end{enumerate}",
+    "owner_explanation": "Claim: Proposition~\\ref{prop:resid2} bounds three foldwise second-moment terms using nuisance mean-square errors. What is wrong: (a) Its continuity step applies Assumption~\\ref{assumption:cont} to a fitted error outside $\\Gamma$, where that assumption supplies no bound. (b) Its noise step uses a conditional second moment, while the printed premise bounds only the square of a conditional mean. Why: For Bernoulli $W$, constant-function $\\Gamma$, $m(w,\\gamma)=10\\{\\gamma(1)-\\gamma(0)\\}$, $\\hat\\gamma_\\ell(w)=\\delta w$, and $L=2$, the paper's conditions on $\\Gamma$ hold but $\\Delta_{4\\ell}=100\\delta^2>t_4=6\\delta^2$ at $\\epsilon'=1$. Proposed fix: The statement places each fitted error in $\\Gamma$ and writes the noise premise as the conditional second-moment bound used by the proof; this protects Theorem~\\ref{thm:var} and Corollary~\\ref{cor:CI}.",
+    "accepted_weakening": true,
+    "given_up": "patch hypothesis ass:patch-fitted-errors-in-gamma: weakens the contribution: Since $\\Gamma$ is linear and $\\gamma_0\\in\\Gamma$, this condition requires every fitted $\\hat\\gamma_\\ell$ to lie in $\\Gamma$, although the paper allows black-box estimators with mean-square rates. It is satisfiable: with Bernoulli $W$, independent mean-zero Rademacher $Y$, constant-function $\\Gamma$, $\\gamma_0=0$, $m(w,\\gamma)=\\gamma(w)$, and $\\hat\\gamma_\\ell(w)=\\delta$, it holds. In the same model, $\\hat\\gamma_\\ell(w)=\\delta w$ lies outside $\\Gamma$ while the required continuity bound and Riesz identity still hold. Extending those two properties to the realized fitted errors would retain this case.",
+    "narrowed_by": "runner"
+   }
+  ],
+  "paper_errors": {
+   "lem:global": {
+    "detail": "For a projection onto a proper Γ, E(U₂ | W) need not be zero. The variance expansion retains 2E(U₁α₀^{min}(W)U₂); dropping it invalidates the stated lower bound. Separately, the paper leaves unresolved whether σ=0 is excluded from κ/σ.",
+    "witness": "Let X and Z be independent Rademacher variables, W=X, Γ be the constant functions, γ₀=1, m(W,γ)=(1+X)γ(W), Y=1−X+Z/2, and ℓ_h=1. Then γ₀ is the projection of E(Y | W) onto Γ, α₀^{min}=M̄=1, U₁=X, and U₂=−X+Z/2. The stated moment conditions hold with c=c̃=1 and c̄=2. Yet E(U₁U₂)=−1, so σ²=1−2+5/4=1/4, contradicting c̃M̄≤σ.",
+    "owner_explanation": "Claim: The printed lemma asserts σ≥\\tilde c\\bar M and variance equivalence with \\bar M. What is wrong: Step: $E(U_2 \\mid W)=0$ by definition of $U_2$. It uses: $\\gamma_0(W)=E(Y\\mid W)$ which the paper assumes only on: the regression case. But the step applies it at: projection models with $\\gamma_0\\in\\Gamma$. Why: With W=X, Γ the constant functions, γ₀=1, m(W,γ)=(1+X)γ(W), and Y=1−X+Z/2 for independent Rademacher X and Z, σ=1/2 while \\tilde c\\bar M=1. Proposed fix: The confirmed conclusion retains the covariance through triangle bounds, yielding [\\tilde c\\bar M−\\bar c]₊≤σ≤\\bar c(1+\\bar M), and restricts ratios involving σ to σ>0.",
+    "weakens_contribution": true,
+    "suggested_repair": "corrected statement: \\label{lemma:global}\nUnder the lemma's stated conditions, $[\\tilde c\\bar M-\\bar c]_+\\leq\\sigma\\leq\\bar c(1+\\bar M)$ and $\\kappa,\\zeta\\leq\\bar c\\{1+c(\\bar M^2\\vee1)\\}$. In particular these quantities are finite; ratios involving $\\sigma$ are asserted only when $\\sigma>0$. · gives up: The lower bound $\\tilde c\\bar M\\leq\\sigma$ and $\\sigma\\asymp\\bar M$ no longer cover projection models.",
+    "auto_narrowed": true,
+    "explanation_patch": "6e9efd9e9969b444",
+    "explanation_clarity": {
+     "grade": "ok",
+     "reason": "It locates the deleted covariance term and explains why a projection residual need not have conditional mean zero."
+    }
+   },
+   "prop:resid2": {
+    "detail": "The displayed noise premise literally squares the conditional mean; the proof uses the conditional second moment, as does the preceding residual proposition, so that intended reading is pinned. Even under it, mean-square continuity applies only on Γ, while the paper says the black-box estimator needs only a mean-square rate. The analogous-proposition citation supplies no hypothesis, and the estimated-representer bound appears explicitly in this proposition; both lint warnings are dismissed. The earlier foldwise-second-moment verdict was used.",
+    "witness": "Let W be Bernoulli(1/2), Γ be the constant functions, γ₀=Y=0, m(w,γ)=10{γ(1)−γ(0)}, and take deterministic estimates γ̂ℓ(w)=δw and α̂ℓ=0. On Γ, the continuity assumption holds with Q̄=q=1; all noise and representer bounds hold, and m is pointwise linear. With L=2 and ε′=1, Δ₄ℓ=100δ² while t₄=6δ², so the claimed event has probability zero.",
+    "owner_explanation": "The proposition claims a high-probability bound for the residual terms using the estimator’s mean-square error. Its continuity assumption controls functions in Γ, but a black-box estimate can lie outside Γ and have a much larger functional value, as in the Bernoulli example. A fix would require the fitted functions to lie in Γ or extend the continuity bound to their errors.",
+    "weakens_contribution": true,
+    "auto_narrowed": true,
+    "suggested_repair": "corrected statement: \\label{prop:resid2}\nSuppose Assumption~\\ref{assumption:cont} holds and\n$$\nE[\\{Y-\\gamma_0(W)\\}^2\\mid W]\\leq\\bar{\\sigma}^2,\\quad\\|\\hat{\\alpha}_{\\ell}\\|_{\\infty}\\leq\\bar{\\alpha}'.\n$$\nSuppose in addition that, for every fold $\\ell$, $\\hat{\\gamma}_{\\ell}-\\gamma_0\\in\\Gamma$ almost surely. Then with probability $1-\\epsilon'/(2L)$,\n\\begin{align*}\n\\Delta_{4\\ell}&\\leq t_4=\\frac{6L}{\\epsilon'}\\bar{Q}\\mathcal{R}(\\hat{\\gamma}_{\\ell})^q;\\\\\n\\Delta_{5\\ell}&\\leq t_5=\\frac{6L}{\\epsilon'}(\\bar{\\alpha}')^2\\mathcal{R}(\\hat{\\gamma}_{\\ell});\\\\\n\\Delta_{6\\ell}&\\leq t_6=\\frac{6L}{\\epsilon'}\\bar{\\sigma}^2\\mathcal{R}(\\hat{\\alpha}_{\\ell}).\n\\end{align*} · added hypotheses: ass:patch-fitted-errors-in-gamma: For every fold $\\ell$, $\\hat\\gamma_\\ell-\\gamma_0\\in\\Gamma$ almost surely.; ass:patch-resid2-conditional-second-moment: $E[\\{Y-\\gamma_0(W)\\}^2\\mid W]\\leq\\bar\\sigma^2$ almost surely. · gives up: patch hypothesis ass:patch-fitted-errors-in-gamma: weakens the contribution: Since $\\Gamma$ is linear and $\\gamma_0\\in\\Gamma$, this condition requires every fitted $\\hat\\gamma_\\ell$ to lie in $\\Gamma$, although the paper allows black-box estimators with mean-square rates. It is satisfiable: with Bernoulli $W$, independent mean-zero Rademacher $Y$, constant-function $\\Gamma$, $\\gamma_0=0$, $m(w,\\gamma)=\\gamma(w)$, and $\\hat\\gamma_\\ell(w)=\\delta$, it holds. In the same model, $\\hat\\gamma_\\ell(w)=\\delta w$ lies outside $\\Gamma$ while the required continuity bound and Riesz identity still hold. Extending those two properties to the realized fitted errors would retain this case."
+   },
+   "thm:local-local-clause": {
+    "detail": "weakens the contribution: K(u)=0 for |u|>1 excludes Gaussian localization allowed by the paper’s bounded, symmetric, unit-mass kernel convention, even when all the claimed local rates hold. The theorem defines Δ_h using σ_h, while the approximation subsection uses σ without explicitly reconciling them.",
+    "witness": null,
+    "owner_decision": "redo",
+    "guidance": "keep Gaussian kernels: control the kernel's distant mass via the kernel-order moment conditions (∫|u|^v|K|<∞) and a global bound on m·f_V (or global density/derivative bounds) instead of compact support",
+    "owner_explanation": "Claim: The printed theorem asserts the displayed oracle moment and standardized localization bias rates for local functionals. What is wrong: Step: “$\\tilde{f}/2  \\leq \\omega \\leq 2 \\bar f.$” It uses: bounded density, which the paper assumes only on: $N_{h_0}(v)$. But the step applies it at: $v-hu$ for every nonzero kernel weight, including points outside that neighborhood. Why: With a bounded symmetric pulse kernel and a density singularity away from v, the normalizer diverges along a bandwidth sequence and σ_h is smaller than order h^{-1/2}. Proposed fix: The repair controls the density-weighted kernel integrals and normalizer, states the kernel moment and distant-tail conditions used by the bias argument, supplies the variance lower bound, and identifies the local standard deviation in Δ_h as σ_h.",
+    "explanation_patch": "97cab99969d9527d",
+    "explanation_clarity": {
+     "grade": "ok",
+     "reason": "The explanation identifies the Taylor step, the neighborhood where its bounds hold, and the kernel evaluations outside it."
+    }
+   },
+   "lem:bounded-rr-local-alt3": {
+    "detail": "any repair weakens the contribution: when elasticity is localized at its differentiation variable $D$, the product rule adds $-\\partial_d\\ell_h$ of order $h^{-2}$, so preserving the claimed $h^{-1}$ bound excludes that allowed localization.",
+    "witness": null,
+    "weakens_contribution": true,
+    "suggested_repair": "corrected statement: \\label{lemma:bounded_RR_local}\nSuppose $\\alpha_0^{\\min}$ exists and $\\Gamma\\subset\\mathbb{L}_2$. Further suppose there exist $(\\tilde f,\\bar f,\\bar f',h_0,\\bar K)$ bounded away from zero and above such that the following conditions hold.\n\\begin{enumerate}\n\\item Valid neighborhood. There exists $N_{h_0}(v)=\\{v':|v'-v|\\leq h_0\\}\\subset\\mathcal V$.\n\\item Bounded density. The density $f_V$ obeys, for all $v'$ in $N_{h_0}(v)$,\n$$0<\\tilde f\\leq f_V(v')\\leq\\bar f,\\quad|\\partial f_V(v')|\\leq\\bar f'.$$\n\\item Bounded kernel. $|K(u)|\\leq\\bar K$.\n\\item The conditions of Lemma~\\ref{lemma:bounded_RR_global} hold, allowing bandwidth to vanish. For Example~\\ref{ex:elasticity}, $\\alpha_0^{\\min}$ that solves $-\\partial_d\\log f(d\\mid x)=E\\{\\alpha(X,Z)\\mid D=d,X=x\\}$ is bounded above.\n\\end{enumerate}\nSuppose in addition that $\\partial_d\\ell_h(V)=0$ almost everywhere, $\\|\\alpha_0^{\\min}\\|_\\infty\\leq\\check\\alpha<\\infty$, and $c_\\omega=\\inf_{0<h<h_0}|\\omega_h|>0$. Then the finite sample bound\n$$\\|\\alpha_0^{\\min,h}\\|_\\infty\\leq\\frac{\\check\\alpha\\bar K}{c_\\omega h}$$\nholds. In summary,\n$$\\bar\\alpha_h\\lesssim h^{-1}\\rightarrow\\infty.$$ · added hypotheses: ass:patch-elasticity-absolute: $\\|\\alpha_0^{\\min}\\|_\\infty\\leq\\check\\alpha<\\infty$.; ass:patch-elasticity-weight-constant-in-d: $\\partial_d\\ell_h(V)=0$ almost everywhere. · gives up: The $h^{-1}$ bound for elasticity localized at its differentiation variable.",
+    "auto_narrowed": true
+   },
+   "lem:bounded-rr-local-alt4": {
+    "detail": "every repair weakens the claim",
+    "witness": null,
+    "weakens_contribution": true,
+    "auto_narrowed": true,
+    "suggested_repair": "corrected statement: \\label{lemma:bounded_RR_local}\nSuppose $\\alpha_0^{\\min}$ exists and $\\Gamma\\subset\\mathbb{L}_2$. Further suppose there exist $(\\tilde f,\\bar f,\\bar f',h_0,\\bar K)$ bounded away from zero and above such that the following conditions hold.\n\\begin{enumerate}\n\\item Valid neighborhood. There exists $N_{h_0}(v)=\\{v':|v'-v|\\leq h_0\\}\\subset\\mathcal V$.\n\\item Bounded density. The density $f_V$ obeys, for all $v'$ in $N_{h_0}(v)$,\n$$0<\\tilde f\\leq f_V(v')\\leq\\bar f,\\quad|\\partial f_V(v')|\\leq\\bar f'.$$\n\\item Bounded kernel. $|K(u)|\\leq\\bar K$.\n\\item The conditions of Lemma~\\ref{lemma:bounded_RR_global} hold, allowing bandwidth to vanish. For Example~\\ref{ex:deriv}, $-\\partial_d\\log f(d\\mid v,x)$ is bounded above.\n\\end{enumerate}\nSuppose in addition that $\\|\\partial_d\\log f(D\\mid V,X)\\|_\\infty\\leq\\check\\alpha<\\infty$ and $c_\\omega=\\inf_{0<h<h_0}|\\omega_h|>0$. Then the finite sample bound\n$$\\|\\alpha_0^{\\min,h}\\|_\\infty\\leq\\frac{\\check\\alpha\\bar K}{c_\\omega h}$$\nholds. In summary,\n$$\\bar\\alpha_h\\lesssim h^{-1}\\rightarrow\\infty.$$ · added hypotheses: ass:patch-deriv-score-absolute-local: $\\|\\partial_d\\log f(D\\mid V,X)\\|_\\infty\\leq\\check\\alpha<\\infty$. · gives up: The $h^{-1}$ representer bound under a merely one-sided derivative-score bound."
+   }
+  }
+ },
+ "dfm": {
+  "var_kurt_tex": "\n\n\\begin{thm}{}\nAssume that $Y(z)$ has finite kurtosis $\\kappa_z$.\nUnder the null of equal variance,\n$$\nt_{kvar} \\equiv \\frac{\\log \\widehat{\\sigma}_1^2 - \\log \\widehat{\\sigma}_0^2}{   \\sqrt{     \\left (  \\widehat{\\kappa}_1 - 1 \\right) / N_1  + \\left( \\widehat{\\kappa}_0 - 1 \\right) / N_0       }       }  \n\\stackrel{d}{\\longrightarrow} \\mathcal{N}(0, 1), \n$$\nas $N\\rightarrow \\infty$.\n\\label{thm::var-kurt}\n\\end{thm}\n\n%\\begin{proof}[Proof of Theorem \\ref{cor::scale}.]\n%Technical details omitted for space (but available upon request), but the core argument is that the CDFs formed by linearly interpolating the points of the discrete ECDFs can be transformed as above, and the resulting transformation gives a constant shift for the original point masses of the original distributions.\n%\\end{proof}\n\n{\\sc Proof.}\nFrom the classic result \\citep{lehmann1999elements}, we have\n$$\n\\sqrt{N_t} (\\widehat{\\sigma}_t^2 - \\sigma_t^2) \\stackrel{d}{\\longrightarrow} \n\\mathcal{N} \\left\\{ 0,  \\text{var}(Y_t - \\mu_t)^2 = \\sigma^4 (  \\kappa_t - 1  )   \\right\\},\n$$\nand therefore using delta-method we have that\n$$\n\\sqrt{N_t} (\\log \\widehat{\\sigma}_t^2 - \\log \\sigma_t^2) \\stackrel{d}{\\longrightarrow} \\mathcal{N}(0,    \\kappa_t - 1     ).\n$$\nUnder the null, $\\sigma_1^2 = \\sigma_0^2$, and $\\log \\widehat{\\sigma}_1^2 - \\log \\widehat{\\sigma}_0^2$ has the following asymptotic distribution\n\\begin{equation}\n\\frac{\\log \\widehat{\\sigma}_1^2 - \\log \\widehat{\\sigma}_0^2}{  \\sqrt{  (  \\kappa_1 - 1  ) / N_1     + (\\kappa_0 - 1 ) / N_0}    } \n\\stackrel{d}{\\longrightarrow} \\mathcal{N}(0, 1).  \\label{eq:asmp_var}\n\\end{equation}\nDue to the fact that $\\widehat{\\kappa}_t\\rightarrow \\kappa_t$ in probability and Slutsky's Theorem, we have\n$$\n\\frac{\\log \\widehat{\\sigma}_1^2 - \\log \\widehat{\\sigma}_0^2}{  \\sqrt{   \\left(  \\widehat{ \\kappa}_1 - 1 \\right) / N_1     + \\left(  \\widehat{ \\kappa}_0 - 1 \\right) / N_0    }   } \n\\stackrel{d}{\\longrightarrow} \\mathcal{N}(0, 1).\\Box\n$$",
+  "twoforms_tex": "\\begin{lemma}{}\nTake random variables $A$ and $B$ with invertible CDFs $F_A(\\cdot)$ and $F_B(\\cdot)$.  Then \n\\[ F_A(y) = F_B(y - \\tau) \\qquad \\forall y \\in [F_A^{-1}(0),F_A^{-1}(1)]  \\]\nis equivalent to\n\\[ F_A^{-1}(p) - F_B^{-1}(p) = \\tau \\qquad \\forall p \\in [0,1] . \\]\\label{lemma::twoforms}\n\\end{lemma}\n\\bigskip\n{\\sc Proof of Lemma \\ref{lemma::twoforms}.}\nThe conclusion follows if we couple $A$ and $B$ through a common Uniform$(0,1)$ random variable $U$: $A = F_A^{-1}(U)$ and $B = F_B^{-1}(U)$.\n$\\Box$\n\n",
+  "unfixable": [
+   {
+    "node": "thm:var-kurt",
+    "reason": "any repair weakens the contribution: patch hypothesis ass:patch-independent-complete-randomization: weakens the contribution: The paper conditions on the observed science table and says randomness comes only from assignment; this hypothesis requires independent sampling of potential-outcome pairs and excludes fixed science table sequences and matched-pair randomization. Independent bivariate normal pairs with balanced complete randomization satisfy the hypothesis, so it is consistent, but it does not merely restate the paper’s setting.",
+    "suggested_repair": {
+     "corrected_statement": "Assume that $Y(z)$ has finite kurtosis $\\kappa_z$. Suppose in addition that the potential-outcome pairs are independent draws from a common joint distribution with continuous, nondegenerate marginals, and that, independently of those draws, a complete randomization assigns exactly $N_1$ units to treatment and $N_0$ to control, with $N_1/N\\rightarrow r\\in(0,1)$. Under the null of equal variance,\n$$\nt_{kvar} \\equiv \\frac{\\log \\widehat{\\sigma}_1^2 - \\log \\widehat{\\sigma}_0^2}{\\sqrt{(\\widehat{\\kappa}_1-1)/N_1+(\\widehat{\\kappa}_0-1)/N_0}}\n\\stackrel{d}{\\longrightarrow}\\mathcal{N}(0,1),\n$$\nas $N\\rightarrow\\infty$, where $t_{kvar}$ is defined to be $0$ if either sample variance or the displayed denominator is $0$. \\label{thm::var-kurt}",
+     "add_assumptions": [
+      {
+       "id": "ass:patch-independent-complete-randomization",
+       "condition": "The potential-outcome pairs $(Y_i(1),Y_i(0))$ are independent draws from a common joint distribution with continuous, nondegenerate marginals, and, independently of those draws, a complete randomization assigns exactly $N_1$ units to treatment and $N_0$ to control, with $N_1/N\\rightarrow r\\in(0,1)$.",
+       "wire_into": [
+        "thm:var-kurt",
+        "thm:sks-nuisance"
+       ],
+       "reason": "The step combining the arm limits needs independent observed arm samples and an interior limiting allocation; separate marginal limits cannot supply their joint covariance, and the fixed grid science table and matched-pair assignment in the findings violate this sampling and assignment condition.",
+       "restates": "Spells out the paper's setting in which a potential outcome is “drawn from the distribution of $Y(z)$” and $N_1$ subjects are randomly assigned to treatment."
+      }
+     ],
+     "remove_depends_on": [],
+     "proof_edits": [
+      {
+       "anchor": {
+        "env": "thm::var-kurt",
+        "sentences": [
+         1,
+         1
+        ]
+       },
+       "original": "From the classic result \\citep{lehmann1999elements}, we have $$ \\sqrt{N_t} (\\widehat{\\sigma}_t^2 - \\sigma_t^2) \\stackrel{d}{\\longrightarrow} \\mathcal{N} \\left\\{ 0, \\text{var}(Y_t - \\mu_t)^2 = \\sigma^4 ( \\kappa_t - 1 ) \\right\\}, $$ and therefore using delta-method we have that $$ \\sqrt{N_t} (\\log \\widehat{\\sigma}_t^2 - \\log \\sigma_t^2) \\stackrel{d}{\\longrightarrow} \\mathcal{N}(0, \\kappa_t - 1 ). $$",
+       "replacement": "Under the independent sampling and complete randomization condition, conditional on the assignment the observations in arm $t$ are independent draws from $Y(t)$. Write $Q_t=(Y(t)-\\mu_t)^2$. Since $E(Q_t)=\\sigma_t^2$ and $\\operatorname{var}(Q_t)=E\\{(Y(t)-\\mu_t)^4\\}-\\sigma_t^4=\\sigma_t^4(\\kappa_t-1)$, the finite fourth moment and the central limit theorem give $\\sqrt{N_t}\\{N_t^{-1}\\sum Q_{ti}-\\sigma_t^2\\}\\stackrel{d}{\\longrightarrow}\\mathcal{N}\\{0,\\sigma_t^4(\\kappa_t-1)\\}$. The difference between $\\widehat{\\sigma}_t^2$ and $N_t^{-1}\\sum Q_{ti}$ is $O_P(N_t^{-1})$, because $\\widehat{\\\\mu}_t-\\mu_t=O_P(N_t^{-1/2})$; hence the same limit holds for $\\widehat{\\sigma}_t^2$. Since $\\sigma_t^2>0$, the delta method, with derivative $1/\\sigma_t^2$, yields $\\sqrt{N_t}(\\log\\widehat{\\sigma}_t^2-\\log\\sigma_t^2)\\stackrel{d}{\\longrightarrow}\\mathcal{N}(0,\\kappa_t-1)$."
+      }
+     ],
+     "insert_after": [
+      {
+       "anchor": {
+        "env": "thm::var-kurt",
+        "sentences": [
+         2,
+         2
+        ]
+       },
+       "text": "Conditional on any assignment of the fixed group sizes, the two observed arm samples involve disjoint independent potential-outcome pairs, so the two log-variance limits are independent; their unconditional joint law is the same. Put $V_N=(\\kappa_1-1)/N_1+(\\kappa_0-1)/N_0$. Continuity and nondegeneracy imply $\\kappa_t>1$: equality in $E(Q_t^2)\\geq E(Q_t)^2$ would make $|Y(t)-\\mu_t|$ constant almost surely. Thus $V_N>0$. Since $N_1/N\\rightarrow r\\in(0,1)$, both group sizes diverge and the independent weighted normal limits give $(\\log\\widehat{\\sigma}_1^2-\\log\\widehat{\\sigma}_0^2)/\\sqrt{V_N}\\stackrel{d}{\\longrightarrow}\\mathcal{N}(0,1)$ under $\\sigma_1^2=\\sigma_0^2$."
+      },
+      {
+       "anchor": {
+        "env": "thm::var-kurt",
+        "sentences": [
+         3,
+         3
+        ]
+       },
+       "text": "The law of large numbers for the sample second and fourth central moments gives $\\widehat{\\kappa}_t\\rightarrow\\kappa_t$ in probability. Because $N_1/N$ has an interior limit and $\\kappa_1+\\kappa_0>2$, the ratio of the estimated denominator squared to $V_N$ converges in probability to $1$. Each sample variance is positive with probability tending to $1$, and the estimated denominator is positive with probability tending to $1$; assigning $t_{kvar}=0$ on the complementary event therefore does not change the limit."
+      }
+     ],
+     "proof_note": "Under the independent sampling and complete randomization condition, conditional on the assignment the observations in arm $t$ are independent draws from $Y(t)$. Write $Q_t=(Y(t)-\\mu_t)^2$. Since $E(Q_t)=\\sigma_t^2$ and $\\operatorname{var}(Q_t)=E\\{(Y(t)-\\mu_t)^4\\}-\\sigma_t^4=\\sigma_t^4(\\kappa_t-1)$, the finite fourth moment and the central limit theorem give $\\sqrt{N_t}\\{N_t^{-1}\\sum Q_{ti}-\\sigma_t^2\\}\\stackrel{d}{\\longrightarrow}\\mathcal{N}\\{0,\\sigma_t^4(\\kappa_t-1)\\}$. The difference between $\\widehat{\\sigma}_t^2$ and $N_t^{-1}\\sum Q_{ti}$ is $O_P(N_t^{-1})$, because $\\widehat{\\\\mu}_t-\\mu_t=O_P(N_t^{-1/2})$; hence the same limit holds for $\\widehat{\\sigma}_t^2$. Since $\\sigma_t^2>0$, the delta method, with derivative $1/\\sigma_t^2$, yields $\\sqrt{N_t}(\\log\\widehat{\\sigma}_t^2-\\log\\sigma_t^2)\\stackrel{d}{\\longrightarrow}\\mathcal{N}(0,\\kappa_t-1)$.\nUnder the null, $\\sigma_1^2 = \\sigma_0^2$, and $\\log \\widehat{\\sigma}_1^2 - \\log \\widehat{\\sigma}_0^2$ has the following asymptotic distribution\n\\begin{equation}\n\\frac{\\log \\widehat{\\sigma}_1^2 - \\log \\widehat{\\sigma}_0^2}{  \\sqrt{  (  \\kappa_1 - 1  ) / N_1     + (\\kappa_0 - 1 ) / N_0}    } \n\\stackrel{d}{\\longrightarrow} \\mathcal{N}(0, 1).  \\label{eq:asmp_var}\n\\end{equation} Conditional on any assignment of the fixed group sizes, the two observed arm samples involve disjoint independent potential-outcome pairs, so the two log-variance limits are independent; their unconditional joint law is the same. Put $V_N=(\\kappa_1-1)/N_1+(\\kappa_0-1)/N_0$. Continuity and nondegeneracy imply $\\kappa_t>1$: equality in $E(Q_t^2)\\geq E(Q_t)^2$ would make $|Y(t)-\\mu_t|$ constant almost surely. Thus $V_N>0$. Since $N_1/N\\rightarrow r\\in(0,1)$, both group sizes diverge and the independent weighted normal limits give $(\\log\\widehat{\\sigma}_1^2-\\log\\widehat{\\sigma}_0^2)/\\sqrt{V_N}\\stackrel{d}{\\longrightarrow}\\mathcal{N}(0,1)$ under $\\sigma_1^2=\\sigma_0^2$.\nDue to the fact that $\\widehat{\\kappa}_t\\rightarrow \\kappa_t$ in probability and Slutsky's Theorem, we have\n$$\n\\frac{\\log \\widehat{\\sigma}_1^2 - \\log \\widehat{\\sigma}_0^2}{  \\sqrt{   \\left(  \\widehat{ \\kappa}_1 - 1 \\right) / N_1     + \\left(  \\widehat{ \\kappa}_0 - 1 \\right) / N_0    }   } \n\\stackrel{d}{\\longrightarrow} \\mathcal{N}(0, 1).\\Box\n$$ The law of large numbers for the sample second and fourth central moments gives $\\widehat{\\kappa}_t\\rightarrow\\kappa_t$ in probability. Because $N_1/N$ has an interior limit and $\\kappa_1+\\kappa_0>2$, the ratio of the estimated denominator squared to $V_N$ converges in probability to $1$. Each sample variance is positive with probability tending to $1$, and the estimated denominator is positive with probability tending to $1$; assigning $t_{kvar}=0$ on the complementary event therefore does not change the limit.",
+     "given_up": "patch hypothesis ass:patch-independent-complete-randomization: weakens the contribution: The paper conditions on the observed science table and says randomness comes only from assignment; this hypothesis requires independent sampling of potential-outcome pairs and excludes fixed science table sequences and matched-pair randomization. Independent bivariate normal pairs with balanced complete randomization satisfy the hypothesis, so it is consistent, but it does not merely restate the paper’s setting."
+    },
+    "suggested_by": "referee",
+    "owner_explanation": "Claim: Theorem 2 asserts that equal marginal variances and finite kurtosis give $t_{kvar}\\stackrel{d}{\\longrightarrow}\\mathcal{N}(0,1)$. What is wrong: (a) The step combining the two marginal log-variance limits treats the treatment and control terms as independent; conditional randomization from a fixed science table instead retains a finite-population covariance term. (b) The displayed statistic has no specified value when a sample variance or its denominator is $0$. Why: For a balanced complete randomization of all pairs $(x_j,x_k)$ on the stated uniform grid, the marginal variances are equal and $\\kappa_z\\rightarrow9/5$, but $t_{kvar}\\stackrel{d}{\\longrightarrow}\\mathcal{N}(0,1/2)$. Proposed fix: The theorem states the independent sampling and complete randomization condition used by its joint central limit argument and assigns a value on the exceptional zero-denominator event."
+   }
+  ],
+  "weakening_item": {
+   "node": "thm:var-kurt",
+   "printed": "{}\nAssume that $Y(z)$ has finite kurtosis $\\kappa_z$.\nUnder the null of equal variance,\n$$\nt_{kvar} \\equiv \\frac{\\log \\widehat{\\sigma}_1^2 - \\log \\widehat{\\sigma}_0^2}{   \\sqrt{     \\left (  \\widehat{\\kappa}_1 - 1 \\right) / N_1  + \\left( \\widehat{\\kappa}_0 - 1 \\right) / N_0       }       }  \n\\stackrel{d}{\\longrightarrow} \\mathcal{N}(0, 1), \n$$\nas $N\\rightarrow \\infty$.\n\\label{thm::var-kurt} [Hypotheses: ass:var-kurt-finite-kurtosis, ass:var-kurt-equal-variance-null]",
+   "proposed": "Assume that $Y(z)$ has finite kurtosis $\\kappa_z$. Suppose in addition that the potential-outcome pairs are independent draws from a common joint distribution with continuous, nondegenerate marginals, and that, independently of those draws, a complete randomization assigns exactly $N_1$ units to treatment and $N_0$ to control, with $N_1/N\\rightarrow r\\in(0,1)$. Under the null of equal variance,\n$$\nt_{kvar} \\equiv \\frac{\\log \\widehat{\\sigma}_1^2 - \\log \\widehat{\\sigma}_0^2}{\\sqrt{(\\widehat{\\kappa}_1-1)/N_1+(\\widehat{\\kappa}_0-1)/N_0}}\n\\stackrel{d}{\\longrightarrow}\\mathcal{N}(0,1),\n$$\nas $N\\rightarrow\\infty$, where $t_{kvar}$ is defined to be $0$ if either sample variance or the displayed denominator is $0$. \\label{thm::var-kurt}",
+   "hypotheses": [
+    {
+     "id": "ass:patch-independent-complete-randomization",
+     "condition": "The potential-outcome pairs $(Y_i(1),Y_i(0))$ are independent draws from a common joint distribution with continuous, nondegenerate marginals, and, independently of those draws, a complete randomization assigns exactly $N_1$ units to treatment and $N_0$ to control, with $N_1/N\\rightarrow r\\in(0,1)$.",
+     "wire_into": [
+      "thm:var-kurt",
+      "thm:sks-nuisance"
+     ]
+    }
+   ],
+   "repair": {
+    "corrected_statement": "Assume that $Y(z)$ has finite kurtosis $\\kappa_z$. Suppose in addition that the potential-outcome pairs are independent draws from a common joint distribution with continuous, nondegenerate marginals, and that, independently of those draws, a complete randomization assigns exactly $N_1$ units to treatment and $N_0$ to control, with $N_1/N\\rightarrow r\\in(0,1)$. Under the null of equal variance,\n$$\nt_{kvar} \\equiv \\frac{\\log \\widehat{\\sigma}_1^2 - \\log \\widehat{\\sigma}_0^2}{\\sqrt{(\\widehat{\\kappa}_1-1)/N_1+(\\widehat{\\kappa}_0-1)/N_0}}\n\\stackrel{d}{\\longrightarrow}\\mathcal{N}(0,1),\n$$\nas $N\\rightarrow\\infty$, where $t_{kvar}$ is defined to be $0$ if either sample variance or the displayed denominator is $0$. \\label{thm::var-kurt}",
+    "add_assumptions": [
+     {
+      "id": "ass:patch-independent-complete-randomization",
+      "condition": "The potential-outcome pairs $(Y_i(1),Y_i(0))$ are independent draws from a common joint distribution with continuous, nondegenerate marginals, and, independently of those draws, a complete randomization assigns exactly $N_1$ units to treatment and $N_0$ to control, with $N_1/N\\rightarrow r\\in(0,1)$.",
+      "wire_into": [
+       "thm:var-kurt",
+       "thm:sks-nuisance"
+      ],
+      "reason": "The step combining the arm limits needs independent observed arm samples and an interior limiting allocation; separate marginal limits cannot supply their joint covariance, and the fixed grid science table and matched-pair assignment in the findings violate this sampling and assignment condition."
+     }
+    ],
+    "remove_depends_on": [],
+    "proof_edits": [
+     {
+      "anchor": {
+       "env": "thm::var-kurt",
+       "sentences": [
+        1,
+        1
+       ]
+      },
+      "original": "From the classic result \\citep{lehmann1999elements}, we have $$ \\sqrt{N_t} (\\widehat{\\sigma}_t^2 - \\sigma_t^2) \\stackrel{d}{\\longrightarrow} \\mathcal{N} \\left\\{ 0, \\text{var}(Y_t - \\mu_t)^2 = \\sigma^4 ( \\kappa_t - 1 ) \\right\\}, $$ and therefore using delta-method we have that $$ \\sqrt{N_t} (\\log \\widehat{\\sigma}_t^2 - \\log \\sigma_t^2) \\stackrel{d}{\\longrightarrow} \\mathcal{N}(0, \\kappa_t - 1 ). $$",
+      "replacement": "Under the independent sampling and complete randomization condition, conditional on the assignment the observations in arm $t$ are independent draws from $Y(t)$. Write $Q_t=(Y(t)-\\mu_t)^2$. Since $E(Q_t)=\\sigma_t^2$ and $\\operatorname{var}(Q_t)=E\\{(Y(t)-\\mu_t)^4\\}-\\sigma_t^4=\\sigma_t^4(\\kappa_t-1)$, the finite fourth moment and the central limit theorem give $\\sqrt{N_t}\\{N_t^{-1}\\sum Q_{ti}-\\sigma_t^2\\}\\stackrel{d}{\\longrightarrow}\\mathcal{N}\\{0,\\sigma_t^4(\\kappa_t-1)\\}$. The difference between $\\widehat{\\sigma}_t^2$ and $N_t^{-1}\\sum Q_{ti}$ is $O_P(N_t^{-1})$, because $\\widehat{\\\\mu}_t-\\mu_t=O_P(N_t^{-1/2})$; hence the same limit holds for $\\widehat{\\sigma}_t^2$. Since $\\sigma_t^2>0$, the delta method, with derivative $1/\\sigma_t^2$, yields $\\sqrt{N_t}(\\log\\widehat{\\sigma}_t^2-\\log\\sigma_t^2)\\stackrel{d}{\\longrightarrow}\\mathcal{N}(0,\\kappa_t-1)$."
+     }
+    ],
+    "insert_after": [
+     {
+      "anchor": {
+       "env": "thm::var-kurt",
+       "sentences": [
+        2,
+        2
+       ]
+      },
+      "text": "Conditional on any assignment of the fixed group sizes, the two observed arm samples involve disjoint independent potential-outcome pairs, so the two log-variance limits are independent; their unconditional joint law is the same. Put $V_N=(\\kappa_1-1)/N_1+(\\kappa_0-1)/N_0$. Continuity and nondegeneracy imply $\\kappa_t>1$: equality in $E(Q_t^2)\\geq E(Q_t)^2$ would make $|Y(t)-\\mu_t|$ constant almost surely. Thus $V_N>0$. Since $N_1/N\\rightarrow r\\in(0,1)$, both group sizes diverge and the independent weighted normal limits give $(\\log\\widehat{\\sigma}_1^2-\\log\\widehat{\\sigma}_0^2)/\\sqrt{V_N}\\stackrel{d}{\\longrightarrow}\\mathcal{N}(0,1)$ under $\\sigma_1^2=\\sigma_0^2$."
+     },
+     {
+      "anchor": {
+       "env": "thm::var-kurt",
+       "sentences": [
+        3,
+        3
+       ]
+      },
+      "text": "The law of large numbers for the sample second and fourth central moments gives $\\widehat{\\kappa}_t\\rightarrow\\kappa_t$ in probability. Because $N_1/N$ has an interior limit and $\\kappa_1+\\kappa_0>2$, the ratio of the estimated denominator squared to $V_N$ converges in probability to $1$. Each sample variance is positive with probability tending to $1$, and the estimated denominator is positive with probability tending to $1$; assigning $t_{kvar}=0$ on the complementary event therefore does not change the limit."
+     }
+    ],
+    "proof_note": "Under the independent sampling and complete randomization condition, conditional on the assignment the observations in arm $t$ are independent draws from $Y(t)$. Write $Q_t=(Y(t)-\\mu_t)^2$. Since $E(Q_t)=\\sigma_t^2$ and $\\operatorname{var}(Q_t)=E\\{(Y(t)-\\mu_t)^4\\}-\\sigma_t^4=\\sigma_t^4(\\kappa_t-1)$, the finite fourth moment and the central limit theorem give $\\sqrt{N_t}\\{N_t^{-1}\\sum Q_{ti}-\\sigma_t^2\\}\\stackrel{d}{\\longrightarrow}\\mathcal{N}\\{0,\\sigma_t^4(\\kappa_t-1)\\}$. The difference between $\\widehat{\\sigma}_t^2$ and $N_t^{-1}\\sum Q_{ti}$ is $O_P(N_t^{-1})$, because $\\widehat{\\\\mu}_t-\\mu_t=O_P(N_t^{-1/2})$; hence the same limit holds for $\\widehat{\\sigma}_t^2$. Since $\\sigma_t^2>0$, the delta method, with derivative $1/\\sigma_t^2$, yields $\\sqrt{N_t}(\\log\\widehat{\\sigma}_t^2-\\log\\sigma_t^2)\\stackrel{d}{\\longrightarrow}\\mathcal{N}(0,\\kappa_t-1)$.\nUnder the null, $\\sigma_1^2 = \\sigma_0^2$, and $\\log \\widehat{\\sigma}_1^2 - \\log \\widehat{\\sigma}_0^2$ has the following asymptotic distribution\n\\begin{equation}\n\\frac{\\log \\widehat{\\sigma}_1^2 - \\log \\widehat{\\sigma}_0^2}{  \\sqrt{  (  \\kappa_1 - 1  ) / N_1     + (\\kappa_0 - 1 ) / N_0}    } \n\\stackrel{d}{\\longrightarrow} \\mathcal{N}(0, 1).  \\label{eq:asmp_var}\n\\end{equation} Conditional on any assignment of the fixed group sizes, the two observed arm samples involve disjoint independent potential-outcome pairs, so the two log-variance limits are independent; their unconditional joint law is the same. Put $V_N=(\\kappa_1-1)/N_1+(\\kappa_0-1)/N_0$. Continuity and nondegeneracy imply $\\kappa_t>1$: equality in $E(Q_t^2)\\geq E(Q_t)^2$ would make $|Y(t)-\\mu_t|$ constant almost surely. Thus $V_N>0$. Since $N_1/N\\rightarrow r\\in(0,1)$, both group sizes diverge and the independent weighted normal limits give $(\\log\\widehat{\\sigma}_1^2-\\log\\widehat{\\sigma}_0^2)/\\sqrt{V_N}\\stackrel{d}{\\longrightarrow}\\mathcal{N}(0,1)$ under $\\sigma_1^2=\\sigma_0^2$.\nDue to the fact that $\\widehat{\\kappa}_t\\rightarrow \\kappa_t$ in probability and Slutsky's Theorem, we have\n$$\n\\frac{\\log \\widehat{\\sigma}_1^2 - \\log \\widehat{\\sigma}_0^2}{  \\sqrt{   \\left(  \\widehat{ \\kappa}_1 - 1 \\right) / N_1     + \\left(  \\widehat{ \\kappa}_0 - 1 \\right) / N_0    }   } \n\\stackrel{d}{\\longrightarrow} \\mathcal{N}(0, 1).\\Box\n$$ The law of large numbers for the sample second and fourth central moments gives $\\widehat{\\kappa}_t\\rightarrow\\kappa_t$ in probability. Because $N_1/N$ has an interior limit and $\\kappa_1+\\kappa_0>2$, the ratio of the estimated denominator squared to $V_N$ converges in probability to $1$. Each sample variance is positive with probability tending to $1$, and the estimated denominator is positive with probability tending to $1$; assigning $t_{kvar}=0$ on the complementary event therefore does not change the limit.",
+    "given_up": "patch hypothesis ass:patch-independent-complete-randomization: weakens the contribution: The paper conditions on the observed science table and says randomness comes only from assignment; this hypothesis requires independent sampling of potential-outcome pairs and excludes fixed science table sequences and matched-pair randomization. Independent bivariate normal pairs with balanced complete randomization satisfy the hypothesis, so it is consistent, but it does not merely restate the paper’s setting."
+   },
+   "given_up": "patch hypothesis ass:patch-independent-complete-randomization: weakens the contribution: The paper conditions on the observed science table and says randomness comes only from assignment; this hypothesis requires independent sampling of potential-outcome pairs and excludes fixed science table sequences and matched-pair randomization. Independent bivariate normal pairs with balanced complete randomization satisfy the hypothesis, so it is consistent, but it does not merely restate the paper’s setting.",
+   "detail": "The marginal log variance calculations are valid, but combining them omits the finite population term $-S_{A-B}^2/N$, where $A_i=(Y_i(1)-\\mu_1)^2/\\sigma_1^2$ and $B_i=(Y_i(0)-\\mu_0)^2/\\sigma_0^2$. Equal marginal variances do not make this term vanish. The statistic’s value when a sample variance or its denominator is zero also remains unspecified.",
+   "witness": "For even $m$, set $N=m^2$, $N_1=N_0=N/2$, and include every pair $(Y_{jk}(1),Y_{jk}(0))=(x_j,x_k)$, with $x_j=(2j-m-1)/m$. The two marginal variances are exactly equal and $\\kappa_z\\to9/5$. Under complete randomization, the numerator has asymptotic variance $8/(5N)$, while the displayed denominator squared tends to $16/(5N)$; thus $t_{kvar}\\stackrel{d}{\\longrightarrow}\\mathcal{N}(0,1/2)$.",
+   "source": "referee",
+   "owner_explanation": "Claim: Theorem 2 asserts that equal marginal variances and finite kurtosis give $t_{kvar}\\stackrel{d}{\\longrightarrow}\\mathcal{N}(0,1)$. What is wrong: (a) The step combining the two marginal log-variance limits treats the treatment and control terms as independent; conditional randomization from a fixed science table instead retains a finite-population covariance term. (b) The displayed statistic has no specified value when a sample variance or its denominator is $0$. Why: For a balanced complete randomization of all pairs $(x_j,x_k)$ on the stated uniform grid, the marginal variances are equal and $\\kappa_z\\rightarrow9/5$, but $t_{kvar}\\stackrel{d}{\\longrightarrow}\\mathcal{N}(0,1/2)$. Proposed fix: The theorem states the independent sampling and complete randomization condition used by its joint central limit argument and assigns a value on the exceptional zero-denominator event."
+  },
+  "paper_errors": {
+   "thm:var-kurt": {
+    "detail": "The marginal log variance calculations are valid, but combining them omits the finite population term $-S_{A-B}^2/N$, where $A_i=(Y_i(1)-\\mu_1)^2/\\sigma_1^2$ and $B_i=(Y_i(0)-\\mu_0)^2/\\sigma_0^2$. Equal marginal variances do not make this term vanish. The statistic’s value when a sample variance or its denominator is zero also remains unspecified.",
+    "witness": "For even $m$, set $N=m^2$, $N_1=N_0=N/2$, and include every pair $(Y_{jk}(1),Y_{jk}(0))=(x_j,x_k)$, with $x_j=(2j-m-1)/m$. The two marginal variances are exactly equal and $\\kappa_z\\to9/5$. Under complete randomization, the numerator has asymptotic variance $8/(5N)$, while the displayed denominator squared tends to $16/(5N)$; thus $t_{kvar}\\stackrel{d}{\\longrightarrow}\\mathcal{N}(0,1/2)$.",
+    "owner_explanation": "Claim: Under equal marginal variances and finite kurtosis, $t_{kvar}\\stackrel{d}{\\longrightarrow}\\mathcal{N}(0,1)$. What is wrong: Step: “Under the null, $\\sigma_1^2 = \\sigma_0^2$, and $\\log \\widehat{\\sigma}_1^2 - \\log \\widehat{\\sigma}_0^2$ has the following asymptotic distribution”. It uses: the marginal variance limit for each arm as a joint limit with zero covariance, which the paper assumes only on: each arm considered separately as draws from $Y(z)$. But the step applies it at: complementary arms randomized from a fixed science table. Why: For a balanced randomization of all pairs $(x_j,x_k)$ on a uniform grid, the marginal variances are equal and $\\kappa_z\\to9/5$, yet $t_{kvar}\\stackrel{d}{\\longrightarrow}\\mathcal{N}(0,1/2)$. Proposed fix: Add independent sampling of units from the marginal $Y(z)$ distributions, take the limit unconditionally over sampling and assignment, and require both $N_1$ and $N_0$ to diverge.",
+    "weakens_contribution": true,
+    "suggested_repair": "corrected statement: Assume that $Y(z)$ has finite kurtosis $\\kappa_z$. Suppose in addition that the potential-outcome pairs are independent draws from a common joint distribution with continuous, nondegenerate marginals, and that, independently of those draws, a complete randomization assigns exactly $N_1$ units to treatment and $N_0$ to control, with $N_1/N\\rightarrow r\\in(0,1)$. Under the null of equal variance,\n$$\nt_{kvar} \\equiv \\frac{\\log \\widehat{\\sigma}_1^2 - \\log \\widehat{\\sigma}_0^2}{\\sqrt{(\\widehat{\\kappa}_1-1)/N_1+(\\widehat{\\kappa}_0-1)/N_0}}\n\\stackrel{d}{\\longrightarrow}\\mathcal{N}(0,1),\n$$\nas $N\\rightarrow\\infty$, where $t_{kvar}$ is defined to be $0$ if either sample variance or the displayed denominator is $0$. \\label{thm::var-kurt} · added hypotheses: ass:patch-independent-complete-randomization: The potential-outcome pairs $(Y_i(1),Y_i(0))$ are independent draws from a common joint distribution with continuous, nondegenerate marginals, and, independently of those draws, a complete randomization assigns exactly $N_1$ units to treatment and $N_0$ to control, with $N_1/N\\rightarrow r\\in(0,1)$. · gives up: patch hypothesis ass:patch-independent-complete-randomization: weakens the contribution: The paper conditions on the observed science table and says randomness comes only from assignment; this hypothesis requires independent sampling of potential-outcome pairs and excludes fixed science table sequences and matched-pair randomization. Independent bivariate normal pairs with balanced complete randomization satisfy the hypothesis, so it is consistent, but it does not merely restate the paper’s setting."
+   }
+  },
+  "refs": {
+   "statements": [
+    {
+     "id": "lem:twoforms",
+     "kind": "lemma",
+     "env": "lemma::twoforms",
+     "status": "to-prove",
+     "depends_on": [
+      "ass:twoforms-invertible-cdfs"
+     ],
+     "hypotheses": [
+      "ass:twoforms-invertible-cdfs"
+     ],
+     "free_symbols": [
+      "A",
+      "B",
+      "F_A(\\cdot)",
+      "F_B(\\cdot)",
+      "y",
+      "p",
+      "\\tau"
+     ]
+    },
+    {
+     "id": "thm:var-kurt",
+     "kind": "theorem",
+     "env": "thm::var-kurt",
+     "status": "to-prove",
+     "depends_on": [
+      "ass:var-kurt-finite-kurtosis",
+      "ass:var-kurt-equal-variance-null"
+     ],
+     "hypotheses": [
+      "ass:var-kurt-finite-kurtosis",
+      "ass:var-kurt-equal-variance-null"
+     ],
+     "free_symbols": [
+      "Y(z)",
+      "\\kappa_z",
+      "t_{kvar}",
+      "\\widehat{\\sigma}_1^2",
+      "\\widehat{\\sigma}_0^2",
+      "\\widehat{\\kappa}_1",
+      "\\widehat{\\kappa}_0",
+      "N_1",
+      "N_0",
+      "N",
+      "\\mathcal{N}(0, 1)"
+     ]
+    }
+   ],
+   "assumptions": [
+    {
+     "id": "ass:twoforms-invertible-cdfs",
+     "kind": "regularity",
+     "source": {
+      "env": "lemma::twoforms",
+      "sentences": [
+       1,
+       1
+      ]
+     },
+     "free_symbols": [
+      "A",
+      "B",
+      "F_A(\\cdot)",
+      "F_B(\\cdot)"
+     ],
+     "novel": {
+      "flag": true,
+      "justification": "The lemma explicitly takes random variables with invertible CDFs."
+     }
+    },
+    {
+     "id": "ass:var-kurt-finite-kurtosis",
+     "kind": "moment",
+     "source": {
+      "env": "thm::var-kurt",
+      "sentences": [
+       1,
+       1
+      ]
+     },
+     "free_symbols": [
+      "Y(z)",
+      "\\kappa_z"
+     ],
+     "novel": {
+      "flag": true,
+      "justification": "The theorem assumes finite kurtosis."
+     }
+    },
+    {
+     "id": "ass:var-kurt-equal-variance-null",
+     "kind": "null",
+     "source": {
+      "env": "thm::var-kurt",
+      "slice": {
+       "from": "Under the null of",
+       "to": "equal variance"
+      }
+     },
+     "free_symbols": [],
+     "novel": {
+      "flag": true,
+      "justification": "The theorem conditions its conclusion on the equal-variance null."
+     }
+    }
+   ]
+  },
+  "symbol_A": {
+   "name": "A",
+   "meaning": "ok",
+   "fix": null,
+   "ambiguity": "pinned",
+   "reading": {
+    "reading": "In Lemma 2, A is an arbitrary random variable with invertible CDF F_A; in the proof of the scaling theorem, A=f{Y(1)}.",
+    "evidence": "The lemma begins “Take random variables $A$ and $B$ with invertible CDFs”; the later proof says “define two new random variables $A= f\\{ Y(1) \\}$ and $B = f\\{ Y(0) \\}$.”"
+   },
+   "redefined_at": "Now, define two new random variables $A= f\\{ Y(1) \\}$ and $B = f\\{ Y(0) \\}$.",
+   "detail": "The later A is a specific transformed treatment outcome, rather than the arbitrary A of Lemma 2.",
+   "shards": [
+    "A3",
+    "B5"
+   ],
+   "agreement": true,
+   "basis": "b10d59c7608fd495ae84119d1652dd29e0ff3073074c23958f9a661ed387c90d",
+   "source": "ea178cce847f16d73395a552834e4daea49ad61802fb8c507b665b6d9a873ec0",
+   "graded": "carried",
+   "introduced_at": {
+    "flat_line": 1097,
+    "file": "Arxiv.tex",
+    "line": 835
+   }
+  }
+ }
+}

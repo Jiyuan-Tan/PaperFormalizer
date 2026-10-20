@@ -1,0 +1,8 @@
+You are auditing a row-by-row link between a verified paper's results and their Lean formalization. For each result below you get the paper statement's segments, the Lean statement's rows (in reading order: its binders — `v1`, … those it takes from its section's `variable`s — then each clause of the conclusion — the quantifiers and hypotheses a clause states for itself, then what it concludes; `r3/r7` is a row of the theorem whose statement the clause `r3` stands for), and a proposed assignment: for every row, the segments stating it or `unstated`; and the paper segments no row states (`uncovered`).
+
+Check every row and every uncovered segment against the mathematics: a row linked to a segment that does not state it, a row marked unstated that a segment does state, a segment marked uncovered that a row states (or the reverse), a row given more segments than the SMALLEST set that states it (rows of one clause seldom share a list), and a row missing one of two statements of it (the paper states it in words, then as a formula: the row takes both). Return the corrected assignment for every result in the same shape — every row answered once, ids only — and in `changes` one line per correction ("T-3 row r4: s2 → s1, s2"); `changes` is empty when you agree.
+
+{{items}}
+
+Proposed assignment:
+{{assignment}}

@@ -1,0 +1,152 @@
+%% Fixture for test/verify/inline_citations.test.ts — NOT a compilable paper.
+%% Verbatim excerpts of "Arxiv_template.tex" (run tbs_extreme_effects: extreme treatment effects under
+%% multivariate regular variation), cut at whole paragraphs. A `%%% <env id> <kind> <body|proof> — <file>:<lines>`
+%% line opens the body or the proof of one environment (the text between its \begin and \end); a
+%% `%% [lines a-b omitted]` line marks a cut. The test drops every `%%` line.
+%%% prop:id proposition body — Arxiv_template.tex:235-242
+  [Identification]\label{prop:id}Suppose that $U$
+  is multivariate regularly varying and Assumption~\ref{assump:exo}, \ref{assump:iid}, \ref{assump:f_homo}
+  hold, we have
+  \begin{align*}
+    \theta^{\tmop{NETE}} = \lim_{t \rightarrow \infty} \mathbb{E}[g (X, 1, U
+    /\|U\|) - g (X, 0, U /\|U\|) \mid \|U\|> t] \cdot \lim_{t \rightarrow
+    \infty} \mathbb{E}[\|U\|^{\alpha} / t^{\alpha} \mid \|U\|> t] .
+  \end{align*}
+%%% prop:id proposition proof — Arxiv_template.tex:524-559
+We first prove (\ref{eq:naive_id2}). By Assumption \ref{assump:f_homo},
+\begin{align*}
+  \lim_{t \rightarrow \infty} \mathbb{E} &\left[ \frac{Y (1) - Y
+  (0)}{t^{\alpha}} \mid \|U\|> t \right] \\
+  & = \lim_{t \rightarrow \infty}
+  \mathbb{E} \left[ \frac{f (X, 1, U) - f (X, 0, U)}{t^{\alpha}} \mid \|U\|> t
+  \right] \\
+  & = \lim_{t \rightarrow \infty} \mathbb{E} \left[ \frac{f (X, 1, U) - f (X,
+  0, U)}{\|U\|^{\alpha}} \cdot \left( \frac{\|U\|}{t} \right)^{\alpha} \mid
+  \|U\|> t \right]\\
+  & = \lim_{t \rightarrow \infty} \mathbb{E} \left[ (g (X, 1, U / \| U \|) -
+  g (X, 0, U / \| U \|) + 2 e (t)) \cdot \left( \frac{\|U\|}{t}
+  \right)^{\alpha} \mid \|U\|> t \right]
+\end{align*}
+%% [lines 538-549 omitted]
+Note that $\| U \|$ is also regularly varying. By Potter's theorem \cite[Theorem 1.56]{bingham1989regular}, for any $\epsilon >0$ and sufficiently large $t$, we have
+\begin{align*}
+  \frac{P (\| U \| > {rt})}{P (\| U \| > t)} & \leqslant 2 r^{-\beta + \epsilon} .
+\end{align*}
+
+Take $\epsilon > 0$ such that $\alpha -\beta + \epsilon - 1 < - 1$, we have for sufficiently large $t$, 
+\begin{align*}
+  \frac{\int_1^{\infty} \alpha P (\| U \| > {rt}) r^{\alpha - 1}
+  \tmop{dr}}{P (\| U \| > t)} & \leqslant 2\int^{\infty}_1 \alpha r^{\alpha -\beta + \epsilon - 1} \tmop{dr} < \infty .
+\end{align*}
+%%% lemma:mu_rate lemma body — Arxiv_template.tex:608-615
+  \label{lemma:mu_rate}Under Assumption \ref{assump:iid}, \ref{assump:mvary}
+  with probability at least $1 - \delta$, for sufficiently large $n$, we have
+  \begin{align*}
+    | \gamma - \hat{\gamma}_n | & \leqslant O \left( \left( \frac{\log (2 /
+    \delta)}{n} \right)^{1 / (2 + \beta)} \right),
+  \end{align*}
+  
+  where $\gamma = 1 / \beta$ is the EVI of $U$. 
+%%% lemma:mu_rate lemma proof — Arxiv_template.tex:618-679
+  We adopt the non-asymptotic analysis of the adaptive Hill estimator for EVI
+  in {\citep{boucheron2015tail}}. In the paper, the author adopts an adaptive
+  estimator, choosing $k$ to be
+  \begin{align*}
+    k & = \max \left\{ k \in \{l_n, \cdots, n\} \text{and} \  \forall i \in
+    \{l_n, \cdots, n\}, | \hat{\gamma}(i) - \hat{\gamma}(k) | \leqslant
+    \frac{\hat{\gamma}(i) r_n (\delta)}{\sqrt{i}} \right\}
+  \end{align*}
+  where $\hat{\gamma}(i) = \frac{1}{i} \sum_{j=1}^i \log \frac{\|U_{(j)}\|}{\|U_{(i+1)}\|}$ and $r_n (\delta)$ scales like $\sqrt{\log ((2 / \delta) \log (n))}$.
+  First, we verify the von Mises conditions in \cite{boucheron2015tail} under Assumption \ref{assump:mvary}. Let $F$ be the CDF of $\|U\|$. By
+  Assumption~\ref{assump:mvary}, we know that
+  \begin{align*}
+    g (z) & = c \alpha^m  \prod_{i = 1}^m (1 + z_i)^{- \alpha - 1}, \|z\|_1 >
+    \zeta k^{(1 - 2 s) / \alpha} .
+  \end{align*}
+%% [lines 633-647 omitted]
+  where $f (t)$ is the density function of $\sum_{i = 1}^m a_i \tilde{z}_i$. By
+  {\citetext{\citealp{nguyen2014tail},  Theorem 2.1}}, we have that when
+  $\|U\|_1 > \max_i \{a_i \} \zeta k^{(1 - 2 s) / \alpha}$,
+  \begin{align}
+    f (t) & = C \beta t^{- \beta - 1} (1 + D (1 - 1 / \beta) t^{- 1} + o (t^{-
+    1})) .  \label{eq:density_f}
+  \end{align}
+%% [lines 655-673 omitted]
+  Therefore, the growth rate of the von Mises function is bounded. By
+  {\citep{boucheron2015tail}}, with probability at least $1 - \delta$, we have
+  \begin{align*}
+    | \gamma - \hat{\gamma}_n | & \leqslant O \left( \left( \frac{\log (2 /
+    \delta)}{n} \right)^{1 / (2 + \beta)} \right),
+  \end{align*}
+%%% lemma:eta_rate lemma body — Arxiv_template.tex:683-689
+  \label{lemma:eta_rate}Undet the assumption of Theorem \ref{thm:rate}, with
+  probability at least $1 - \delta$, we have
+  \begin{align*}
+    | \hat{\eta}_{n, t}^{\tmop{DR}} - \eta | & \leqslant O (\sqrt{R_p (n/2, \delta) R_g
+    (t^{- \beta} n, \delta)} + t^{\beta / 2} n^{- 1 / 2} + t^{- \min \{1,
+    \beta\}} + t^{- \beta s / (1 - 2 s)} + e (t) + \log (t) R_{\alpha} (n,\delta)) .
+  \end{align*}
+%%% lemma:eta_rate lemma proof — Arxiv_template.tex:692-783
+  Let
+  \begin{align*}
+    \eta^t & =\mathbb{E} \left[ \frac{f (X, 1, U) - f (X, 0,
+    U)}{\|U\|^{\hat{\alpha}_{n}}} \mid \|U\|> t \right],
+  \end{align*}
+  
+  We have the following decomposition
+  \begin{align*}
+    | \hat{\eta}_{n, t}^{\tmop{DR}} - \eta | & \leqslant | \hat{\eta}_{n,
+    t}^{\tmop{DR}} - \eta^t | + | \eta^t - \eta |.
+  \end{align*}
+  
+  The first term comes from the standard statistical error of DR estimator, while the second term is the bias term caused by the finite threshold. For the first term, by standard DML theory {\citep{foster2023orthogonal}},
+  we have
+  \begin{align*}
+    | \hat{\eta}_{n, t}^{\tmop{DR}} - \eta^t | & \leqslant O \left( \sqrt{R_p
+    (n/2, \delta) R_g (n_t, \delta)} + n_t^{- 1 / 2} \right),
+  \end{align*}
+%% [lines 710-762 omitted]
+  Since $g$ is $L$-Lipschitz continuous, the second term is upper bounded by
+  Wasserstein distance $LW_1 (\mathcal{L}_{U /\|U\|}^t, \mathcal{L}_{U
+  /\|U\|})$, where $\mathcal{L}_{U /\|U\|}^t$ is the distribution of $U
+  /\|U\|$ conditioning on $\|U\|> t$ and $\mathcal{L}_{U /\|U\|}$ is its
+  limiting distribution as $t \rightarrow \infty$. Therefore, we have
+  \begin{align}
+    | \eta^t - \eta | & \leqslant 2 e (t) + LW_1 (\mathcal{L}_{U /\|U\|}^t,
+    \mathcal{L}_{U /\|U\|}) + O (\log (t) R_{\alpha} (n, \delta)) \nonumber\\
+    & \leqslant 2 e (t) + O (t^{- \min \{1, \beta\}} + t^{- \beta s / (1 - 2
+    s)} + \log (t) R_{\alpha} (n, \delta)),  \label{eq:eta_bias}
+  \end{align}
+  
+  where we use {\citetext{\citealp{zhang2023wasserstein},  Proposition 3.1}}
+  in the last inequality to upper bound the bias term $W_1 (\mathcal{L}_{U
+  /\|U\|}^t, \mathcal{L}_{U /\|U\|})$. Combing (\ref{eq:eta_est}) and
+  (\ref{eq:eta_bias}), we get
+  \begin{align*}
+    | \hat{\eta}_n^{t} - \eta | & \leqslant O (\sqrt{R_p (n/2, \delta) R_g
+    (t^{- \beta} n, \delta)} + t^{\beta / 2} n^{- 1 / 2} + t^{- \min \{1,
+    \beta\}} + t^{- \beta s / (1 - 2 s)} + e (t) + \log (t) R_{\alpha} (n,\delta)) .
+  \end{align*}
+%%% lemma:eta_ipw lemma body — Arxiv_template.tex:788-794
+  Under the assumption of Theorem \ref{thm:rate}, with probability at least $1
+  - \delta$, we have
+\begin{align*}
+    | \hat{\eta}_{n, t}^{\text{IPW}} - \eta | & \leqslant O (R_p (n/2, \delta) +
+    t^{\beta / 2} n^{- 1 / 2} + t^{- \min \{1, \beta\}} + t^{- \beta s / (1 -
+    2 s)}) + e (t) .
+  \end{align*}
+%%% lemma:eta_ipw lemma proof — Arxiv_template.tex:797-810
+
+Similar to Lemma \ref{lemma:eta_rate}, we have the following decomposition.
+\begin{align*}
+  | \hat{\eta}_{n, t}^{\text{IPW}} - \eta | & \leqslant | \hat{\eta}_{n,
+  t}^{\text{IPW}} - \eta^t | + | \eta^t - \eta |.
+\end{align*}
+
+Term $| \eta^t - \eta |$ can be bounded in the same way as in the proof of
+Lemma \ref{lemma:eta_rate}. By \cite[Theorem 1]{su2023estimated}, we have
+\begin{align*}
+  | \hat{\eta}_{n, t}^{\text{IPW}} - \eta^t | & \leqslant O (R_p (n/2, \delta) +
+  n_t^{- 1 / 2}) = O (R_p (n/2, \delta) + t^{\beta / 2} n^{- 1 / 2}  + \log (t) R_{\alpha} (n,\delta)) .
+\end{align*}
+The rest of the proof is similar.   

@@ -1,0 +1,20 @@
+{
+  "key_results": [
+    "thm:amgm",
+    "thm:cubic"
+  ],
+  "key_contribution": "the two-variable AM-GM inequality, and a cubic inequality from Schur's inequality",
+  "patches": [],
+  "unfixable": [
+    {
+      "node": "thm:amgm",
+      "reason": "any repair weakens the contribution: the inequality fails for negative numbers; only the nonnegative case holds",
+      "suggested_repair": {
+        "corrected_statement": "For all real numbers $a, b \\ge 0$, \\[ \\frac{a + b}{2} \\ge \\sqrt{ab} . \\]",
+        "proof_note": "Apply Lemma~\\ref{lem:sq} to $x = \\sqrt{a}$ and $y = \\sqrt{b}$, real numbers since $a, b \\ge 0$: then $x^2 = a$, $y^2 = b$ and $xy = \\sqrt{ab}$, so $a + b \\ge 2\\sqrt{ab}$.",
+        "given_up": "The inequality is no longer claimed when $a$ or $b$ is negative."
+      },
+      "suggested_by": "fixer"
+    }
+  ]
+}

@@ -1,0 +1,22 @@
+\documentclass{article}
+\usepackage{amsmath,amsthm}
+\newtheorem{thm}{Theorem}
+\newtheorem{lem}[thm]{Lemma}
+\newtheorem{prop}[thm]{Proposition}
+
+\begin{document}
+
+\section{Results}
+
+\begin{thm}[Rate]\label{thm:rate}
+Assume the propensity score is bounded away from zero. % the paper's own comment
+The estimator converges at rate $n^{-1/2}$. It is efficient.
+\end{thm}
+
+\begin{lem}\label{lem:bound}
+Suppose $X$ is bounded. Then $E[X]$ exists.
+\end{lem}
+
+\input{sec/results}
+
+\end{document}

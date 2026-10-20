@@ -1,0 +1,94 @@
+{
+  "stage_completed": "V6",
+  "lean_subdir": "Papers/Demo",
+  "qid": "demo",
+  "design_decisions": {},
+  "added_assumptions": [],
+  "cited_checks": [],
+  "cited_review_receipts": [],
+  "delivery_review_receipts": [],
+  "auto_mode": false,
+  "full_auto": false,
+  "flags": {
+    "missing_architecture": false,
+    "scaffold_redirect": null,
+    "proof_review_escalation_pending": null,
+    "f2_scaffold_directive": null
+  },
+  "verify": {
+    "phase": "proposals_B",
+    "source": {
+      "input": "@@PAPER@@",
+      "main_file": "main.tex",
+      "sha256": "943d23dc47c7585bada40a17d1f9f182973b8074b343002c8aa72696acf9a8b8"
+    },
+    "targets": null,
+    "core_sha256": "76ba8c57e90881ca1cacc22552dbc0062efccef778f780cfd27b86cff1808078",
+    "v1_rounds": 1,
+    "v1_5_rounds": 0,
+    "findings": [
+      {
+        "node": "thm:amgm",
+        "stage": "V1.5",
+        "kind": "refuted",
+        "detail": "False for negative numbers: for $a=b=-1$ the left side is $-1$ while the right side is $\\sqrt{1}=1$. The proof takes $\\sqrt{a}$ and $\\sqrt{b}$, which are real numbers only when $a,b\\ge 0$.",
+        "witness": "$a=b=-1$: $\\frac{a+b}{2}=-1<1=\\sqrt{ab}$.",
+        "suggested_repair": "For all real numbers $a, b \\ge 0$, \\[ \\frac{a + b}{2} \\ge \\sqrt{ab} . \\]",
+        "at": "2026-10-17T12:00:00.000Z"
+      }
+    ],
+    "report_path": "@@TOOLKIT@@/runs/demo/report.md",
+    "transcribed_written_sha256": "c9c4b8d3079861a3ee54d284697a017603631ce72a1545d9a30538856fc0a436",
+    "confirmed_symbols": {},
+    "confirmed_scheme": 5,
+    "confirmed": {
+      "lem:schur": "0c74feb18014bca8932eb1e423d82818083fc560186d879f87e5386b8e4de40d",
+      "lem:sq": "bf04485cb2b37667269146a5e6e40bc723cd985c1beab87ab410d41bae26ca1a",
+      "thm:amgm": "69c071d5af6fb8eb2ae59a2fd62c3959e681a9edcfb2b393d7252b8499c52c74",
+      "thm:cubic": "1bd655ae280f62381d37dd9950b5778d7bcedcc993a1a28e9078cc1bc9e7d4c2"
+    },
+    "paper_errors": {
+      "thm:amgm": {
+        "detail": "False for negative numbers: for $a=b=-1$ the left side is $-1$ while the right side is $\\sqrt{1}=1$. The proof takes $\\sqrt{a}$ and $\\sqrt{b}$, which are real numbers only when $a,b\\ge 0$.",
+        "witness": "$a=b=-1$: $\\frac{a+b}{2}=-1<1=\\sqrt{ab}$.",
+        "kind": "error",
+        "weakens_contribution": true,
+        "suggested_repair": "For all real numbers $a, b \\ge 0$, \\[ \\frac{a + b}{2} \\ge \\sqrt{ab} . \\]",
+        "owner_decision": "accepted"
+      }
+    },
+    "weakening_repair": {
+      "status": "accepted",
+      "items": [
+        {
+          "node": "thm:amgm",
+          "printed": "For all real numbers $a$ and $b$, \\[ \\frac{a + b}{2} \\ge \\sqrt{ab} . \\]",
+          "proposed": "For all real numbers $a, b \\ge 0$, \\[ \\frac{a + b}{2} \\ge \\sqrt{ab} . \\]",
+          "given_up": "The inequality is no longer claimed when $a$ or $b$ is negative.",
+          "detail": "False for negative numbers: for $a=b=-1$ the left side is $-1$ while the right side is $\\sqrt{1}=1$. The proof takes $\\sqrt{a}$ and $\\sqrt{b}$, which are real numbers only when $a,b\\ge 0$.",
+          "witness": "$a=b=-1$: $\\frac{a+b}{2}=-1<1=\\sqrt{ab}$.",
+          "source": "fixer"
+        }
+      ],
+      "at": "2026-10-17T12:00:00.000Z",
+      "decisions": {
+        "thm:amgm": "accepted"
+      }
+    },
+    "promotion_a": {
+      "status": "applied",
+      "batch_path": "@@TOOLKIT@@/runs/demo/proposals/A.json",
+      "checklist_path": "@@TOOLKIT@@/doc/proposals/demo.A.md",
+      "created_at": "2026-10-17T18:38:17.330Z",
+      "promoted": [],
+      "applied_at": "2026-10-17T18:38:19.772Z"
+    },
+    "promotion": {
+      "status": "pending_user",
+      "batch_path": "@@TOOLKIT@@/runs/demo/proposals/B.json",
+      "checklist_path": "@@TOOLKIT@@/doc/proposals/demo.B.md",
+      "created_at": "2026-10-17T18:38:23.699Z",
+      "promoted": []
+    }
+  }
+}

@@ -1,0 +1,36 @@
+\documentclass{article}
+\newtheorem{thm}{Theorem}
+\newtheorem{lem}[thm]{Lemma}
+\newtheorem{assumption}{Assumption}
+\begin{document}
+
+\section{Setup}
+Let $Y$ be the outcome, $D \in \{0,1\}$ the treatment and $X$ the covariates.
+
+\begin{assumption}\label{ass:unconf}
+$Y(d) \perp D \mid X$ for $d \in \{0,1\}$.
+\end{assumption}
+
+\begin{assumption}\label{ass:overlap}
+$0 < e(X) < 1$ almost surely.
+\end{assumption}
+
+\begin{lem}\label{lem:ipw}
+Under Assumption \ref{ass:overlap}, $E[DY/e(X)] = E[Y(1)]$.
+\end{lem}
+\begin{proof}
+Condition on $X$ and apply the tower property.
+\end{proof}
+
+\begin{thm}\label{thm:ate}
+Under Assumptions \ref{ass:unconf} and \ref{ass:overlap}, $\tau = E[DY/e(X) - (1-D)Y/(1-e(X))]$.
+\end{thm}
+\begin{proof}
+Apply Lemma \ref{lem:ipw} to each arm and subtract.
+\end{proof}
+
+\begin{lem}\label{lem:delta}
+(van der Vaart, Theorem 3.1.) If $\sqrt{n}(T_n - \theta) \rightsquigarrow T$ and $\phi$ is differentiable at $\theta$, then $\sqrt{n}(\phi(T_n) - \phi(\theta)) \rightsquigarrow \phi'_\theta(T)$.
+\end{lem}
+
+\end{document}

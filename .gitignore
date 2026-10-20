@@ -1,0 +1,10 @@
+node_modules
+.lake/
+tools/config/local.json
+*.log
+.DS_Store
+tools/config/lean_mcp.generated.*.json
+__pycache__/
+.claude/settings.local.json
+.claude/worktrees/
+!tools/test/verify/fixtures/*.log

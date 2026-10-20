@@ -1,0 +1,60 @@
+{
+  "shards": [
+    [
+      "thm:amgm"
+    ]
+  ],
+  "levels": [
+    {
+      "level": 1,
+      "nodes": [
+        "thm:amgm"
+      ],
+      "shards": [
+        [
+          "thm:amgm"
+        ]
+      ],
+      "content_bytes": [
+        235
+      ],
+      "calls": 1,
+      "bytes": 39267,
+      "dependency_unclear": [],
+      "wall_ms": 18
+    }
+  ],
+  "cycles": [],
+  "calls": [
+    {
+      "tag": "shard_L1-1",
+      "kind": "shard",
+      "bytes": 39267,
+      "ms": 0,
+      "nodes": 1
+    },
+    {
+      "tag": "global",
+      "kind": "global",
+      "bytes": 25497,
+      "ms": 0,
+      "nodes": 0
+    }
+  ],
+  "shard_bytes": 39267,
+  "global_bytes": 25497,
+  "total_bytes": 64764,
+  "set_aside": [],
+  "wall_ms": 24,
+  "symbols": {
+    "effort": "medium",
+    "symbols": 0,
+    "graded": 0,
+    "carried": 0,
+    "shards": [],
+    "calls": [],
+    "shard_bytes": 0,
+    "set_aside": [],
+    "wall_ms": 4
+  }
+}

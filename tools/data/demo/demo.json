@@ -1,0 +1,148 @@
+{
+  "slug": "demo",
+  "agent": "Demo agent",
+  "reply": "This is the demo, so nobody reads your message. In a real run the agent attached to the run reads it within seconds and answers here: ask it why it recommends something, ask it to look again at a finding, or attach a cited paper it could not fetch. A message never changes the run by itself; only the decision buttons do.",
+  "steps": [
+    {
+      "id": "start",
+      "snapshot": "start",
+      "view": "toolkit",
+      "title": "Welcome: how a paper starts",
+      "body": "<p>This page shows your toolkit and follows every paper you verify. You start a paper from your agent, not from here: open a terminal in the TheoremChecker folder, start <code>claude</code> or <code>codex</code>, and ask it as in this box (<b>copy</b> gives you the words).</p><p>The agent starts the run, attaches itself to it and acts at every halt; the run then appears on this page and updates live.</p><p>For this demo a paper has already been started. Press Next.</p>",
+      "target": "#start-how"
+    },
+    {
+      "id": "welcome",
+      "view": "toolkit",
+      "title": "Your papers",
+      "body": "<p>Every paper you verify is a row here, with its stage and whether it waits for you; <b>Needs you</b> at the top counts what does.</p><p>Here is the demo's paper, <i>Two Elementary Inequalities</i>, made up for this tour. One of its theorems is stated too broadly, on purpose, so you can see what happens then.</p><p>Click its row, or press Next.</p>",
+      "target": "#runs-body tr"
+    },
+    {
+      "id": "paper",
+      "view": "paper",
+      "title": "The paper's page",
+      "body": "<p>This is where you follow one paper. On the left: the run's stages, and a proof map (an arrow reads \"used by\"). In the middle: the paper itself. On the right: TheoremChecker's comments.</p><p>An agent session (Claude Code or Codex) is attached to the run. It acts at every halt and talks with you here. In this demo a stand-in plays it.</p><p>Press Next to let the referee read the paper.</p>",
+      "target": "#vstages"
+    },
+    {
+      "id": "review",
+      "snapshot": "review",
+      "view": "paper",
+      "title": "A repair that would weaken a main result",
+      "body": "<p>The referee found that Theorem 3 is false as printed: for <i>a = b = −1</i> the left side is −1 and the right side is 1. The only true version adds <i>a, b ≥ 0</i>, which claims less than the paper does.</p><p>That is <b>your</b> decision, never the agent's. The printed text is marked red, the proposed statement blue, and the card in the margin holds the agent's recommendation.</p><p>Choose <b>Accept</b>, <b>Redo with guidance</b> or <b>Decline</b> on the card and press <b>Send my decisions</b>, or press <b>Accept all recommendations</b> in the box under the title.</p>",
+      "target": ".card.decision",
+      "advance": "rule-repairs",
+      "running": {
+        "seconds": 6,
+        "events": [
+          {
+            "stage": "V1.5",
+            "message": "referee: grading 4 results for faithfulness, ambiguity and correctness"
+          },
+          {
+            "stage": "V1.5",
+            "message": "fixer: no repair keeps Theorem 3 at full strength — suggesting the strongest true version"
+          }
+        ]
+      }
+    },
+    {
+      "id": "roundA",
+      "snapshot": "roundA",
+      "view": "paper",
+      "title": "Promotion round A: cited results",
+      "body": "<p>Your decision went to the run: the referee confirmed the repaired Theorem 3, and the Lean plan was made.</p><p>The paper uses Schur's inequality without proving it, citing a book. Round A offers to build it in your toolkit, so this paper and later ones can use it instead of assuming it.</p><p>The checklist is at the end of the paper, with the agent's recommendation. Decide the entry, or press <b>Accept all recommendations</b>, and apply the round.</p>",
+      "target": "#promo-sec",
+      "advance": "apply-promotion",
+      "running": {
+        "seconds": 6,
+        "events": [
+          {
+            "stage": "V1.5",
+            "message": "confirming the accepted repair of Theorem 3"
+          },
+          {
+            "stage": "1",
+            "message": "F1: planning the Lean formalization"
+          },
+          {
+            "stage": "promotion",
+            "message": "round A: looking for the cited results in Mathlib and your toolkit"
+          }
+        ]
+      }
+    },
+    {
+      "id": "roundB",
+      "snapshot": "roundB",
+      "view": "paper",
+      "title": "Promotion round B: the paper's results",
+      "body": "<p>The Lean stages proved the paper's results and the report is written. Round B offers the proved results to your toolkit.</p><p>Here the agent recommends accepting the cubic inequality, which is new, and declining the AM-GM inequality, because Mathlib already has it. You may follow it or not, entry by entry.</p><p>Decide, then apply round B.</p>",
+      "target": "#promo-sec",
+      "advance": "apply-promotion",
+      "running": {
+        "seconds": 8,
+        "events": [
+          {
+            "stage": "promotion",
+            "message": "round A: building Schur's inequality in your toolkit"
+          },
+          {
+            "stage": "2",
+            "message": "F2: the Lean scaffold"
+          },
+          {
+            "stage": "4",
+            "message": "F4: proofs written and reviewed"
+          },
+          {
+            "stage": "5",
+            "message": "F5: each statement linked to the paper's words"
+          },
+          {
+            "stage": "V6",
+            "message": "writing the report and the corrected paper"
+          }
+        ]
+      }
+    },
+    {
+      "id": "done",
+      "snapshot": "done",
+      "view": "paper",
+      "title": "The result",
+      "body": "<p>The run is finished. The top of the page gives the verdict: an error was found and repaired. Use the <b>Markup</b> switch above the paper to read it as corrected or as printed.</p><p>Click a result to open its drawer: the referee's verdict, the conditions added, and its Lean statement linked to the paper's words.</p>",
+      "target": "#markup",
+      "running": {
+        "seconds": 5,
+        "events": [
+          {
+            "stage": "promotion",
+            "message": "round B: the accepted result enters your toolkit"
+          }
+        ]
+      }
+    },
+    {
+      "id": "talk",
+      "view": "paper",
+      "title": "Talking to the agent",
+      "body": "<p>You can write to the agent at any time with <b>Message the agent</b>, and attach files (a cited paper, say). Its answers appear under yours. Try it: the stand-in answers.</p><p>When the agent needs something only you can give, its request shows here and under <b>Needs you</b>.</p>",
+      "target": "[data-msg=\"open\"]"
+    },
+    {
+      "id": "library",
+      "view": "library",
+      "title": "Your library",
+      "body": "<p>The Library lists your toolkit's results, read from its Lean files: Schur's inequality from round A and the cubic inequality from round B are now there, each with its statement and what uses it.</p>",
+      "target": "#lib-main"
+    },
+    {
+      "id": "end",
+      "view": "toolkit",
+      "title": "That is the tour",
+      "body": "<p>To verify a paper of your own, ask your agent, for example: \"Use TheoremChecker to verify arXiv 2401.01234 with my toolkit at ~/my-toolkit.\" It starts the run, brings up this page and gives you the link.</p><p>To let the agent take your decisions too (each listed for your review afterwards), have it start the run with <code>--full-auto</code>.</p><p>Press <b>Start over</b> to see the tour again.</p>"
+    }
+  ]
+}

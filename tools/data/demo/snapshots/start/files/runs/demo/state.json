@@ -1,0 +1,30 @@
+{
+  "stage_completed": "V1",
+  "lean_subdir": "Papers/Demo",
+  "design_decisions": {},
+  "added_assumptions": [],
+  "cited_checks": [],
+  "delivery_review_receipts": [],
+  "flags": {
+    "missing_architecture": false,
+    "scaffold_redirect": null,
+    "f2_scaffold_directive": null,
+    "proof_review_escalation_pending": null
+  },
+  "verify": {
+    "phase": "v1",
+    "source": {
+      "input": "@@PAPER@@",
+      "main_file": "main.tex",
+      "sha256": "943d23dc47c7585bada40a17d1f9f182973b8074b343002c8aa72696acf9a8b8"
+    },
+    "targets": null,
+    "core_sha256": null,
+    "v1_rounds": 1,
+    "v1_5_rounds": 0,
+    "findings": [],
+    "report_path": null,
+    "transcribed_written_sha256": "c9c4b8d3079861a3ee54d284697a017603631ce72a1545d9a30538856fc0a436"
+  },
+  "qid": "demo"
+}

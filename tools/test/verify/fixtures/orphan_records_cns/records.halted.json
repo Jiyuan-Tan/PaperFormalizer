@@ -1,0 +1,44 @@
+{
+ "patches": {
+  "key_results": [],
+  "patches": [
+   {
+    "node": "lem:cont-elasticity",
+    "corrected_statement": "Suppose the weighting is bounded, namely $|\\ell_h|\\leq C<\\infty$, and $\\Gamma\\subset\\mathbb L_2$. The following conditions are sufficient for $\\bar Q<\\infty$ with $q=1$ in Examples~\\ref{ex:CATE} and~\\",
+    "add_assumptions": [],
+    "remove_depends_on": [],
+    "proof_note": "(trimmed)",
+    "given_up": "Class-wide mean-square continuity with $q=1/2$ for the elasticity and derivative examples.",
+    "narrowed_by": "runner"
+   },
+   {
+    "node": "lem:cont-deriv",
+    "corrected_statement": "Suppose the weighting is bounded, namely $|\\ell_h|\\leq C<\\infty$, and $\\Gamma\\subset\\mathbb L_2$. The following conditions are sufficient for $\\bar Q<\\infty$ with $q=1$ in Examples~\\ref{ex:CATE} and~\\",
+    "add_assumptions": [],
+    "remove_depends_on": [],
+    "proof_note": "(trimmed)",
+    "given_up": "Class-wide mean-square continuity with $q=1/2$ for the elasticity and derivative examples.",
+    "narrowed_by": "runner"
+   }
+  ],
+  "unfixable": []
+ },
+ "verify": {
+  "paper_errors": {
+   "lem:cont-elasticity": {
+    "detail": "The lint warning is dismissed: the elasticity clause uses the cited Lemma~\\ref{lemma:rp} under its second condition, so the other clause's assumptions need no wiring. Under the dependency verdict, tha",
+    "witness": null
+   },
+   "lem:cont-deriv": {
+    "detail": "The printed \u2113_h\u2264C permits a one-sided reading, while \u201cbounded weighting\u201d and the proof\u2019s bounds on \u2113_h\u00b2 determine an absolute bound. Independently deriving the derivative case gives E[m_h(W,\u03b3)\u00b2]=E[\u2113_h",
+    "witness": null
+   }
+  },
+  "confirmed": {
+   "lem:cont-rdd": "db0cad750a85fd270e7c757fcde230b3390ce400e855d758bd746c2b2eac9164",
+   "lem:cont-elasticity": "73a0029b196949833f47fb65a43dae8907cca7583e5a7ee4639b5c22cd5de1e8",
+   "lem:cont-deriv": "933f9f4e479342dca4cc4e6d0a916f2012aa2277167cdb25b304515dff685631"
+  },
+  "findings": []
+ }
+}

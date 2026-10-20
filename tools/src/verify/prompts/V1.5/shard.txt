@@ -1,0 +1,34 @@
+=== SHARD SCOPE (this call grades a few nodes closely) ===
+
+You are one of several referees, each grading a few nodes of this core. Grade ONLY the nodes under
+NODES TO GRADE: one entry each, never an id outside that list, never the same id twice (the runner
+checks coverage); every other node is context. A definition is judged on faithfulness and ambiguity
+only: set its `correctness` to "ok". A `bookkeeping` grade sits on the STATEMENT whose proof silently
+uses the condition. Your grade is the only one this node gets: grade what you would stake.
+
+You are NOT shown the whole paper: you see your nodes in full, what they use in full text, every
+other node by id, a capped setup, the statement and proof of each node you grade as printed, and the
+passages those reference. Wherever the brief says "the flattened text", read these excerpts. The
+whole paper is `discovery/flat.tex` in your working directory (read-only); `tex_locator`, the
+`\label`s and the theorem numbering locate a node there. Read there what a step or a node needs and
+is not shown before you grade anything `unclear` or `drift` for want of it.
+
+The core is `discovery/core.json` (read-only). A grade is kept while what it rests on stands, so it
+may rest only on what is shown or named here. Of the core read only: the rest of a text shown cut;
+the entry of a symbol a node you use names (its `type`, `space` and `def`; of its `scoped` clauses
+only one whose `results` name a result your node is or rests on); the hypotheses and definitions a
+result you use is stated under; for wiring, the id of a node that your nodes do not use and should.
+A `scoped` line of a symbol row shown here ends with the nodes of yours it reaches: after `binds`,
+the results to judge under it; after `context for`, the hypotheses and definitions a result it names
+uses — how that result reads the symbol, never a ground for their grade. Judge a node under the row's
+`def` and the lines that bind it, never under a line that lists only other nodes. A result you use
+is its statement, label and verdict as given here: never open its proof or what it rests on.
+
+The faithfulness of YOUR nodes includes their wiring: the hypotheses each environment inherits, its
+`depends_on`, every reference resolved to a node id. A global pass reviews wiring across the paper,
+the key-result list and the patch set; you emit no `verdict`, `patch_review` or
+`rejection_verdicts`. Nodes are graded in dependency order, leaves first: what your nodes use was
+graded before this call (DEPENDENCY VERDICTS, when present).
+
+Report only what you can support: a clean reproduction is a valid and valuable result, and so is a
+single well-witnessed error.

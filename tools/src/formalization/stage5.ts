@@ -1,0 +1,300 @@
+// Formalization Stage 5: delivery audit, docstring coverage, soundness scan, note sync and the
+// complete tex↔Lean crosswalk. Writes per-run artifacts only (no library-wide docs or ledgers;
+// cited dependencies are reported per run by V6), plus, on completion, the paper's line in the
+// root `<papers_lib>.lean` barrel.
+
+import { readFile } from "node:fs/promises";
+import type { AddedAssumption, PipelineContext, StageResult, StateJson } from "../types.js";
+import { artifactPaths, type StageDeps } from "../pipeline_support.js";
+import { buildCompleteCrosswalkFromGraph, parseLeanDecls, persistCrosswalk, crosswalkVerifiedWithoutAnchor } from "./crosswalk.js";
+import { graphPath, loadGraph } from "../graph/store.js";
+import { existsSync } from "node:fs";
+import { bankSoundnessIssues } from "./bank_soundness.js";
+import { coreJsonPath, readFormalizationCore } from "../core/core_io.js";
+import { PlanSchema } from "./plan/schema.js";
+import { auditCitedReview, auditDelivery, citedLeanEvidence, splitCitedFindingsForVerify } from "./delivery_audit.js";
+import { auditConvergenceReview } from "./convergence_evidence.js";
+import { takeStatementFingerprints } from "./statement_fingerprints.js";
+import { parseAnnotatedDecls } from "../graph/extractor.js";
+import { parseJsonWithEscapeRepair } from "../shared/codex_json.js";
+import { ensureDocstringCoverage } from "./stage5_docstrings.js";
+import { emitNlLinks } from "./nl_links.js";
+import { recordVerifyFinding } from "../verify/findings.js";
+import { leanModulePrefix } from "../paths.js";
+import { ctxToolkit } from "../toolkit/config.js";
+import { ensurePapersBarrelImport } from "../toolkit/barrels.js";
+import { writeRunBarrel } from "./proof_review_loop.js";
+
+/**
+ * Register the finished paper in the root papers barrel: refresh the run barrel
+ * (`<papers_lib>/<Pascal>.lean`) and ensure `<papers_lib>.lean` imports it. Only a completed F5
+ * joins the root barrel, so an in-progress run never breaks the default build. Returns the root
+ * barrel path when it changed, and a warning instead of throwing (the run's deliverable is
+ * already on disk; a barrel problem is reported, not fatal).
+ */
+export async function registerInPapersBarrel(ctx: PipelineContext, state: StateJson, leanDir: string): Promise<{ changed?: string; warning?: string }> {
+  if (ctx.dryRun) return {};
+  try {
+    const barrel = await writeRunBarrel(ctx.repoRoot, leanDir);
+    if (!barrel) return { warning: `no Lean modules under ${leanDir}; the paper was not added to the papers barrel` };
+    const r = await ensurePapersBarrelImport(ctxToolkit(ctx), leanModulePrefix(state.lean_subdir));
+    return r.changed ? { changed: r.path } : {};
+  } catch (e) {
+    return { warning: `papers barrel not updated: ${e instanceof Error ? e.message : String(e)}` };
+  }
+}
+
+/**
+ * Emit the COMPLETE tex↔Lean crosswalk (the visualization backbone AND the table
+ * the V6 report consumes). F5 is the guaranteed-final point: F4 has passed, no stage
+ * edits Lean past here, so the lemma set is final and line numbers are accurate.
+ * Lemma-inclusive; inherits the F2.5 drift verdicts for the def/theorem rows.
+ *
+ * NO LONGER best-effort. A silently-swallowed emit failure left the PREVIOUS
+ * (pre-de-laundering) table banked as if current — the bug behind P-8 shipping
+ * `lean: null` with a stale `equivalent` verdict. On emit failure, or a
+ * self-consistency contradiction (a row claiming a verified match with no anchor),
+ * return a block reason so F5 refuses to reach CKPT 2 with a stale/inconsistent
+ * table. Returns `null` on success.
+ */
+async function emitCompleteCrosswalk(args: {
+  ctx: PipelineContext;
+  state: StateJson;
+}): Promise<string | null> {
+  const paths = artifactPaths(args.ctx, args.state);
+  let full;
+  try {
+    // The core-keyed graph is the trust anchor (every paper object, its Lean
+    // link, and its obj_id alias); F2 always emits it before F5 can run.
+    const gp = graphPath(paths.formalizationDir);
+    if (!existsSync(gp)) throw new Error(`graph.json missing at ${gp}`);
+    full = await buildCompleteCrosswalkFromGraph(await loadGraph(gp), paths.leanDir);
+    await persistCrosswalk(paths.crosswalkFullJson, paths.crosswalkFullMd, full);
+  } catch (err) {
+    return (
+      `F5 crosswalk emit FAILED (${err instanceof Error ? err.message : String(err)}) — ` +
+      `the delivered table would be STALE (the previous, pre-restructure table stays in place). ` +
+      `Resolve the emit error then resume.`
+    );
+  }
+  console.warn(
+    `[theoremchecker] F5 complete crosswalk: ${full.length} object(s) anchored → ${paths.crosswalkFullJson}`,
+  );
+  const contradictions = crosswalkVerifiedWithoutAnchor(full);
+  if (contradictions.length > 0) {
+    return (
+      `F5 crosswalk consistency: ${contradictions.length} row(s) claim a verified Lean match ` +
+      `(exact/equivalent) but carry NO anchor — equivalence verified against nothing, and a ` +
+      `consumer's gate SKIPS lean:null rows: ${contradictions.map((c) => `${c.obj_id} [${c.verdict}]`).join(", ")}. ` +
+      `Wire the anchor (its decl exists) or correct the verdict to 'unmatched' before delivery.`
+    );
+  }
+  return null;
+}
+
+/**
+ * #5 fix (F3→note→paper faithfulness). A premise F3 added to a theorem signature
+ * (`state.added_assumptions`) that is LOAD-BEARING (not `regularity-bookkeeping`)
+ * must be reflected in the .md note's hypothesis ledger — that note is what the
+ * report consumes, and an assumption-table totality gate only sees
+ * `(H<n>` binders, so an instance-implicit / differently-named F3 premise can be
+ * silently omitted from the paper (overclaim-by-omission). A prose note may label
+ * the same premise differently, so a deterministic label match would false-block a
+ * correctly hand-synced note; this is therefore a PROMPTED CKPT-2 warning (it lists
+ * exactly which premises to confirm), recorded durably in `design_decisions`.
+ */
+/**
+ * Whether `label` occurs in the note as a STANDALONE token.
+ *
+ * A bare `includes` is satisfied by any longer label that contains it — `A1` by an unrelated
+ * `A10` row — which suppresses the warning in exactly the case it exists to catch. Delimiters
+ * are "not alphanumeric", so ordinary note punctuation (`**A1**:`, `(A1)`, `` `A1` ``) still
+ * counts as a mention while `A10` does not.
+ */
+function noteMentionsLabel(noteMd: string, label: string): boolean {
+  const l = label.trim();
+  if (!l) return false;
+  const esc = l.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+  return new RegExp(`(?:^|[^A-Za-z0-9])${esc}(?:$|[^A-Za-z0-9])`).test(noteMd);
+}
+
+export function unsyncedLoadBearingAssumptions(state: StateJson, noteMd: string): AddedAssumption[] {
+  return state.added_assumptions.filter(
+    (a) => a.classification !== "regularity-bookkeeping" && !noteMentionsLabel(noteMd, a.label),
+  );
+}
+
+export async function runStage5(args: {
+  ctx: PipelineContext;
+  state: StateJson;
+  deps: StageDeps;
+}): Promise<StageResult> {
+  /** The run's modules the convergence audit built green in this entry (none when it did not get
+   *  that far): the docstring pass skips its own pre-pass build of them. */
+  let builtModules: readonly string[] = [];
+  // Re-run the same omission contract used by F2. F4 receipts are
+  // mandatory here; any later plan/graph edit invalidates their evidence hashes.
+  {
+    const paths = artifactPaths(args.ctx, args.state);
+    try {
+      const core = await readFormalizationCore(coreJsonPath(args.ctx));
+      const plan = PlanSchema.parse(parseJsonWithEscapeRepair(await readFile(paths.plan, "utf8")));
+      const gp = graphPath(paths.formalizationDir);
+      const graph = await loadGraph(gp);
+      const declNames = (await parseLeanDecls(paths.leanDir, { includeLemmas: true })).map((decl) => decl.name);
+      const annotatedDecls = await parseAnnotatedDecls(paths.leanDir);
+      const leanEvidence = await citedLeanEvidence(paths.leanDir, plan);
+      const findings = auditDelivery({
+        core,
+        plan,
+        graph,
+        leanDeclNames: declNames,
+        annotatedDecls,
+        receipts: args.state.delivery_review_receipts ?? [],
+        requireReceipts: true,
+      });
+      const citedFindings = auditCitedReview({
+        core,
+        plan,
+        graph,
+        leanEvidence,
+        receipts: args.state.cited_review_receipts ?? [],
+      });
+      // The headline is the USER'S theorem, which may legitimately rest on a result the paper
+      // only cites. A source the F4 peers could not resolve (no receipt) or could not fully pin
+      // down (`cited-underspecified`) is therefore DISCLOSED in the correctness report as a cited
+      // hypothesis, not a reason to halt. A `cited-mismatch` — the Lean encodes a different
+      // statement than the source — is a faithfulness defect and still blocks.
+      const { blocking, notes } = splitCitedFindingsForVerify(citedFindings);
+      for (const note of notes) {
+        recordVerifyFinding(args.state, {
+          node: note.node_id ?? "run",
+          stage: "F5",
+          kind: "note",
+          detail: `cited-source evidence: ${note.message}`,
+          witness: null,
+        });
+      }
+      findings.push(...blocking);
+      findings.push(...await auditConvergenceReview({
+        graph,
+        leanDir: paths.leanDir,
+        core,
+        fingerprints: async () => {
+          const fp = await takeStatementFingerprints(args.ctx.repoRoot, paths.leanDir);
+          // The fingerprint build is a green build of the run's modules: the docstring pass
+          // below starts from it instead of building the unchanged tree again.
+          if (fp) builtModules = fp.modules;
+          return fp;
+        },
+      }));
+      if (findings.length > 0) {
+        return {
+          stage: "5",
+          status: "checkpoint",
+          advance: false,
+          message: `F5 delivery audit REFUSED: ${findings.map((f) => `${f.code}${f.node_id ? ` @ ${f.node_id}` : ""}: ${f.message}`).join("; ")}`,
+        };
+      }
+    } catch (err) {
+      return {
+        stage: "5",
+        status: "checkpoint",
+        advance: false,
+        message: `F5 delivery audit could not validate the artifacts: ${err instanceof Error ? err.message : String(err)}`,
+      };
+    }
+  }
+  // Docstring coverage (docstring-canonical workflow): every declaration in the run's Lean
+  // modules must carry a docstring whose first paragraph is the NL translation. Authored here
+  // (the final Lean-edit point), BEFORE the bank-soundness scan below (the docstring pass
+  // edits Lean, and the token scan must cover the final text) and BEFORE the crosswalk emit
+  // (docstring insertion shifts line numbers; the banked crosswalk records post-docstring lines).
+  {
+    const docstringBlock = await ensureDocstringCoverage({ ...args, builtModules });
+    if (docstringBlock) {
+      return { stage: "5", status: "checkpoint", advance: false, message: docstringBlock };
+    }
+  }
+  // Soundness gate: refuse to complete while the artifact (or any reachable
+  // file of the same package) still contains a real `sorry` or a
+  // cheat token (`axiom`/`opaque`/`unsafe`/`admit`). Text-based scan;
+  // catches the false-completion class where F3's in-subdir count was clean
+  // but a dependency stub was not. Runs AFTER the docstring pass so an edit
+  // that pass made cannot introduce a token behind the scan's back.
+  {
+    const paths = artifactPaths(args.ctx, args.state);
+    const issues = await bankSoundnessIssues(paths.leanDir, args.ctx.repoRoot);
+    if (issues.length > 0) {
+      return {
+        stage: "5",
+        status: "checkpoint",
+        advance: false,
+        message:
+          `F5 bank-soundness gate REFUSED: ${issues.slice(0, 10).join("; ")}` +
+          (issues.length > 10 ? ` (+${issues.length - 10} more)` : "") +
+          ". Resolve (prove the stubs / remove the cheat tokens) then resume.",
+      };
+    }
+  }
+  // F3→note sync warning: surface any load-bearing F3-added premise whose label
+  // is absent from the note, so the orchestrator confirms it is reflected before
+  // the report (a totality gate cannot catch a non-H<n> binder).
+  const noteSyncWarnings: string[] = [];
+  {
+    const paths = artifactPaths(args.ctx, args.state);
+    // Fail CLOSED. The report consumes this note, so an unreadable one is a
+    // blocking defect — and degrading it to "" would ALSO make every load-bearing premise look
+    // unsynced, or (with no premises) emit a clean run over a note that is not there at all.
+    let noteMd: string;
+    try {
+      noteMd = await readFile(paths.md, "utf8");
+    } catch (e) {
+      return {
+        stage: "5",
+        status: "blocked",
+        advance: false,
+        message:
+          `F5 cannot read the formalization note at ${paths.md} ` +
+          `(${e instanceof Error ? e.message : String(e)}). The report consumes this note, and ` +
+          `the F3→note premise-sync check cannot run without it.`,
+      };
+    }
+    for (const a of unsyncedLoadBearingAssumptions(args.state, noteMd)) {
+      const w =
+        `F3-added load-bearing premise '${a.label}' (${a.classification ?? "?"}, source ${a.source ?? "?"}) ` +
+        `is not found by label in the note — CONFIRM it is reflected in the note's "Load-bearing hypotheses" ` +
+        `before reporting (the report consumes the note; a totality gate is blind to non-H<n>/instance binders).`;
+      noteSyncWarnings.push(w);
+      args.state.design_decisions[`note_sync:${a.label}`] = w;
+    }
+  }
+
+  const crosswalkBlock = await emitCompleteCrosswalk(args);
+  if (crosswalkBlock) {
+    return { stage: "5", status: "checkpoint", advance: false, message: crosswalkBlock };
+  }
+  // Paper ↔ Lean links row by row (advisory: the report and the paper page read them; a
+  // failure is logged and F5 goes on).
+  try {
+    console.log(`[theoremchecker] F5 nl-links: ${await emitNlLinks(args)}`);
+  } catch (err) {
+    console.warn(`[theoremchecker] F5 nl-links skipped: ${err instanceof Error ? err.message : String(err)}`);
+  }
+  // Everything above IS the deliverable (docstring coverage, soundness scan, note sync, full
+  // tex↔Lean crosswalk).
+  const paths = artifactPaths(args.ctx, args.state);
+  const barrel = await registerInPapersBarrel(args.ctx, args.state, paths.leanDir);
+  const baseMsg =
+    "F5 complete: docstring coverage, soundness scan, note sync and the full tex↔Lean crosswalk are done." +
+    (barrel.warning ? `\n\n⚠ ${barrel.warning}` : "");
+  return {
+    stage: "5",
+    status: "completed",
+    completedStage: "5",
+    message:
+      noteSyncWarnings.length > 0
+        ? `${baseMsg}\n\n⚠ NOTE-SYNC — verify before reporting:\n- ${noteSyncWarnings.join("\n- ")}`
+        : baseMsg,
+  };
+}

@@ -1,0 +1,5 @@
+{
+  "targets": null,
+  "envs": ["ass:overlap", "thm:overlap", "lem:aux", "thm:main"],
+  "theorem_like": ["thm:overlap", "lem:aux", "thm:main"]
+}

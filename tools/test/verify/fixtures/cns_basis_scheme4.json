@@ -1,0 +1,1208 @@
+{
+ "about": "Live CNS (cns_simple_dml) before and after the 2026-09-25 compile-at-source sweep, cut to five nodes and their closures: the graded core, the confirmed cache (basis scheme 3) and the prior review with its symbol verdicts; the core and symbol verdicts of the next pass.",
+ "graded": {
+  "core": {
+   "qid": "cns_simple_dml",
+   "symbols": [
+    {
+     "name": "W",
+     "type": "random vector",
+     "def": "the random variables in the model excluding $Y$"
+    },
+    {
+     "name": "Y",
+     "type": "outcome random variable",
+     "refs": [
+      "W"
+     ]
+    },
+    {
+     "name": "n",
+     "type": "sample size"
+    },
+    {
+     "name": "\\Gamma",
+     "type": "linear subset of $\\mathbb{L}_2$"
+    },
+    {
+     "name": "\\gamma",
+     "type": "generic function in $\\Gamma$",
+     "refs": [
+      "\\Gamma"
+     ]
+    },
+    {
+     "name": "\\gamma_0",
+     "type": "function in $\\Gamma$",
+     "refs": [
+      "\\Gamma"
+     ]
+    },
+    {
+     "name": "m",
+     "type": "$m:\\mathcal W\\times\\mathbb L_2\\rightarrow\\mathbb R$",
+     "def": "an abstract formula",
+     "refs": [
+      "W",
+      "\\Gamma"
+     ]
+    },
+    {
+     "name": "\\theta_0",
+     "type": "scalar target parameter",
+     "def": "$E\\{m(W,\\gamma_0)\\}$",
+     "refs": [
+      "W",
+      "m",
+      "\\gamma_0"
+     ]
+    },
+    {
+     "name": "\\alpha_0^{\\min}",
+     "type": "unique minimal Riesz representer in the regression or projection case; unique solution of the conditional-expectation equation in the exactly identified instrumental-variable case",
+     "def": "In the regression or projection case, $\\alpha_0^{\\min}\\in closure(\\Gamma)$ satisfies $E\\{m(W,\\gamma)\\}=E\\{\\alpha_0^{\\min}(W)\\gamma(W)\\}$ for all $\\gamma\\in\\Gamma$, and is obtained by projecting any valid $\\alpha_0$ onto $\\Gamma$. In the instrumental-variable case, $\\eta_0^{\\min}(w_1)=E\\{\\alpha_0^{\\min}(W_2)\\mid W_1=w_1\\}$.",
+     "refs": [
+      "W",
+      "\\Gamma"
+     ]
+    },
+    {
+     "name": "\\hat{\\gamma}_{\\ell}",
+     "type": "fold-specific estimator",
+     "refs": [
+      "\\gamma_0"
+     ]
+    },
+    {
+     "name": "\\hat{\\alpha}_{\\ell}",
+     "type": "fold-specific estimator",
+     "refs": [
+      "\\alpha_0^{\\min}"
+     ]
+    },
+    {
+     "name": "\\hat{\\theta}",
+     "type": "estimator",
+     "def": "$\\hat{\\theta}=n^{-1}\\sum_{\\ell=1}^{L}\\sum_{i\\in I_{\\ell}}[m(W_i,\\hat{\\gamma}_{\\ell})+\\hat{\\alpha}_{\\ell}(W_i)\\{Y_i-\\hat{\\gamma}_{\\ell}(W_i)\\}]$.",
+     "refs": [
+      "\\theta_0",
+      "\\hat{\\gamma}_{\\ell}",
+      "\\hat{\\alpha}_{\\ell}"
+     ]
+    },
+    {
+     "name": "\\hat{\\sigma}^2",
+     "type": "variance estimator",
+     "def": "$\\hat{\\sigma}^2=n^{-1}\\sum_{\\ell=1}^L\\sum_{i\\in I_{\\ell}} [m(W_i,\\hat{\\gamma}_{\\ell})+\\hat{\\alpha}_{\\ell}(W_i)\\{Y_i-\\hat{\\gamma}_{\\ell}(W_i)\\}-\\hat{\\theta}]^2$.",
+     "refs": [
+      "\\hat{\\theta}"
+     ]
+    },
+    {
+     "name": "\\bar{\\sigma}",
+     "type": "conditional-noise bound",
+     "def": "E[\\{Y-\\gamma_0(W)\\}^2 \\mid W]\\leq \\bar{\\sigma}^2"
+    },
+    {
+     "name": "h",
+     "type": "bandwidth"
+    },
+    {
+     "name": "\\ell_h",
+     "type": "weighting function",
+     "refs": [
+      "h"
+     ]
+    },
+    {
+     "name": "\\bar{M}",
+     "type": "operator norm",
+     "def": "\\bar{M}=\\inf [c\\geq 0: |E\\{m(W,\\gamma)\\}|\\leq c  \\text{ for all } \\gamma \\text{ in }\\Gamma \\text{ such that } \\|\\gamma\\|_{\\text{\\normalfont pr,2}}=1]."
+    },
+    {
+     "name": "\\alpha_0",
+     "type": "Riesz representer",
+     "refs": [
+      "W"
+     ]
+    }
+   ],
+   "assumptions": [
+    {
+     "id": "ass:dml-noise",
+     "kind": "moment",
+     "condition": "E[\\{Y-\\gamma_0(W)\\}^2 \\mid W]\\leq \\bar{\\sigma}^2,",
+     "free_symbols": [
+      "Y",
+      "W",
+      "\\gamma_0",
+      "\\bar{\\sigma}"
+     ],
+     "novel": {
+      "flag": true,
+      "justification": "Inline premise of Theorem thm:dml."
+     },
+     "used_by": [
+      "prop:resid",
+      "prop:resid-alt",
+      "thm:dml-alt1",
+      "thm:dml-alt2",
+      "thm:dml-alt3",
+      "thm:dml-alt4"
+     ],
+     "tex_locator": {
+      "file": "5_dml.tex",
+      "from": 19,
+      "to": 40,
+      "env": "theorem",
+      "label": "thm:dml"
+     }
+    },
+    {
+     "id": "ass:thm-local-finite-noise",
+     "kind": "regularity",
+     "condition": "If noise has finite variance",
+     "free_symbols": [],
+     "novel": {
+      "flag": true,
+      "justification": "Inline premise of the finite-noise clause of Theorem thm:local."
+     },
+     "used_by": [
+      "thm:local-finite-noise"
+     ],
+     "tex_locator": {
+      "file": "5_dml.tex",
+      "from": 51,
+      "to": 62,
+      "env": "theorem",
+      "label": "thm:local"
+     }
+    }
+   ],
+   "definitions": [
+    {
+     "id": "def:operator-norm",
+     "name": "Operator norm",
+     "construction": "denoting by $\\bar{M}$ the operator norm of $\\gamma\\mapsto E\\{m(W,\\gamma)\\}$,",
+     "free_symbols": [
+      "\\bar{M}",
+      "\\gamma",
+      "m",
+      "W"
+     ],
+     "inputs": [
+      "m",
+      "W",
+      "\\gamma"
+     ],
+     "tex_locator": {
+      "file": "3_problem.tex",
+      "from": 60,
+      "to": 69,
+      "env": "lemma",
+      "label": "prop:RR"
+     }
+    },
+    {
+     "id": "def:algorithm-target",
+     "name": "Debiased machine learning",
+     "construction": "\\label{alg:target}\nGiven a sample $(Y_i,W_i)$ $(i=1,...,n)$, partition the sample into folds $(I_{\\ell})$ $(\\ell=1,...,L)$. Denote by $I_{\\ell}^c$ the complement of $I_{\\ell}$.\n\\begin{enumerate}\n    \\item For each fold $\\ell$, estimate $\\hat{\\gamma}_{\\ell}$ and $\\hat{\\alpha}_{\\ell}$ from observations in $I_{\\ell}^c$.\n    \\item Estimate $\\theta_0$ as\n    $\n  \\hat{\\theta}=n^{-1}\\sum_{\\ell=1}^L\\sum_{i\\in I_{\\ell}} [m(W_i,\\hat{\\gamma}_{\\ell})+\\hat{\\alpha}_{\\ell}(W_i)\\{Y_i-\\hat{\\gamma}_{\\ell}(W_i)\\}]\n    $.\n    \\item Estimate its $(1-a) 100$\\% confidence interval as\n    $\n    \\hat{\\theta}\\pm c_{a}\\hat{\\sigma} n^{-1/2}$, where $c_{a}$ is the $1-a/2$ quantile of the standard Gaussian and $\\hat{\\sigma}^2=n^{-1}\\sum_{\\ell=1}^L\\sum_{i\\in I_{\\ell}} [m(W_i,\\hat{\\gamma}_{\\ell})+\\hat{\\alpha}_{\\ell}(W_i)\\{Y_i-\\hat{\\gamma}_{\\ell}(W_i)\\}-\\hat{\\theta}]^2\n    $. \n\\end{enumerate}",
+     "free_symbols": [
+      "Y",
+      "W",
+      "\\hat{\\gamma}_{\\ell}",
+      "\\hat{\\alpha}_{\\ell}",
+      "\\hat{\\theta}",
+      "\\theta_0",
+      "\\hat{\\sigma}^2"
+     ],
+     "inputs": [
+      "Y",
+      "W",
+      "\\hat{\\gamma}_{\\ell}",
+      "\\hat{\\alpha}_{\\ell}"
+     ],
+     "tex_locator": {
+      "file": "4_algorithm.tex",
+      "from": 7,
+      "to": 20,
+      "env": "algorithm",
+      "label": "alg:target"
+     }
+    }
+   ],
+   "statements": [
+    {
+     "id": "thm:local-finite-noise",
+     "kind": "theorem",
+     "statement": "If noise has finite variance then $\\bar{\\sigma}^2<\\infty$. [Hypotheses: ass:thm-local-finite-noise]",
+     "free_symbols": [
+      "\\bar{\\sigma}"
+     ],
+     "depends_on": [
+      "ass:thm-local-finite-noise"
+     ],
+     "status": "to-prove",
+     "tex_locator": {
+      "file": "5_dml.tex",
+      "from": 51,
+      "to": 62,
+      "env": "theorem",
+      "label": "thm:local"
+     }
+    },
+    {
+     "id": "lem:rr-exists-rdd",
+     "kind": "lemma",
+     "statement": "Example~\\ref{ex:RDD}. Denote the Riesz representer for the first term by $\\alpha_0^{+}$ and the Riesz representer for the second term by $\\alpha_0^{-}$. Then\n    $$\n    \\alpha^+_0(d,x)=\\ell_h^{+}(d),\n    \\quad \n     \\alpha^-_0(d,x)=\\ell_h^{-}(d).\n    $$\n    Hence the minimal Riesz representer $\\alpha^{\\min}_0$ exists.",
+     "free_symbols": [
+      "\\alpha_0",
+      "\\alpha_0^{\\min}",
+      "\\ell_h",
+      "\\Gamma"
+     ],
+     "depends_on": [],
+     "proof_tex": "For Examples~\\ref{ex:CATE} and~\\ref{ex:RDD}, the result is immediate from standard propensity score and regression arguments. For Example~\\ref{ex:elasticity}. the result follows from \\cite[Proposition 3 and Example 5]{ichimura2021influence}. For Example~\\ref{ex:deriv}, the result follows from integration by parts.",
+     "status": "to-prove",
+     "tex_locator": {
+      "file": "B_local.tex",
+      "from": 22,
+      "to": 49,
+      "env": "lemma",
+      "label": "lemma:RR_exists"
+     }
+    }
+   ],
+   "estimand_functional": "$\\theta_0=E\\{m(W,\\gamma_0)\\}$",
+   "target_estimand": "the scalar functional $\\theta_0=E\\{m(W,\\gamma_0)\\}$ (and its local limit $\\theta_0^{\\lim}$)",
+   "bibliography": []
+  },
+  "confirmed": {
+   "ass:dml-noise": "d121db102f3db5dd18ddac34be9a3cb05f5c625ced415b01a5c536f267eabe1c",
+   "def:operator-norm": "fa8e8b06fd6638c7faa6a997236f3b0cddeaa4e0ec0f32dde351a8c28975d5e3",
+   "def:algorithm-target": "187dbf062a5ae34fe30616559459555815ab794771ea77ddaf58ec8a65fce660",
+   "lem:rr-exists-rdd": "a2746250bb74edca5d55c77e6f14977b0fc292326f8f20f605a4fbe6df196d48",
+   "thm:local-finite-noise": "ff88f89daec2a99f89cba5dca87f72d6839796106936a9d0ff6db0f6477a19b1"
+  },
+  "confirmed_scheme": 3,
+  "review": {
+   "verdict": "PASS",
+   "summary": "",
+   "nodes": [
+    {
+     "id": "thm:local-finite-noise",
+     "faithfulness": "ok",
+     "ambiguity": "pinned",
+     "correctness": "ok",
+     "detail": "",
+     "witness": null,
+     "fix": null,
+     "bookkeeping_assumption": null,
+     "reading": {
+      "reading": "There exists a finite deterministic $\\bar\\sigma$ such that $E[\\{Y-\\gamma_0(W)\\}^2\\mid W]\\leq\\bar\\sigma^2$ almost surely.",
+      "evidence": "The paragraph following the representer examples recalls this conditional bound and calls $\\bar\\sigma$ constant when noise has bounded variance."
+     },
+     "minimality": false,
+     "weakens_contribution": false,
+     "owner_explanation": null,
+     "witness_regime": null,
+     "witness_instance": null,
+     "depends_on_verdicts_used": null,
+     "shards": [
+      "L1-A2",
+      "L1-B4"
+     ],
+     "agreement": true,
+     "basis": "ff88f89daec2a99f89cba5dca87f72d6839796106936a9d0ff6db0f6477a19b1",
+     "basis_scheme": 3,
+     "basis_inputs": {
+      "scheme": 3,
+      "node": "ccf1932e3090fdb3b8296c9868042b5c6433446ae0755cd07b3fbfaa8b7247ff",
+      "closure": "3dca61d1e5d0efaddd6ac8fa863e68c7a83a6e7ea97e86513f7b831be40128ff",
+      "symbols": {
+       "\\bar{\\sigma}": "5b4234392214ac0036f537985b96613877c90fac425d80c6a90421298e19052e"
+      }
+     },
+     "graded": "carried"
+    },
+    {
+     "id": "lem:rr-exists-rdd",
+     "faithfulness": "ok",
+     "ambiguity": "ok",
+     "correctness": "bookkeeping",
+     "detail": "",
+     "witness": null,
+     "fix": null,
+     "bookkeeping_assumption": {
+      "condition": "For fixed $h>0$, $0<|\\omega^+|,|\\omega^-|<\\infty$.",
+      "reason": "The definitions of $\\ell_h^+$ and $\\ell_h^-$ divide by these normalizers."
+     },
+     "reading": null,
+     "minimality": false,
+     "weakens_contribution": false,
+     "owner_explanation": null,
+     "explanation_clarity": null,
+     "witness_regime": null,
+     "witness_instance": null,
+     "depends_on_verdicts_used": null,
+     "shards": [
+      "L1-A8",
+      "L1-B1"
+     ],
+     "agreement": false,
+     "resolved": "rule",
+     "rule": "ok vs bookkeeping → bookkeeping",
+     "basis": "a2746250bb74edca5d55c77e6f14977b0fc292326f8f20f605a4fbe6df196d48",
+     "basis_scheme": 3,
+     "basis_inputs": {
+      "scheme": 3,
+      "node": "a4085e686f2b7a74e0589547f9095b7b3a7c04bc1f1eb60c95d8f89de8826877",
+      "closure": "2ff9c8189e01a95151ecdc0f45cc7c27cdcbf4ed2f07ae3bc8a66ddbfdf3b8b8",
+      "symbols": {
+       "W": "36d2a5b946f8da4fa75b8df7a0616af8e15b399b231bfc145755ff9b0f60d591",
+       "\\Gamma": "e387ccbcc043e4a0e325d395735b13b2c2c5e5fd753efdde4c5d8bd89907d040",
+       "\\alpha_0^{\\min}": "45ce3200a6fc9340271b1082cc3a4af3c0ca46dc68aec66ebe912db66c4b91ad",
+       "h": "e153579eb7d12da588b5b2ecccc4a705437a7a8ec01dee189e5d7611e674cb03",
+       "\\ell_h": "2d553d2cd695cb501731fee8855ac5e70a7ea463a8f17daac1e3cca75c68d486",
+       "\\alpha_0": "cf1c1510984d76528595e8ad6e9c13c04a7044bfef318cdb21f8268b84d1a198"
+      }
+     },
+     "graded": "carried"
+    },
+    {
+     "id": "ass:dml-noise",
+     "faithfulness": "ok",
+     "ambiguity": "ok",
+     "correctness": "ok",
+     "detail": "",
+     "witness": null,
+     "fix": null,
+     "bookkeeping_assumption": null,
+     "reading": null,
+     "minimality": false,
+     "weakens_contribution": false,
+     "owner_explanation": null,
+     "witness_regime": null,
+     "witness_instance": null,
+     "depends_on_verdicts_used": null,
+     "shards": [
+      "L0-A2",
+      "L0-B9"
+     ],
+     "agreement": true,
+     "basis": "d121db102f3db5dd18ddac34be9a3cb05f5c625ced415b01a5c536f267eabe1c",
+     "graded": "carried",
+     "basis_scheme": 3,
+     "basis_inputs": {
+      "scheme": 3,
+      "node": "4b70228b65d2e7bf018cf6f7e739c900bf6267a5c9ac78a53ebfb56467138cee",
+      "closure": "4b70228b65d2e7bf018cf6f7e739c900bf6267a5c9ac78a53ebfb56467138cee",
+      "symbols": {
+       "W": "36d2a5b946f8da4fa75b8df7a0616af8e15b399b231bfc145755ff9b0f60d591",
+       "Y": "b5b9216566c069289d429bf3d724a6f9df670a8f6c3ad4b7662b3332dbe42c05",
+       "\\Gamma": "e387ccbcc043e4a0e325d395735b13b2c2c5e5fd753efdde4c5d8bd89907d040",
+       "\\gamma_0": "f852fec225922b8fa207520cead3f3140207b2b5b3dd9853e4fad1058826f3c1",
+       "\\bar{\\sigma}": "5b4234392214ac0036f537985b96613877c90fac425d80c6a90421298e19052e"
+      }
+     }
+    },
+    {
+     "id": "def:operator-norm",
+     "faithfulness": "ok",
+     "ambiguity": "ok",
+     "correctness": "ok",
+     "detail": "",
+     "witness": null,
+     "fix": null,
+     "bookkeeping_assumption": null,
+     "reading": null,
+     "minimality": false,
+     "weakens_contribution": false,
+     "owner_explanation": null,
+     "explanation_clarity": null,
+     "witness_regime": null,
+     "witness_instance": null,
+     "depends_on_verdicts_used": null,
+     "shards": [
+      "L0-A1",
+      "L0-B4"
+     ],
+     "agreement": true,
+     "basis": "fa8e8b06fd6638c7faa6a997236f3b0cddeaa4e0ec0f32dde351a8c28975d5e3",
+     "basis_scheme": 3,
+     "basis_inputs": {
+      "scheme": 3,
+      "node": "36040de673f2cb03d18de32d972da27932f5b2845040730662dab1153a4c3a79",
+      "closure": "36040de673f2cb03d18de32d972da27932f5b2845040730662dab1153a4c3a79",
+      "symbols": {
+       "W": "36d2a5b946f8da4fa75b8df7a0616af8e15b399b231bfc145755ff9b0f60d591",
+       "\\Gamma": "e387ccbcc043e4a0e325d395735b13b2c2c5e5fd753efdde4c5d8bd89907d040",
+       "\\gamma": "f9c94ec45fb97c997569b65ba595dd1ae6d6bbcb10ae07f0ee5669eac75e2172",
+       "m": "9f3c6719fc170bd598e90192fabbe2e59f5010abeb30dc7c24178dd2410aaee1",
+       "\\bar{M}": "e972a720a1666f92e1d9eb38edf1f750cffdcfc657a1ae4ce820121ea7467c0c"
+      }
+     },
+     "graded": "carried"
+    },
+    {
+     "id": "def:algorithm-target",
+     "faithfulness": "ok",
+     "ambiguity": "ok",
+     "correctness": "ok",
+     "detail": "",
+     "witness": null,
+     "fix": null,
+     "bookkeeping_assumption": null,
+     "reading": null,
+     "minimality": false,
+     "weakens_contribution": false,
+     "owner_explanation": null,
+     "witness_regime": null,
+     "witness_instance": null,
+     "depends_on_verdicts_used": null,
+     "shards": [
+      "L0-A2",
+      "L0-B8"
+     ],
+     "agreement": true,
+     "basis": "187dbf062a5ae34fe30616559459555815ab794771ea77ddaf58ec8a65fce660",
+     "graded": "carried",
+     "basis_scheme": 3,
+     "basis_inputs": {
+      "scheme": 3,
+      "node": "82d32b870f7aaa500fbf4f2bedb43e613d1819a1391e90f9614018a318a1f696",
+      "closure": "82d32b870f7aaa500fbf4f2bedb43e613d1819a1391e90f9614018a318a1f696",
+      "symbols": {
+       "W": "36d2a5b946f8da4fa75b8df7a0616af8e15b399b231bfc145755ff9b0f60d591",
+       "Y": "b5b9216566c069289d429bf3d724a6f9df670a8f6c3ad4b7662b3332dbe42c05",
+       "n": "abdb0301285bb4dcef4041d7155a8360c90b1ff9c07863bf4927b7ba8a3633ab",
+       "\\Gamma": "e387ccbcc043e4a0e325d395735b13b2c2c5e5fd753efdde4c5d8bd89907d040",
+       "\\gamma_0": "f852fec225922b8fa207520cead3f3140207b2b5b3dd9853e4fad1058826f3c1",
+       "m": "9f3c6719fc170bd598e90192fabbe2e59f5010abeb30dc7c24178dd2410aaee1",
+       "\\theta_0": "ae6a978954fa7094d05fca218aecc2d9da710a192d8afcbc92122ac4846f41f5",
+       "\\alpha_0^{\\min}": "45ce3200a6fc9340271b1082cc3a4af3c0ca46dc68aec66ebe912db66c4b91ad",
+       "\\hat{\\gamma}_{\\ell}": "278e73b45b50f3f9abd2eb43a0cae9bd0f6a92fd4244d89a7b18aa82f66d4a0e",
+       "\\hat{\\alpha}_{\\ell}": "9beb9dda0465ae4b78d4f26b29e98b0481de8c4998ad2240ed7ac5078def9422",
+       "\\hat{\\theta}": "66aff141c486dbae8df78787b9b171bc53e42d588e615f9a44c6d0b1c693b0bd",
+       "\\hat{\\sigma}^2": "18d5f9ce25e0b6a6297c71fe46dcd534972b3fb1d8a4578f9bcc2a061adc5def"
+      }
+     }
+    }
+   ],
+   "symbols": [
+    {
+     "name": "W",
+     "meaning": "ok",
+     "fix": null,
+     "ambiguity": "pinned",
+     "reading": {
+      "reading": "W ∈ 𝒲 is a population random vector concatenating the model variables other than Y; W_i is its sampled counterpart for i = 1, …, n. Its components are specified by example, including W = (D,V,X) for CATE and W = (D,X) for RDD.",
+      "evidence": "flat.tex line 134 defines W and its domain; lines 147 and 157 specify example components; line 232 introduces the sample (Y_i,W_i), i = 1, …, n."
+     },
+     "redefined_at": null,
+     "detail": ""
+    },
+    {
+     "name": "Y",
+     "meaning": "ok",
+     "fix": null,
+     "ambiguity": "pinned",
+     "reading": {
+      "reading": "Y ∈ 𝒴 ⊂ ℝ is the random outcome in the population pair (Y,W), observed as Y_i in the sample (Y_i,W_i), i=1,…,n; γ_0(W)=E(Y | W) is not imposed globally.",
+      "evidence": "flat.tex lines 133–136 specify Y’s domain and allow γ_0 to be a regression or another nonparametric quantity; lines 231–237 give the sampled pairs."
+     },
+     "redefined_at": null,
+     "detail": ""
+    },
+    {
+     "name": "n",
+     "meaning": "ok",
+     "fix": null,
+     "ambiguity": "pinned",
+     "reading": {
+      "reading": "$n$ is the positive integer number of observations $(Y_i,W_i)$, $i=1,\\ldots,n$; it varies toward infinity in asymptotic results, while the simulation sets $n=100$.",
+      "evidence": "Algorithm 1 indexes the sample by $i=1,\\ldots,n$; line 1180 defines $E_n$ as its average; the confidence-interval corollary takes $n\\to\\infty$; line 653 sets $n=100$ for the simulation."
+     },
+     "redefined_at": null,
+     "detail": ""
+    },
+    {
+     "name": "\\Gamma",
+     "meaning": "ok",
+     "fix": null,
+     "ambiguity": "pinned",
+     "reading": {
+      "reading": "$\\Gamma$ is a fixed linear function space known by the analyst, contained in $\\mathbb L_2$ and possibly equal to $\\mathbb L_2$.",
+      "evidence": "The framework states that $\\Gamma$ is a linear subset of $\\mathbb L_2$ known by the analyst, which may be $\\mathbb L_2$ itself."
+     },
+     "redefined_at": null,
+     "detail": ""
+    },
+    {
+     "name": "\\gamma",
+     "meaning": "ok",
+     "fix": null,
+     "ambiguity": "pinned",
+     "reading": {
+      "reading": "\\gamma denotes a generic element of \\Gamma, quantified as stated by the surrounding result—typically for all \\gamma\\in\\Gamma—and is distinct from the population function \\gamma_0 unless an inverse-problem equation selects its solution. In the derivative examples, the stated smoothness and derivative conditions further restrict \\Gamma.",
+      "evidence": "Assumption~\\ref{assumption:cont} quantifies 'for all \\gamma in \\Gamma'; Lemma~\\ref{lemma:rp} and the corrected continuity lemma impose their restrictions on each or every \\gamma\\in\\Gamma; the inverse-problem passage describes \\gamma_0 as a solution."
+     },
+     "redefined_at": null,
+     "detail": ""
+    },
+    {
+     "name": "\\gamma_0",
+     "meaning": "ok",
+     "fix": null,
+     "ambiguity": "pinned",
+     "reading": {
+      "reading": "\\gamma_0\\in\\Gamma\\subset\\mathbb{L}_2 is a fixed population function under the data-generating law, distinct from the training-sample-dependent estimator \\hat\\gamma_\\ell; the same \\gamma_0 enters \\theta_0^h=E\\{m_h(W,\\gamma_0)\\} as h varies. Depending on the model, it may be a conditional expectation function or the population solution of the stated inverse problem.",
+      "evidence": "Framework and local-functional definitions, flat.tex lines 132–142; model examples, lines 146–175; foldwise estimation, lines 227–259."
+     },
+     "redefined_at": null,
+     "detail": ""
+    },
+    {
+     "name": "m",
+     "meaning": "drift",
+     "fix": null,
+     "ambiguity": "pinned",
+     "reading": {
+      "reading": "In $m(w,\\gamma)$, $m$ is the deterministic formula $\\mathcal W\\times\\mathbb L_2\\to\\mathbb R$; in the approximation-error subsection, the one-argument notation $m(v)$ means the population conditional function $E[m(W,\\gamma_0)\\mid V=v]$.",
+      "evidence": "The framework states the two-argument mapping; the approximation-error subsection says, “We define $m(v)= E [m(W, \\gamma_0) \\mid V=v]$ to lighten notation.”"
+     },
+     "redefined_at": "We define $m(v)= E [m(W, \\gamma_0) \\mid V=v]$ to lighten notation.",
+     "detail": ""
+    },
+    {
+     "name": "\\theta_0",
+     "meaning": "ok",
+     "fix": null,
+     "ambiguity": "pinned",
+     "reading": {
+      "reading": "$\\theta_0=E\\{m(W,\\gamma_0)\\}\\in\\mathbb R$ is a deterministic population target for the global functional; the bandwidth-dependent local approximants are denoted separately by $\\theta_0^h$.",
+      "evidence": "The framework defines $\\theta_0$ by a population expectation and then defines $\\theta_0^h=E\\{m_h(W,\\gamma_0)\\}$ for local functionals."
+     },
+     "redefined_at": null,
+     "detail": ""
+    },
+    {
+     "name": "\\alpha_0^{\\min}",
+     "meaning": "drift",
+     "fix": null,
+     "ambiguity": "pinned",
+     "reading": {
+      "reading": "$\\alpha_0^{\\min}$ is a population function, not a sample estimator: in regression or projection it is the unique representer in $closure(\\Gamma)$ for functions of $W$; in the exactly identified instrumental-variable case it is the unique function of $W_2$ solving $\\eta_0^{\\min}(w_1)=E\\{\\alpha_0^{\\min}(W_2)\\mid W_1=w_1\\}$; the later local theory writes the representer for $m_h$ as $\\alpha_0^{\\min,h}$.",
+      "evidence": "flat.tex lines 189–195 define the minimal representer; lines 215–224 give the instrumental-variable equation and explicitly call the notation an abuse; lines 1028–1035 distinguish the local representer."
+     },
+     "redefined_at": "The relevant nuisance parameters are $(\\gamma_0,\\alpha^{\\min}_0)$ defined as unique solutions $(\\gamma,\\alpha)$ to\n$$\nE(Y \\mid W_2=w_2)=E\\{\\gamma(W_1) \\mid W_2=w_2\\},\\quad \\eta_0^{\\min}(w_1)=E\\{\\alpha(W_2) \\mid W_1=w_1\\},\n$$\nwhere $\\eta_0^{\\min}$ is the minimal Riesz representer satisfying $E\\{m(W_1,\\gamma)\\}=E\\{\\eta_0(W_1)\\gamma(W_1)\\}$ for all $\\gamma$ in $\\Gamma$ from Lemma~\\ref{prop:RR}.",
+     "detail": ""
+    },
+    {
+     "name": "\\hat{\\gamma}_{\\ell}",
+     "meaning": "ok",
+     "fix": null,
+     "ambiguity": "pinned",
+     "reading": {
+      "reading": "For each fold \\ell\\in\\{1,\\ldots,L\\}, \\hat\\gamma_\\ell is a random estimator of \\gamma_0 trained from observations indexed by I_\\ell^c; its error risks condition on I_\\ell^c and evaluate at a test point W.",
+      "evidence": "Algorithm~\\ref{alg:target} specifies training on I_\\ell^c, and Definition [Mean square error] explicitly defines E[\\{\\hat\\gamma_\\ell(W)-\\gamma_0(W)\\}^2\\mid I_\\ell^c]."
+     },
+     "redefined_at": null,
+     "detail": ""
+    },
+    {
+     "name": "\\hat{\\alpha}_{\\ell}",
+     "meaning": "ok",
+     "fix": null,
+     "ambiguity": "pinned",
+     "reading": {
+      "reading": "For each fold \\ell\\in\\{1,\\ldots,L\\}, \\hat\\alpha_\\ell is a random estimator of \\alpha_0^{\\min} trained from observations indexed by I_\\ell^c; its error risks condition on I_\\ell^c and evaluate at a test point W.",
+      "evidence": "Algorithm~\\ref{alg:target} trains both nuisance estimators on I_\\ell^c for each fold; Definition [Mean square error] conditions their risks on I_\\ell^c."
+     },
+     "redefined_at": null,
+     "detail": ""
+    },
+    {
+     "name": "\\hat{\\theta}",
+     "meaning": "drift",
+     "fix": null,
+     "ambiguity": "pinned",
+     "reading": {
+      "reading": "$\\hat{\\theta}$ is the random, cross-fitted sample estimator of $\\theta_0$; with $n_{\\ell}=n/L$, it also equals $L^{-1}\\sum_{\\ell=1}^{L}\\hat{\\theta}_{\\ell}$, and $\\hat{\\theta}^{h}$ denotes its local-functional version.",
+      "evidence": "Algorithm 1, flat.tex lines 231–241, gives the sample formula; lines 1180 and 1390 give equal fold sizes and the equivalent fold average; line 342 specifies the local replacement."
+     },
+     "redefined_at": null,
+     "detail": ""
+    },
+    {
+     "name": "\\hat{\\sigma}^2",
+     "meaning": "drift",
+     "fix": null,
+     "ambiguity": "pinned",
+     "reading": {
+      "reading": "$\\hat{\\sigma}^2$ is the random full-sample mean of squared foldwise estimated scores centered at the random $\\hat{\\theta}$, using nuisance estimates trained on the corresponding $I_{\\ell}^c$.",
+      "evidence": "Algorithm 1 at lines 231–244 defines the folds, their training complements, and the displayed formula for $\\hat{\\sigma}^2$."
+     },
+     "redefined_at": null,
+     "detail": ""
+    },
+    {
+     "name": "\\bar{\\sigma}",
+     "meaning": "drift",
+     "fix": null,
+     "ambiguity": "pinned",
+     "reading": {
+      "reading": "For each n, \\bar{\\sigma}\\geq0 is a deterministic bound satisfying E[\\{Y-\\gamma_0(W)\\}^2\\mid W]\\leq\\bar{\\sigma}^2 almost surely in W; the bound may vary with n.",
+      "evidence": "The defining inequality appears at flat.tex lines 865–869; line 288 allows \\bar{\\sigma} to diverge relative to n."
+     },
+     "redefined_at": null,
+     "detail": ""
+    },
+    {
+     "name": "h",
+     "meaning": "ok",
+     "fix": null,
+     "ambiguity": "pinned",
+     "reading": {
+      "reading": "In the theory, h>0 is a bandwidth indexing population functionals: it is fixed for global functionals and tends to 0 as n\\rightarrow\\infty for local asymptotic results, subject to each result's stated neighborhood and rate conditions. In the simulations, h=c_h\\hat{\\sigma}_v n^{-0.2} is sample-dependent, with c_h chosen by the analyst.",
+      "evidence": "The local-functional definition introduces h as the bandwidth of \\ell_h (line 142); Supplement 2 distinguishes fixed and vanishing bandwidths (line 871); the local confidence-interval results take n\\rightarrow\\infty and h\\rightarrow0 (lines 329 and 1075); the simulation rule uses the sample variance of (V_i) (line 657)."
+     },
+     "redefined_at": "Finally, to tune the bandwidth, we use the heuristic $h=c_h\\hat{\\sigma}_vn^{-0.2}$ \\cite{colangelo2020double}, where $\\hat{\\sigma}^2_v$ is the sample variance of $(V_i)$ $(i=1,...,n)$.",
+     "detail": ""
+    },
+    {
+     "name": "\\ell_h",
+     "meaning": "ok",
+     "fix": null,
+     "ambiguity": "pinned",
+     "reading": {
+      "reading": "\\ell_h is a population Nadaraya Watson weight with bandwidth h, evaluated at the scalar component W_j; for localization at v with W_j=V, \\ell_h(V)=(h\\omega)^{-1}K\\{(V-v)/h\\}, where \\omega=E[h^{-1}K\\{(V-v)/h\\}]. It is a random quantity when evaluated at V; h is fixed in global analyses and vanishes in local analyses.",
+      "evidence": "The local-functional definition identifies the weight and W_j; the CATE and heterogeneous-derivative examples give the normalized formula; flat.tex line 871 states the fixed versus vanishing bandwidth cases."
+     },
+     "redefined_at": null,
+     "detail": ""
+    },
+    {
+     "name": "\\bar{M}",
+     "meaning": "drift",
+     "fix": null,
+     "ambiguity": "pinned",
+     "reading": {
+      "reading": "\\bar{M} is the fixed, nonnegative population operator norm of \\gamma\\mapsto E\\{m(W,\\gamma)\\} on \\Gamma with the \\|\\cdot\\|_{\\mathrm{pr},2} norm; within the proof of Lemma \\ref{lemma:local}, its unindexed use denotes the h-dependent local norm \\|\\alpha_0^{\\min,h}\\|_{\\mathrm{pr},2}, called \\bar{M}_h in the local theorem.",
+      "evidence": "The proof of Lemma \\ref{prop:RR} defines the global norm at line 1805; the proof of Lemma \\ref{lemma:local} equates \\|\\alpha_0^{\\min,h}\\|_{\\text{pr},2} with \\bar{M} at line 1935; the local theorem uses \\bar{M}_h at line 303."
+     },
+     "redefined_at": "Next we characterize $\\|\\alpha_0^{\\min,h}\\|_{\\text{pr,q}}$ in terms of $\\|\\ell \\|_{\\text{pr,q}}$. Since $\\alpha_0^{\\min,h}(w)=\\ell_h(w_j)\\alpha_0^{\\min}$,\n$$\n\\tilde{\\alpha} \\|\\ell\\|_{\\text{pr},q}\\leq \\|\\alpha_0^{\\min,h}\\|_{\\text{pr},q} \\leq \\check{\\alpha} \\|\\ell\\|_{\\text{pr},q},\\quad \\|\\alpha_0^{\\min,h}\\|_{\\text{pr},2}=\\bar{M}.\n$$",
+     "detail": ""
+    },
+    {
+     "name": "\\alpha_0",
+     "meaning": "ok",
+     "fix": null,
+     "ambiguity": "pinned",
+     "reading": {
+      "reading": "\\alpha_0\\in\\mathbb{L}_2 is a population Riesz representer satisfying E\\{m(W,\\gamma)\\}=E\\{\\alpha_0(W)\\gamma(W)\\} for every \\gamma\\in\\Gamma; it need not equal \\alpha_0^{\\min}. Its formula may depend on h when m is a local functional. In the local-functionals subsection, \\alpha_0 represents the unlocalized m, while \\alpha_0^h represents m_h.",
+      "evidence": "Lemma \\ref{prop:RR} gives the representer identity and distinguishes \\alpha_0 from its minimal projection. Lemma \\ref{lemma:RR_exists} gives formulas involving \\ell_h. The opening sentence of the local-functionals subsection assigns the two notations explicitly."
+     },
+     "redefined_at": "Given a local functional\n$$\n\\theta_0^h=E\\{m_h(W,\\gamma_0)\\}=E\\{\\ell_h(V) m(W,\\gamma_0)\\},\n$$\nwe will now refer to the Riesz representer of $m_h$ by $\\alpha^h_0$ and the Riesz representer of $m$ by $\\alpha_0$ for this subsection.",
+     "detail": ""
+    }
+   ]
+  }
+ },
+ "next": {
+  "core": {
+   "qid": "cns_simple_dml",
+   "symbols": [
+    {
+     "name": "W",
+     "type": "random vector",
+     "def": "the random variables in the model excluding $Y$"
+    },
+    {
+     "name": "Y",
+     "type": "outcome random variable",
+     "refs": [
+      "W"
+     ]
+    },
+    {
+     "name": "n",
+     "type": "sample size"
+    },
+    {
+     "name": "\\Gamma",
+     "type": "linear subset of $\\mathbb{L}_2$"
+    },
+    {
+     "name": "\\gamma",
+     "type": "generic function in $\\Gamma$",
+     "refs": [
+      "\\Gamma"
+     ]
+    },
+    {
+     "name": "\\gamma_0",
+     "type": "function in $\\Gamma$",
+     "refs": [
+      "\\Gamma"
+     ]
+    },
+    {
+     "name": "m",
+     "type": "$m:\\mathcal W\\times\\mathbb L_2\\rightarrow\\mathbb R$",
+     "def": "an abstract formula",
+     "refs": [
+      "W",
+      "\\Gamma"
+     ]
+    },
+    {
+     "name": "\\theta_0",
+     "type": "scalar target parameter",
+     "def": "$E\\{m(W,\\gamma_0)\\}$",
+     "refs": [
+      "W",
+      "m",
+      "\\gamma_0"
+     ]
+    },
+    {
+     "name": "\\alpha_0^{\\min}",
+     "type": "unique minimal Riesz representer in the regression or projection case; unique solution of the conditional-expectation equation in the exactly identified instrumental-variable case",
+     "def": "In the regression or projection case, $\\alpha_0^{\\min}\\in closure(\\Gamma)$ satisfies $E\\{m(W,\\gamma)\\}=E\\{\\alpha_0^{\\min}(W)\\gamma(W)\\}$ for all $\\gamma\\in\\Gamma$, and is obtained by projecting any valid $\\alpha_0$ onto $\\Gamma$. In the instrumental-variable case, $\\eta_0^{\\min}(w_1)=E\\{\\alpha_0^{\\min}(W_2)\\mid W_1=w_1\\}$.",
+     "refs": [
+      "W",
+      "\\Gamma"
+     ]
+    },
+    {
+     "name": "\\hat{\\gamma}_{\\ell}",
+     "type": "fold-specific estimator",
+     "refs": [
+      "\\gamma_0"
+     ]
+    },
+    {
+     "name": "\\hat{\\alpha}_{\\ell}",
+     "type": "fold-specific estimator",
+     "refs": [
+      "\\alpha_0^{\\min}"
+     ]
+    },
+    {
+     "name": "\\hat{\\theta}",
+     "type": "estimator",
+     "def": "$\\hat{\\theta}=n^{-1}\\sum_{\\ell=1}^L\\sum_{i\\in I_{\\ell}}[m(W_i,\\hat{\\gamma}_{\\ell})+\\hat{\\alpha}_{\\ell}(W_i)\\{Y_i-\\hat{\\gamma}_{\\ell}(W_i)\\}]$",
+     "refs": [
+      "\\theta_0",
+      "\\hat{\\gamma}_{\\ell}",
+      "\\hat{\\alpha}_{\\ell}"
+     ]
+    },
+    {
+     "name": "\\hat{\\sigma}^2",
+     "type": "variance estimator",
+     "def": "$\\hat{\\sigma}^2=n^{-1}\\sum_{\\ell=1}^L\\sum_{i\\in I_{\\ell}} [m(W_i,\\hat{\\gamma}_{\\ell})+\\hat{\\alpha}_{\\ell}(W_i)\\{Y_i-\\hat{\\gamma}_{\\ell}(W_i)\\}-\\hat{\\theta}]^2$.",
+     "refs": [
+      "\\hat{\\theta}"
+     ]
+    },
+    {
+     "name": "\\bar{\\sigma}",
+     "type": "conditional-noise bound",
+     "def": "$E[\\{Y-\\gamma_0(W)\\}^2\\mid W]\\leq\\bar\\sigma^2$."
+    },
+    {
+     "name": "h",
+     "type": "bandwidth"
+    },
+    {
+     "name": "\\ell_h",
+     "type": "Nadaraya Watson weighting with bandwidth $h$",
+     "refs": [
+      "h"
+     ]
+    },
+    {
+     "name": "\\bar{M}",
+     "type": "operator norm",
+     "def": "$\\bar{M}=\\inf [c\\geq 0: |E\\{m(W,\\gamma)\\}|\\leq c\\text{ for all }\\gamma\\text{ in }\\Gamma\\text{ such that }\\|\\gamma\\|_{\\text{\\normalfont pr,2}}=1]$."
+    },
+    {
+     "name": "\\alpha_0",
+     "type": "Riesz representer",
+     "refs": [
+      "W"
+     ]
+    }
+   ],
+   "assumptions": [
+    {
+     "id": "ass:dml-noise",
+     "kind": "moment",
+     "condition": "E[\\{Y-\\gamma_0(W)\\}^2 \\mid W]\\leq \\bar{\\sigma}^2,",
+     "free_symbols": [
+      "Y",
+      "W",
+      "\\gamma_0",
+      "\\bar{\\sigma}"
+     ],
+     "novel": {
+      "flag": true,
+      "justification": "Inline premise of Theorem thm:dml."
+     },
+     "used_by": [
+      "prop:resid",
+      "prop:resid-alt",
+      "thm:dml-alt1",
+      "thm:dml-alt2",
+      "thm:dml-alt3",
+      "thm:dml-alt4"
+     ],
+     "tex_locator": {
+      "file": "5_dml.tex",
+      "from": 19,
+      "to": 40,
+      "env": "theorem",
+      "label": "thm:dml"
+     }
+    },
+    {
+     "id": "ass:thm-local-finite-noise",
+     "kind": "regularity",
+     "condition": "If noise has finite variance",
+     "free_symbols": [],
+     "novel": {
+      "flag": true,
+      "justification": "Inline premise of the finite-noise clause of Theorem thm:local."
+     },
+     "used_by": [
+      "thm:local-finite-noise"
+     ],
+     "tex_locator": {
+      "file": "5_dml.tex",
+      "from": 51,
+      "to": 62,
+      "env": "theorem",
+      "label": "thm:local"
+     }
+    }
+   ],
+   "definitions": [
+    {
+     "id": "def:operator-norm",
+     "name": "Operator norm",
+     "construction": "denoting by $\\bar{M}$ the operator norm of $\\gamma\\mapsto E\\{m(W,\\gamma)\\}$,",
+     "free_symbols": [
+      "\\bar{M}",
+      "\\gamma",
+      "m",
+      "W"
+     ],
+     "inputs": [
+      "m",
+      "W",
+      "\\gamma"
+     ],
+     "tex_locator": {
+      "file": "3_problem.tex",
+      "from": 60,
+      "to": 69,
+      "env": "lemma",
+      "label": "prop:RR"
+     }
+    },
+    {
+     "id": "def:algorithm-target",
+     "name": "Debiased machine learning",
+     "construction": "\\label{alg:target}\nGiven a sample $(Y_i,W_i)$ $(i=1,...,n)$, partition the sample into folds $(I_{\\ell})$ $(\\ell=1,...,L)$. Denote by $I_{\\ell}^c$ the complement of $I_{\\ell}$.\n\\begin{enumerate}\n    \\item For each fold $\\ell$, estimate $\\hat{\\gamma}_{\\ell}$ and $\\hat{\\alpha}_{\\ell}$ from observations in $I_{\\ell}^c$.\n    \\item Estimate $\\theta_0$ as\n    $\n  \\hat{\\theta}=n^{-1}\\sum_{\\ell=1}^L\\sum_{i\\in I_{\\ell}} [m(W_i,\\hat{\\gamma}_{\\ell})+\\hat{\\alpha}_{\\ell}(W_i)\\{Y_i-\\hat{\\gamma}_{\\ell}(W_i)\\}]\n    $.\n    \\item Estimate its $(1-a) 100$\\% confidence interval as\n    $\n    \\hat{\\theta}\\pm c_{a}\\hat{\\sigma} n^{-1/2}$, where $c_{a}$ is the $1-a/2$ quantile of the standard Gaussian and $\\hat{\\sigma}^2=n^{-1}\\sum_{\\ell=1}^L\\sum_{i\\in I_{\\ell}} [m(W_i,\\hat{\\gamma}_{\\ell})+\\hat{\\alpha}_{\\ell}(W_i)\\{Y_i-\\hat{\\gamma}_{\\ell}(W_i)\\}-\\hat{\\theta}]^2\n    $. \n\\end{enumerate}",
+     "free_symbols": [
+      "Y",
+      "W",
+      "\\hat{\\gamma}_{\\ell}",
+      "\\hat{\\alpha}_{\\ell}",
+      "\\hat{\\theta}",
+      "\\theta_0",
+      "\\hat{\\sigma}^2"
+     ],
+     "inputs": [
+      "Y",
+      "W",
+      "\\hat{\\gamma}_{\\ell}",
+      "\\hat{\\alpha}_{\\ell}"
+     ],
+     "tex_locator": {
+      "file": "4_algorithm.tex",
+      "from": 7,
+      "to": 20,
+      "env": "algorithm",
+      "label": "alg:target"
+     }
+    }
+   ],
+   "statements": [
+    {
+     "id": "thm:local-finite-noise",
+     "kind": "theorem",
+     "statement": "If noise has finite variance then $\\bar{\\sigma}^2<\\infty$. [Hypotheses: ass:thm-local-finite-noise]",
+     "free_symbols": [
+      "\\bar{\\sigma}"
+     ],
+     "depends_on": [
+      "ass:thm-local-finite-noise"
+     ],
+     "status": "to-prove",
+     "tex_locator": {
+      "file": "5_dml.tex",
+      "from": 51,
+      "to": 62,
+      "env": "theorem",
+      "label": "thm:local"
+     }
+    },
+    {
+     "id": "lem:rr-exists-rdd",
+     "kind": "lemma",
+     "statement": "Example~\\ref{ex:RDD}. Denote the Riesz representer for the first term by $\\alpha_0^{+}$ and the Riesz representer for the second term by $\\alpha_0^{-}$. Then\n    $$\n    \\alpha^+_0(d,x)=\\ell_h^{+}(d),\n    \\quad \n     \\alpha^-_0(d,x)=\\ell_h^{-}(d).\n    $$\n    Hence the minimal Riesz representer $\\alpha^{\\min}_0$ exists.",
+     "free_symbols": [
+      "\\alpha_0",
+      "\\alpha_0^{\\min}",
+      "\\ell_h",
+      "\\Gamma"
+     ],
+     "depends_on": [],
+     "proof_tex": "For Examples~\\ref{ex:CATE} and~\\ref{ex:RDD}, the result is immediate from standard propensity score and regression arguments. For Example~\\ref{ex:elasticity}. the result follows from \\cite[Proposition 3 and Example 5]{ichimura2021influence}. For Example~\\ref{ex:deriv}, the result follows from integration by parts.",
+     "status": "to-prove",
+     "tex_locator": {
+      "file": "B_local.tex",
+      "from": 22,
+      "to": 49,
+      "env": "lemma",
+      "label": "lemma:RR_exists"
+     }
+    }
+   ],
+   "estimand_functional": "$\\theta_0=E\\{m(W,\\gamma_0)\\}$",
+   "target_estimand": "the scalar functional $\\theta_0=E\\{m(W,\\gamma_0)\\}$ (and its local limit $\\theta_0^{\\lim}$)",
+   "bibliography": []
+  },
+  "symbols": [
+   {
+    "name": "W",
+    "meaning": "ok",
+    "fix": null,
+    "ambiguity": "pinned",
+    "reading": {
+     "reading": "$W\\in\\mathcal{W}$ is the random vector of model variables excluding $Y$; $W_i$ is its value in observation $i$, and $W$ in a learning-rate expectation is a test point. Its components are model-specific: $W=(D,V,X)$ in the treatment-effect example, $W=(D,X)$ in regression discontinuity, and $W=(D,X,Z)$ in demand elasticity.",
+     "evidence": "The framework defines $W\\in\\mathcal{W}$; the examples give its components; Algorithm 1 uses $(Y_i,W_i)$; and the mean-square-error discussion calls $W$ a test point."
+    },
+    "redefined_at": null,
+    "detail": ""
+   },
+   {
+    "name": "Y",
+    "meaning": "ok",
+    "fix": null,
+    "ambiguity": "pinned",
+    "reading": {
+     "reading": "$Y\\in\\mathcal{Y}\\subset\\mathbb{R}$ is the random outcome excluded from $W$; $(Y_i,W_i)$ are sampled observations for $i=1,\\ldots,n$, with $Y$ instantiated as the outcome described in each example.",
+     "evidence": "The framework defines $W$ and $Y$ at flat.tex line 134; Algorithm~\\ref{alg:target} introduces the indexed sample at line 232."
+    },
+    "redefined_at": null,
+    "detail": ""
+   },
+   {
+    "name": "n",
+    "meaning": "ok",
+    "fix": null,
+    "ambiguity": "pinned",
+    "reading": {
+     "reading": "$n$ is the positive integer number of observations $(Y_i,W_i)$, $i=1,\\ldots,n$; it varies toward infinity in asymptotic results, while the simulation sets $n=100$.",
+     "evidence": "Algorithm 1 indexes the sample by $i=1,\\ldots,n$; line 1180 defines $E_n$ as its average; the confidence-interval corollary takes $n\\to\\infty$; line 653 sets $n=100$ for the simulation."
+    },
+    "redefined_at": null,
+    "detail": ""
+   },
+   {
+    "name": "\\Gamma",
+    "meaning": "ok",
+    "fix": null,
+    "ambiguity": "pinned",
+    "reading": {
+     "reading": "$\\Gamma$ is a fixed linear function space known by the analyst, contained in $\\mathbb L_2$ and possibly equal to $\\mathbb L_2$.",
+     "evidence": "The framework states that $\\Gamma$ is a linear subset of $\\mathbb L_2$ known by the analyst, which may be $\\mathbb L_2$ itself."
+    },
+    "redefined_at": null,
+    "detail": ""
+   },
+   {
+    "name": "\\gamma",
+    "meaning": "ok",
+    "fix": null,
+    "ambiguity": "pinned",
+    "reading": {
+     "reading": "$\\gamma$ is a fixed generic candidate in $\\Gamma\\subset\\mathbb{L}_2$, a square-integrable function from $\\mathcal{W}$ to $\\mathbb{R}$; its arguments are $(d,x)$ in the elasticity example and $(d,v,x)$ in the heterogeneous average-derivative example, and statements saying $\\gamma\\in\\Gamma$ quantify over those candidates.",
+     "evidence": "The framework defines \\mathbb{L}_2 and \\Gamma at lines 133–136; Assumption~\\ref{assumption:cont} quantifies over all \\gamma in \\Gamma; the elasticity and heterogeneous average-derivative examples give the respective argument tuples."
+    },
+    "redefined_at": null,
+    "detail": ""
+   },
+   {
+    "name": "\\gamma_0",
+    "meaning": "ok",
+    "fix": null,
+    "ambiguity": "pinned",
+    "reading": {
+     "reading": "$\\gamma_0\\in\\Gamma\\subset\\mathbb{L}_2$ is the fixed, real-valued population function being estimated: it may be $\\gamma_0(w)=E(Y\\mid W=w)$, a projection onto $\\Gamma$, or the solution of $E(Y\\mid W_2=w_2)=E\\{\\gamma(W_1)\\mid W_2=w_2\\}$; the examples specify which case applies.",
+     "evidence": "The framework defines \\Gamma and \\mathbb{L}_2, then explicitly permits conditional regression or an inverse-problem solution. The doubly robust discussion also permits projection onto \\Gamma, and the examples give setting-specific formulas."
+    },
+    "redefined_at": null,
+    "detail": ""
+   },
+   {
+    "name": "m",
+    "meaning": "drift",
+    "fix": null,
+    "ambiguity": "pinned",
+    "reading": {
+     "reading": "In $m(w,\\gamma)$, $m$ is the deterministic formula $\\mathcal W\\times\\mathbb L_2\\to\\mathbb R$; in the approximation-error subsection, the one-argument notation $m(v)$ means the population conditional function $E[m(W,\\gamma_0)\\mid V=v]$.",
+     "evidence": "The framework states the two-argument mapping; the approximation-error subsection says, “We define $m(v)= E [m(W, \\gamma_0) \\mid V=v]$ to lighten notation.”"
+    },
+    "redefined_at": "We define $m(v)= E [m(W, \\gamma_0) \\mid V=v]$ to lighten notation.",
+    "detail": ""
+   },
+   {
+    "name": "\\theta_0",
+    "meaning": "ok",
+    "fix": null,
+    "ambiguity": "pinned",
+    "reading": {
+     "reading": "$\\theta_0=E\\{m(W,\\gamma_0)\\}\\in\\mathbb R$ is a deterministic population target for the global functional; the bandwidth-dependent local approximants are denoted separately by $\\theta_0^h$.",
+     "evidence": "The framework defines $\\theta_0$ by a population expectation and then defines $\\theta_0^h=E\\{m_h(W,\\gamma_0)\\}$ for local functionals."
+    },
+    "redefined_at": null,
+    "detail": ""
+   },
+   {
+    "name": "\\alpha_0^{\\min}",
+    "meaning": "drift",
+    "fix": null,
+    "ambiguity": "pinned",
+    "reading": {
+     "reading": "$\\alpha_0^{\\min}$ is a population function, not a sample estimator: in regression or projection it is the unique representer in $closure(\\Gamma)$ for functions of $W$; in the exactly identified instrumental-variable case it is the unique function of $W_2$ solving $\\eta_0^{\\min}(w_1)=E\\{\\alpha_0^{\\min}(W_2)\\mid W_1=w_1\\}$; the later local theory writes the representer for $m_h$ as $\\alpha_0^{\\min,h}$.",
+     "evidence": "flat.tex lines 189–195 define the minimal representer; lines 215–224 give the instrumental-variable equation and explicitly call the notation an abuse; lines 1028–1035 distinguish the local representer."
+    },
+    "redefined_at": "The relevant nuisance parameters are $(\\gamma_0,\\alpha^{\\min}_0)$ defined as unique solutions $(\\gamma,\\alpha)$ to\n$$\nE(Y \\mid W_2=w_2)=E\\{\\gamma(W_1) \\mid W_2=w_2\\},\\quad \\eta_0^{\\min}(w_1)=E\\{\\alpha(W_2) \\mid W_1=w_1\\},\n$$\nwhere $\\eta_0^{\\min}$ is the minimal Riesz representer satisfying $E\\{m(W_1,\\gamma)\\}=E\\{\\eta_0(W_1)\\gamma(W_1)\\}$ for all $\\gamma$ in $\\Gamma$ from Lemma~\\ref{prop:RR}.",
+    "detail": ""
+   },
+   {
+    "name": "\\hat{\\gamma}_{\\ell}",
+    "meaning": "ok",
+    "fix": null,
+    "ambiguity": "pinned",
+    "reading": {
+     "reading": "For $\\ell=1,\\ldots,L$, $\\hat{\\gamma}_{\\ell}$ is a random estimator of $\\gamma_0$ trained on $I_{\\ell}^c$ and treated as fixed conditional on that training sample when evaluated at a test point $W$ or on $I_{\\ell}$.",
+     "evidence": "The algorithm assigns nuisance training to $I_{\\ell}^c$; the Mean square error definition conditions on $I_{\\ell}^c$ and calls $W$ a test point; the proof explicitly treats fitted functions as nonrandom conditional on $I_{\\ell}^c$."
+    },
+    "redefined_at": null,
+    "detail": ""
+   },
+   {
+    "name": "\\hat{\\alpha}_{\\ell}",
+    "meaning": "ok",
+    "fix": null,
+    "ambiguity": "pinned",
+    "reading": {
+     "reading": "For $\\ell=1,\\ldots,L$, $\\hat{\\alpha}_{\\ell}$ is a random estimator of $\\alpha_0^{\\min}$ trained on $I_{\\ell}^c$ and treated as fixed conditional on that training sample; the local-rate lemma denotes its local counterpart by $\\hat{\\alpha}_{\\ell}^h$.",
+     "evidence": "The algorithm assigns nuisance training to $I_{\\ell}^c$; the Mean square error definition applies likewise to $\\hat{\\alpha}_{\\ell}$; the translating-rates lemma distinguishes $\\hat{\\alpha}_{\\ell}^h$ from $\\hat{\\alpha}_{\\ell}$."
+    },
+    "redefined_at": null,
+    "detail": ""
+   },
+   {
+    "name": "\\hat{\\theta}",
+    "meaning": "drift",
+    "fix": null,
+    "ambiguity": "pinned",
+    "reading": {
+     "reading": "$\\hat{\\theta}$ is the random sample estimator defined by the displayed sum for $\\ell=1,\\ldots,L$, with $(\\hat{\\gamma}_{\\ell},\\hat{\\alpha}_{\\ell})$ trained on $I_{\\ell}^c$; when $|I_{\\ell}|=n/L$, it equals $L^{-1}\\sum_{\\ell=1}^L\\hat{\\theta}_{\\ell}$.",
+     "evidence": "Algorithm 1 specifies the sum and training samples. The Taylor expansion setup sets $|I_{\\ell}|=n/L$ and defines $\\hat{\\theta}_{\\ell}$; the Overall target and oracle definition gives their fold average."
+    },
+    "redefined_at": null,
+    "detail": ""
+   },
+   {
+    "name": "\\hat{\\sigma}^2",
+    "meaning": "drift",
+    "fix": null,
+    "ambiguity": "pinned",
+    "reading": {
+     "reading": "$\\hat{\\sigma}^2$ is the random full-sample mean of squared foldwise estimated scores centered at the random $\\hat{\\theta}$, using nuisance estimates trained on the corresponding $I_{\\ell}^c$.",
+     "evidence": "Algorithm 1 at lines 231–244 defines the folds, their training complements, and the displayed formula for $\\hat{\\sigma}^2$."
+    },
+    "redefined_at": null,
+    "detail": ""
+   },
+   {
+    "name": "\\bar{\\sigma}",
+    "meaning": "drift",
+    "fix": null,
+    "ambiguity": "pinned",
+    "reading": {
+     "reading": "$\\bar\\sigma$ is a population conditional second-moment bound for $Y-\\gamma_0(W)$ given $W$, holding almost surely in $W$; the bound is constant for bounded noise and may vary across the paper's asymptotic problems.",
+     "evidence": "The displayed condition in Theorem~\\ref{thm:dml} and the later characterization of key quantities specify the conditioning and discuss constancy and divergence."
+    },
+    "redefined_at": null,
+    "detail": ""
+   },
+   {
+    "name": "h",
+    "meaning": "ok",
+    "fix": null,
+    "ambiguity": "pinned",
+    "reading": {
+     "reading": "$h>0$ is the bandwidth indexing $\\ell_h$, $m_h$, and the local population quantities; local limits take $h\\to0$, with lemma bounds stated over their specified positive ranges. In the simulations, $h=c_h\\hat\\sigma_v n^{-0.2}$ is sample-dependent and $c_h$ is chosen by the analyst.",
+     "evidence": "The local-functional definition introduces bandwidth $h$ and its limit; the repaired approximation lemma states $0<h<h_1\\leq h_0$; the simulation tuning sentence specifies $h=c_h\\hat\\sigma_v n^{-0.2}$."
+    },
+    "redefined_at": "Finally, to tune the bandwidth, we use the heuristic $h=c_h\\hat{\\sigma}_vn^{-0.2}$ \\cite{colangelo2020double}, where $\\hat{\\sigma}^2_v$ is the sample variance of $(V_i)$ $(i=1,...,n)$.",
+    "detail": ""
+   },
+   {
+    "name": "\\ell_h",
+    "meaning": "drift",
+    "fix": null,
+    "ambiguity": "pinned",
+    "reading": {
+     "reading": "$\\ell_h$ is a deterministic weighting function applied to the scalar component $W_j$ (so $\\ell_h(W_j)$ is random through $W_j$); $h$ is fixed for global functionals and tends to zero for local functionals. In the CATE and derivative examples, $\\ell_h(V)=(h\\omega)^{-1}K\\left\\{(V-v)/h\\right\\}$, where $\\omega=E[h^{-1}K\\left\\{(V-v)/h\\right\\}]$.",
+     "evidence": "The local-functional definition identifies the argument $W_j$; the CATE and derivative examples give the displayed population normalization; the introduction to Supplement 2 distinguishes fixed from vanishing bandwidths."
+    },
+    "redefined_at": null,
+    "detail": ""
+   },
+   {
+    "name": "\\bar{M}",
+    "meaning": "drift",
+    "fix": null,
+    "ambiguity": "pinned",
+    "reading": {
+     "reading": "$\\bar{M}$ is the deterministic population operator norm of $\\gamma\\mapsto E\\{m(W,\\gamma)\\}$ on $\\Gamma$ with its $\\mathbb{L}_2$ norm; the local counterpart is indexed as $\\bar{M}_h$.",
+     "evidence": "The proof of Lemma~\\ref{prop:RR} defines the infimum over the unit sphere of $\\Gamma$, and the local theorem uses $\\bar{M}_h$."
+    },
+    "redefined_at": null,
+    "detail": ""
+   },
+   {
+    "name": "\\alpha_0",
+    "meaning": "ok",
+    "fix": null,
+    "ambiguity": "pinned",
+    "reading": {
+     "reading": "$\\alpha_0\\in\\mathbb{L}_2$ is a population Riesz representer, not necessarily the minimal representer $\\alpha_0^{\\min}$: $E\\{m(W,\\gamma)\\}=E\\{\\alpha_0(W)\\gamma(W)\\}$ for all $\\gamma\\in\\Gamma$. The displayed example representers include $\\ell_h$ where the functional is localized; in the local-functional subsection, $\\alpha_0$ represents the unlocalized $m$ and $\\alpha_0^h$ represents $m_h$.",
+     "evidence": "The Riesz representation lemma gives the identity and defines the minimal representer by projection. The example formulas include \\ell_h, and the local-functional subsection explicitly assigns separate notation to the representers of m and m_h."
+    },
+    "redefined_at": "we will now refer to the Riesz representer of $m_h$ by $\\alpha^h_0$ and the Riesz representer of $m$ by $\\alpha_0$ for this subsection.",
+    "detail": ""
+   }
+  ]
+ }
+}

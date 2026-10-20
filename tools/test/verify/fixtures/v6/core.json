@@ -1,0 +1,60 @@
+{
+  "qid": "verify_sample_paper",
+  "specialization": "v1",
+  "symbols": [],
+  "assumptions": [
+    {
+      "id": "ass:overlap",
+      "condition": "There is c > 0 with c \\le e(X) \\le 1 - c almost surely.",
+      "standard": { "name": "strict overlap", "cite": "imbens2004" },
+      "used_by": ["thm:overlap"],
+      "tex_locator": { "file": "main.tex", "from": 5, "to": 7, "env": "ass", "label": "ass:overlap" }
+    },
+    {
+      "id": "ass:bk-1",
+      "condition": "The weights are integrable.",
+      "bookkeeping": { "flag": true, "added_by": "V1.5", "reason": "the proof exchanges expectation and sum without stating integrability" },
+      "used_by": ["lem:aux"]
+    }
+  ],
+  "definitions": [],
+  "statements": [
+    {
+      "id": "lem:cited",
+      "kind": "lemma",
+      "statement": "A bounded martingale difference array satisfies the stated moment bound.",
+      "depends_on": [],
+      "status": "cited",
+      "source": { "cite": "imbens2004", "locator": "Theorem 3.1", "verbatim_statement": "For bounded weights the second moment is bounded by C/n." }
+    },
+    {
+      "id": "thm:overlap",
+      "kind": "theorem",
+      "statement": "Under Assumption 1 the IPW estimator has variance at most C/(nc^2).",
+      "depends_on": ["ass:overlap", "lem:cited"],
+      "status": "to-prove",
+      "proof_tex": "Apply the cited moment bound to the weighted average.",
+      "tex_locator": { "file": "main.tex", "from": 10, "to": 14, "env": "thm", "label": "thm:overlap" }
+    },
+    {
+      "id": "lem:aux",
+      "kind": "lemma",
+      "statement": "The weighted average is unbiased for the ATE.",
+      "depends_on": ["ass:bk-1"],
+      "status": "to-prove",
+      "proof_tex": "Take conditional expectations and integrate.",
+      "tex_locator": { "file": "main.tex", "from": 20, "to": 24, "env": "lem", "label": "lem:aux" }
+    },
+    {
+      "id": "thm:main",
+      "kind": "theorem",
+      "statement": "The ATE is identified by the IPW functional.",
+      "depends_on": [],
+      "status": "to-prove",
+      "proof_tex": "Immediate from the definition.",
+      "tex_locator": { "file": "main.tex", "from": 30, "to": 36, "env": "thm", "label": "thm:main" }
+    }
+  ],
+  "target_estimand": "ATE",
+  "bibliography": [{ "key": "imbens2004", "citation": "Imbens (2004). Nonparametric estimation of average treatment effects." }]
+}

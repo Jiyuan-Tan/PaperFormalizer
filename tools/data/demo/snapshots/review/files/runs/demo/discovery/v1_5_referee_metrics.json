@@ -1,0 +1,94 @@
+{
+  "shards": [
+    [
+      "lem:schur",
+      "lem:sq"
+    ],
+    [
+      "thm:amgm",
+      "thm:cubic"
+    ]
+  ],
+  "levels": [
+    {
+      "level": 1,
+      "nodes": [
+        "lem:schur",
+        "lem:sq"
+      ],
+      "shards": [
+        [
+          "lem:schur",
+          "lem:sq"
+        ]
+      ],
+      "content_bytes": [
+        336
+      ],
+      "calls": 1,
+      "bytes": 30928,
+      "dependency_unclear": [],
+      "wall_ms": 1341
+    },
+    {
+      "level": 2,
+      "nodes": [
+        "thm:amgm",
+        "thm:cubic"
+      ],
+      "shards": [
+        [
+          "thm:amgm",
+          "thm:cubic"
+        ]
+      ],
+      "content_bytes": [
+        811
+      ],
+      "calls": 1,
+      "bytes": 27795,
+      "dependency_unclear": [],
+      "wall_ms": 9
+    }
+  ],
+  "cycles": [],
+  "calls": [
+    {
+      "tag": "shard_L1-1",
+      "kind": "shard",
+      "bytes": 30928,
+      "ms": 1,
+      "nodes": 2
+    },
+    {
+      "tag": "shard_L2-1",
+      "kind": "shard",
+      "bytes": 27795,
+      "ms": 0,
+      "nodes": 2
+    },
+    {
+      "tag": "global",
+      "kind": "global",
+      "bytes": 13092,
+      "ms": 0,
+      "nodes": 0
+    }
+  ],
+  "shard_bytes": 58723,
+  "global_bytes": 13092,
+  "total_bytes": 71815,
+  "set_aside": [],
+  "wall_ms": 1358,
+  "symbols": {
+    "effort": "medium",
+    "symbols": 0,
+    "graded": 0,
+    "carried": 0,
+    "shards": [],
+    "calls": [],
+    "shard_bytes": 0,
+    "set_aside": [],
+    "wall_ms": 1
+  }
+}

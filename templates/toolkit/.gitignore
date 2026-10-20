@@ -1,0 +1,8 @@
+runs/**/codex_raw/
+runs/**/uploads/
+.lake/
+.lake-build.lock
+runs/**/dry_run_prompts/
+.toolkit-promote.lock
+# a share in progress: its poll token and the claim link (anyone holding it could confirm the share)
+runs/**/share.json

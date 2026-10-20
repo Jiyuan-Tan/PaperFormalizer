@@ -1,0 +1,30 @@
+=== REVISE MODE (load-bearing — do NOT regenerate the plan) ===
+A prior formalization plan (plan.json) is ALREADY ON DISK at the path named below.
+This is a REVISE, not a fresh draft. What to fix is named by the block(s) above — a
+CORRECTION, WHAT CHANGED IN THE CORE, or PLAN HYGIENE — and by the DIRECTIVE below this
+block, when there is one. Operate as a MINIMAL-DIFF PATCH:
+
+- The brief shows the core in one of two forms. SCOPED: in full only the nodes this revise
+  affects, then one reference line for every other node and where to look a node up — from
+  plan.json read only the entries you edit (search the file for the node id), then Edit
+  them; never read the plan or the core whole. WHOLE (what moved cannot be scoped): compare
+  the plan with it and edit the entries that no longer match.
+- Edit EVERY node entry affected by the change — not only the ones it literally names. The
+  affected set is the flagged nodes AND their dependency closure: any node whose
+  disposition/reuse must move, any statement whose `hyps` cite a changed assumption, any
+  class whose `members` change, plus the `env` S-block if the world choice moves. The set
+  the brief shows, and a CORRECTION, may under-report it, so derive it yourself by tracing
+  the revised nodes through the core's `depends_on` edges (BEYOND THE AFFECTED SET, under a scoped
+  core, says how to look up what the trace reaches), and fix all of it.
+- An entry you touch states the CURRENT plan only: REWRITE its `notes` — never append to
+  them, never mark a passage superseded — delete the entry of a node the core removed
+  (never archive it), and add no key the plan schema does not define.
+- Do NOT rewrite node entries that need no change, and do not re-survey the whole
+  substrate from scratch: KEEP the prior reuse/define-local dispositions and the
+  `defer_tier` flags unless a flagged change forces them to move. Re-survey only the substrate touched by the edit.
+- Do NOT regenerate the whole plan from the core — that wastes tokens, risks
+  drifting on nodes that already passed, and re-litigates settled feasibility.
+- Preserve every node key. Keep the plan one-to-one with
+  the core (every node mapped exactly once). Return the SAME output JSON shape as a
+  fresh F1 run, plus `"looked_up_beyond_scope": [<ids of the nodes you had to look up>]` (`[]` when the core was shown whole).
+=== END REVISE MODE ===

@@ -1,0 +1,9 @@
+{
+  "verdict": "PASS",
+  "summary": "Three results reproduced; one integrability condition supplied.",
+  "nodes": [
+    { "id": "thm:overlap", "faithfulness": "ok", "ambiguity": "ok", "correctness": "ok", "detail": "Reproduced from the cited moment bound.", "witness": null, "bookkeeping_assumption": null },
+    { "id": "lem:aux", "faithfulness": "ok", "ambiguity": "ok", "correctness": "bookkeeping", "detail": "Needs integrability of the weights.", "witness": null, "bookkeeping_assumption": { "condition": "The weights are integrable.", "reason": "the proof exchanges expectation and sum without stating integrability" } },
+    { "id": "thm:main", "faithfulness": "ok", "ambiguity": "ok", "correctness": "ok", "detail": "Immediate.", "witness": null, "bookkeeping_assumption": null }
+  ]
+}

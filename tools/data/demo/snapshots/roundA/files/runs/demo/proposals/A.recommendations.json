@@ -1,0 +1,8 @@
+{
+  "a-lem-schur": {
+    "kind": "accept",
+    "why": "Schur's inequality is a standard tool that Mathlib lacks; building it once lets this paper and later ones use it instead of assuming it.",
+    "of": "d899f0909986b01d",
+    "at": "2026-10-17T18:38:18.413Z"
+  }
+}

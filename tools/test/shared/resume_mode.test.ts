@@ -1,0 +1,69 @@
+import { afterEach, describe, expect, it } from "vitest";
+import { mkdtemp, mkdir, rm, writeFile } from "node:fs/promises";
+import { tmpdir } from "node:os";
+import path from "node:path";
+import { laterStageEverRan } from "../../src/shared/resume_mode.js";
+import { pipelineLogPath } from "../../src/paths.js";
+import type { PipelineContext, StateJson } from "../../src/types.js";
+import { tk } from "../toolkit/helpers.js";
+
+const roots: string[] = [];
+
+async function fixture(stage_completed: StateJson["stage_completed"] = "1.5") {
+  const repoRoot = await mkdtemp(path.join(tmpdir(), "resume-mode-"));
+  roots.push(repoRoot);
+  const ctx = {
+    repoRoot,
+    toolkit: tk(repoRoot),
+    qid: "stat_resume_mode",
+    dryRun: false,
+    resume: true,
+  } as PipelineContext;
+  const state = {
+    stage_completed,
+    lean_subdir: "CausalSmith/Stat/ResumeMode",
+    design_decisions: {},
+    added_assumptions: [],
+    flags: {},
+  } as unknown as StateJson;
+  return { ctx, state };
+}
+
+afterEach(async () => {
+  await Promise.all(roots.splice(0).map((root) => rm(root, { recursive: true, force: true })));
+});
+
+describe("laterStageEverRan", () => {
+  it("uses the pre-reentry state cursor when --from-stage rewinds a completed run", async () => {
+    const { ctx, state } = await fixture("5");
+    await expect(laterStageEverRan(ctx, state, "2")).resolves.toBe(true);
+  });
+
+  it("uses append-only pipeline history after the mutable cursor was lowered", async () => {
+    const { ctx, state } = await fixture("2");
+    const log = pipelineLogPath(ctx.repoRoot, ctx.qid);
+    await mkdir(path.dirname(log), { recursive: true });
+    await writeFile(log, [
+      JSON.stringify({ stage: "2", status: "completed" }),
+      "not-json-from-an-interrupted-write",
+      JSON.stringify({ stage: "4", status: "skipped" }),
+    ].join("\n"));
+    await expect(laterStageEverRan(ctx, state, "2")).resolves.toBe(true);
+  });
+
+  it("a V line is never evidence that a later F stage ran (the V stages log their passes; V6 is last in the order)", async () => {
+    const { ctx, state } = await fixture("V1.5");
+    const log = pipelineLogPath(ctx.repoRoot, ctx.qid);
+    await mkdir(path.dirname(log), { recursive: true });
+    await writeFile(log, ["V1", "V1.5", "V6"].map((stage) => JSON.stringify({ stage, status: "completed" })).join("\n"));
+    for (const target of ["1", "1.5", "2"] as const) await expect(laterStageEverRan(ctx, state, target)).resolves.toBe(false);
+    // … while an F line in the same log still is
+    await writeFile(log, [JSON.stringify({ stage: "V6", status: "completed" }), JSON.stringify({ stage: "2.5", status: "checkpoint" })].join("\n"));
+    await expect(laterStageEverRan(ctx, state, "2")).resolves.toBe(true);
+  });
+
+  it("does not label a true first pass as revise", async () => {
+    const { ctx, state } = await fixture("1.5");
+    await expect(laterStageEverRan(ctx, state, "2")).resolves.toBe(false);
+  });
+});

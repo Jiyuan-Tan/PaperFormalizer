@@ -1,0 +1,15 @@
+{
+  "targets": null,
+  "envs": [
+    "lem:schur",
+    "lem:sq",
+    "thm:amgm",
+    "thm:cubic"
+  ],
+  "theorem_like": [
+    "lem:schur",
+    "lem:sq",
+    "thm:amgm",
+    "thm:cubic"
+  ]
+}

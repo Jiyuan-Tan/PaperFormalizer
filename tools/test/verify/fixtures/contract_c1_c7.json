@@ -1,0 +1,310 @@
+{
+ "_source": "live runs <toolkit>/runs/{cns_simple_dml,dfm_effect_variation}, copied read-only 2026-09-25 (texts verbatim)",
+ "cns_cor51_rewrite": {
+  "claim": "Corollary~\\ref{cor:CI} asserts consistency, a Gaussian limit, and nominal coverage.",
+  "what_is_wrong": "(a) Step: $\\hat{\\theta}=\\theta_0+o_p(1)$. It uses: $\\sigma/\\sqrt n\\to0$, which the paper assumes only on: no explicit part of the printed proof. But the step applies it at: the passage from a standardized limit to unnormalized consistency. (b) Step: $\\left(\\hat{\\theta}\\pm \\frac{\\sigma}{n^{1/2}}\\right)$. It uses: the Gaussian critical value $c_a$, which the paper assumes only on: the interval stated in the corollary. But the step applies it at: an intermediate interval with critical value $1$.",
+  "why": "For the printed interval $\\hat\\theta\\pm\\sigma n^{-1/2}$ and the stated $\\mathcal N(0,1)$ limit, coverage tends to $2\\Phi(1)-1$ rather than $1-a$ when $c_a\\ne1$.",
+  "fix": "Use the fourth-moment rate to establish $\\sigma/\\sqrt n\\to0$, and use $c_a$ with relative variance consistency in the coverage argument.",
+  "gives_up": null
+ },
+ "cns_b1_rewrite": {
+  "claim": "The printed elasticity example says an upper bound on the negative log-density derivative ensures a minimal representer.",
+  "what_is_wrong": "Step: For Example~\\ref{ex:elasticity}. the result follows from \\cite[Proposition 3 and Example 5]{ichimura2021influence}. It uses: square integrability of $-\\partial_d\\log f(D\\mid X)$, which the paper assumes only on: no part of its stated one-sided upper bound. But the step applies it at: the claimed existence of $\\eta_0^{\\min}$ in $\\mathbb L_2$.",
+  "why": "For constant $X$, $f(d)=d^{1/2}e^{-d}/\\Gamma(3/2)$ on $(0,\\infty)$, and $\\Gamma=C_c^\\infty(0,\\infty)$, the score $-\\partial_d\\log f(d)=1-1/(2d)\\leq1$ has infinite squared $L_2(f)$ norm near $0$, so the derivative functional has no $L_2$ Riesz representer on $\\Gamma$.",
+  "fix": "Require square integrability of $-\\partial_d\\log f(D\\mid X)$ to support its projection onto $\\overline\\Gamma$.",
+  "gives_up": "Existence from a one-sided upper bound alone."
+ },
+ "cns_b4_why": "For logistic $D$, independent uniform $V$ on $[0,1]$, constant $X$, $v=1/2$, $h=1$, $K(u)=\\mathbf 1\\{|u|<1/2\\}$, and $\\Gamma=\\operatorname{span}\\{1,\\sin d\\}$, one has $\\ell_h(V)=1$ and, for $\\gamma_t(d,v,x)=t\\sin d$, the printed left side is $t^2E[\\cos^2D]>0$ while its proposed bound is $\\bar Q|t|[E\\sin^2D]^{1/2}$.",
+ "cns_thm52_why": "With a bounded symmetric pulse kernel and a density singularity away from $v$, the normalizer diverges along a bandwidth sequence and $\\sigma_h$ is smaller than order $h^{-1/2}$.",
+ "cns_d6_rewrite": {
+  "claim": "The proposition asserts the displayed probability bound on $n^{1/2}|\\hat\\theta-\\bar\\theta|/\\sigma$.",
+  "what_is_wrong": "Step: $= L^{1/2}\\frac{1}{L} \\sum_{\\ell=1}^L \\sum_{j=1}^3 \\Delta_{j\\ell}$. It uses: $n_\\ell^{1/2}(\\hat\\theta_\\ell-\\bar\\theta_\\ell)=\\Delta_{1\\ell}+\\Delta_{2\\ell}+\\Delta_{3\\ell}$ from Proposition~\\ref{prop:Taylor}, which the paper assumes only on: its printed Taylor decomposition with half the mixed product. But the step applies it at: the foldwise estimator difference, whose mixed product is $2\\Delta_{3\\ell}$.",
+  "why": "With $m=0$, $\\gamma_0=\\alpha_0^{\\min}=Y=0$, and constant $u=v=1$, each fold has $n_\\ell^{1/2}(\\hat\\theta_\\ell-\\bar\\theta_\\ell)=-n_\\ell^{1/2}$, while $\\Delta_{1\\ell}+\\Delta_{2\\ell}+\\Delta_{3\\ell}=-n_\\ell^{1/2}/2$.",
+  "fix": "Use $\\Delta_{1\\ell}+\\Delta_{2\\ell}+2\\Delta_{3\\ell}$ in the decomposition and recompute the product-term bound and the displayed $\\Delta$.",
+  "gives_up": "The displayed numerical $\\Delta$ until a bound for the full mixed product is established."
+ },
+ "cns_prop_delta_patch": {
+  "node": "prop:delta",
+  "corrected_statement": null,
+  "add_assumptions": [],
+  "proof_edits": [
+   {
+    "anchor": {
+     "env": "prop:Delta",
+     "sentences": [
+      3,
+      3
+     ]
+    },
+    "original": "By Proposition~\\ref{prop:Taylor}, write\n    \\begin{align*}\n    n^{1/2}(\\hat{\\theta}-\\bar{\\theta})\n    &=\\frac{n^{1/2}}{n_{\\ell}^{1/2}}\\frac{1}{L} \\sum_{\\ell=1}^L n_{\\ell}^{1/2} (\\hat{\\theta}_{\\ell}-\\bar{\\theta}_{\\ell}) \\\\\n    &= L^{1/2}\\frac{1}{L} \\sum_{\\ell=1}^L \\sum_{j=1}^3 \\Delta_{j\\ell}.\n\\end{align*}",
+    "replacement": "Since $n_\\ell=n/L$, the corrected Taylor identity gives $n^{1/2}(\\hat\\theta-\\bar\\theta)=L^{1/2}L^{-1}\\sum_{\\ell=1}^L(\\Delta_{1\\ell}+\\Delta_{2\\ell}+2\\Delta_{3\\ell})$."
+   },
+   {
+    "anchor": {
+     "env": "prop:Delta",
+     "sentences": [
+      8,
+      8
+     ]
+    },
+    "original": "Therefore with probability $1-\\epsilon$,\n\\begin{align*}\n n^{1/2}|\\hat{\\theta}-\\bar{\\theta}|&\\leq L^{1/2}\\frac{1}{L} \\sum_{\\ell=1}^L \\sum_{j=1}^3 |\\Delta_{jk}| \\\\\n &\\leq L^{1/2}\\frac{1}{L} \\sum_{\\ell=1}^L \\sum_{j=1}^3 t_j \\\\\n &=L^{1/2}\\sum_{j=1}^3 t_j.\n\\end{align*}",
+    "replacement": "On the union-bound event, $n^{1/2}|\\hat\\theta-\\bar\\theta|\\leq L^{1/2}L^{-1}\\sum_\\ell(t_{1\\ell}+t_{2\\ell}+2t_{3\\ell})$. For $0<\\epsilon\\leq1$, $\\sqrt{6L/\\epsilon}\\leq3\\sqrt L/\\epsilon$ and $\\sqrt{3L/\\epsilon}\\leq3\\sqrt L/\\epsilon$. Also $2t_{3\\ell}=3\\sqrt L\\{n\\mathcal R(\\hat\\gamma_\\ell)\\mathcal R(\\hat\\alpha_\\ell)\\}^{1/2}/\\epsilon$. Substitution gives the proposition's displayed bound, with each fold's rate evaluated at that fold."
+   }
+  ],
+  "proof_note": "We proceed in steps.\n\\begin{enumerate}\n    \\item Decomposition.\n    \n    Since $n_\\ell=n/L$, the corrected Taylor identity gives $n^{1/2}(\\hat\\theta-\\bar\\theta)=L^{1/2}L^{-1}\\sum_{\\ell=1}^L(\\Delta_{1\\ell}+\\Delta_{2\\ell}+2\\Delta_{3\\ell})$.\n\\end{align*} \n\n    \\item Union bound.\n    \n    Define the events\n$$\n\\mathcal{E}_{\\ell}=\\{\\text{for all } j \\; (j=1,2,3),\\; |\\Delta_{j\\ell}|\\leq t_j\\},\\quad \\mathcal{E}=\\cap_{\\ell=1}^L \\mathcal{E}_{\\ell},\\quad \\mathcal{E}^c=\\cup_{\\ell=1}^L \\mathcal{E}^c_{\\ell}.\n$$\nHence by the union bound and Proposition~\\ref{prop:resid},\n$$\n\\text{pr}(\\mathcal{E}^c)\\leq \\sum_{\\ell=1}^L \\text{pr}(\\mathcal{E}^c_{\\ell}) \\leq L\\frac{\\epsilon}{L}=\\epsilon.\n$$\n    \\item Collecting results.\n\n    On the union-bound event, $n^{1/2}|\\hat\\theta-\\bar\\theta|\\leq L^{1/2}L^{-1}\\sum_\\ell(t_{1\\ell}+t_{2\\ell}+2t_{3\\ell})$. For $0<\\epsilon\\leq1$, $\\sqrt{6L/\\epsilon}\\leq3\\sqrt L/\\epsilon$ and $\\sqrt{3L/\\epsilon}\\leq3\\sqrt L/\\epsilon$. Also $2t_{3\\ell}=3\\sqrt L\\{n\\mathcal R(\\hat\\gamma_\\ell)\\mathcal R(\\hat\\alpha_\\ell)\\}^{1/2}/\\epsilon$. Substitution gives the proposition's displayed bound, with each fold's rate evaluated at that fold.\n\\end{align*}\nFinally, we simplify $(t_j)$. For $a,b>0$, $(a+b)^{1/2}\\leq a^{1/2}+b^{1/2}$. Moreover, $3>6^{1/2}>3^{1/2}>3/2$. Finally, for $\\epsilon\\leq 1$, $\\epsilon^{-1/2}\\leq \\epsilon^{-1}$. In summary\n\\begin{align*}\n    t_1&=\\left(\\frac{6L}{\\epsilon}\\right)^{1/2}(\\bar{Q}+\\bar{\\alpha}^2)^{1/2}\\{\\mathcal{R}(\\hat{\\gamma}_{\\ell})\\}^{q/2}\n   \\leq \\frac{3L^{1/2}}{\\epsilon}(\\bar{Q}^{1/2}+\\bar{\\alpha})\\{\\mathcal{R}(\\hat{\\gamma}_{\\ell})\\}^{q/2}; \\\\\n    t_2&=\\left(\\frac{3L}{\\epsilon}\\right)^{1/2}\\bar{\\sigma}\\{\\mathcal{R}(\\hat{\\alpha}_{\\ell})\\}^{1/2} \n   \\leq \\frac{3L^{1/2}}{\\epsilon}\\bar{\\sigma}\\{\\mathcal{R}(\\hat{\\alpha}_{\\ell})\\}^{1/2}; \\\\\n    t_3&=\\frac{3L^{1/2}}{2\\epsilon}\\{n\\mathcal{R}(\\hat{\\gamma}_{\\ell})\\mathcal{R}(\\hat{\\alpha}_{\\ell})\\}^{1/2}\n    \\leq \\frac{3L^{1/2}}{\\epsilon}\\{n\\mathcal{R}(\\hat{\\gamma}_{\\ell})\\mathcal{R}(\\hat{\\alpha}_{\\ell})\\}^{1/2}.\n\\end{align*}\n\\end{enumerate}"
+ },
+ "cns_thm51_why": "For Bernoulli $W$ with probability $1/2$ at each value, constant-function $\\Gamma$, $\\gamma_0=Y=0$, $m(w,\\gamma)=10\\{\\gamma(1)-\\gamma(0)\\}$, $\\hat\\gamma_\\ell(w)=\\delta w$ with $\\delta\\ne0$, $\\hat\\alpha_\\ell=0$, $L=2$, and $\\epsilon'=1$, continuity holds on $\\Gamma$ but $\\Delta_{4\\ell}=100\\delta^2>t_4=6\\delta^2$.",
+ "cns_lem_global_proof_note": "We extend \\cite[Lemma 3.3]{chernozhukov2018global}. Write\n$$\n\\psi_0(W)=U_1+\\alpha_0^{\\min}(W)U_2.\n$$\nBy law of iterated expectations,\n\\begin{align*}\n    \\sigma^2\n&=E(U_1^2)+2E\\{U_1\\alpha_0^{\\min}(W)U_2\\}+ E(\\{\\alpha_0^{\\min}(W)U_2\\}^2) \\\\\n&=E\\{E(U_1^2 \\mid W)\\}+2E\\{U_1\\alpha_0^{\\min}(W) E(U_2 \\mid W)\\}+ E\\{\\alpha_0^{\\min}(W)^2 E(U_2^2 \\mid W)\\}.\n\\end{align*} Retain the covariance term. Put $A=\\|\\alpha_0^{\\min}\\|_2$. The conditional second-moment bounds give $\\tilde cA\\leq\\|\\alpha_0^{\\min}U_2\\|_2\\leq\\bar cA$, while $\\|U_1\\|_2\\leq\\bar c$. Reverse Minkowski gives $\\sigma=\\|U_1+\\alpha_0^{\\min}U_2\\|_2\\geq[\\tilde cA-\\bar c]_+$; Minkowski gives $\\sigma\\leq\\bar c(1+A)$. These inequalities retain any covariance between the two score terms.\n$$ By Minkowski and conditional expectation, for $q=3,4$,\n\\begin{align*}\n\\|\\psi_0\\|_{\\text{\\normalfont pr},q}&\\leq\\|U_1\\|_{\\text{\\normalfont pr},q}+\\|\\alpha_0^{\\min}(W)U_2\\|_{\\text{\\normalfont pr},q}\\\\\n&=\\|U_1\\|_{\\text{\\normalfont pr},q}+\\left[E\\{|\\alpha_0^{\\min}(W)|^qE(|U_2|^q\\mid W)\\}\\right]^{1/q}\\\\\n&\\leq\\bar c+\\bar c\\|\\alpha_0^{\\min}\\|_{\\text{\\normalfont pr},q}\\leq\\bar c\\{1+c(A^2\\vee1)\\}.\n\\end{align*}\n\\end{align*}",
+ "cns_cont_deriv": {
+  "printed": "\\label{lemma:cont}\nSuppose the weighting is bounded,  namely $\\ell_h \\leq C<\\infty$, and $\\Gamma\\subset \\mathbb{L}_2$. The following conditions are sufficient for $\\bar{Q}<\\infty$ with $q=1$ in Examples~\\ref{ex:CATE} and~\\ref{ex:RDD}, and for $\\bar{Q}<\\infty$ with $q=1/2$ in Examples~\\ref{ex:elasticity} and~\\ref{ex:deriv}.\n\\begin{enumerate}\n    \\item Example~\\ref{ex:CATE}. $\\pi_0(v,x)$ is bounded away from zero and one.\n    \\item Example~\\ref{ex:RDD}. The bandwidth is fixed.\n    \\item Example~\\ref{ex:elasticity}. $f(d\\mid x)$ vanishes for each $d$ in the boundary of the support of $D$ given $X=x$ almost everywhere. $-\\partial_d \\log f(d \\mid x)$ is a bounded above, and $\\Gamma$ consists of functions\n    $\\gamma$ that are twice continuously differentiable in the first argument and that satisfy $E[ \\{\\partial_d \\gamma(D,X)\\}^2]<\\infty$ and $E[ \\{\\partial^2_d \\gamma(D,X)\\}^2]<\\infty$.\n     \\item Example~\\ref{ex:deriv}. $f(d\\mid v,x)$ vanishes for each $d$ in the boundary of the support of $D$ given $(V,X)=(v,x)$ almost everywhere. $-\\partial_d \\log f(d \\mid v,x)$ is a bounded above, and $\\Gamma$ consists of functions\n    $\\gamma$ that are twice continuously differentiable in the first argument and that satisfy $E[ \\{\\partial_d \\gamma(D,V,X)\\}^2]<\\infty$ and $E[ \\{\\partial^2_d \\gamma(D,V,X)\\}^2]<\\infty$.\n\\end{enumerate} [Hypotheses: ass:cont-weighting-and-space, ass:cont-space, ass:cont-deriv-boundary, ass:cont-deriv-score-and-class]",
+  "corrected": "\\label{lemma:cont}\nSuppose the weighting is bounded, namely $|\\ell_h|\\leq C<\\infty$, and $\\Gamma\\subset\\mathbb{L}_2$. In Example~\\ref{ex:deriv}, suppose $f(d\\mid v,x)$ vanishes for each $d$ in the boundary of the support of $D$ given $(V,X)=(v,x)$ almost everywhere. Suppose $-\\partial_d\\log f(d\\mid v,x)$ is bounded above, and $\\Gamma$ consists of functions $\\gamma$ that are twice continuously differentiable in the first argument and that satisfy $E[\\{\\partial_d\\gamma(D,V,X)\\}^2]<\\infty$ and $E[\\{\\partial_d^2\\gamma(D,V,X)\\}^2]<\\infty$. Suppose in addition that $\\|\\partial_d\\log f(D\\mid V,X)\\|_\\infty\\leq S<\\infty$ and $\\|\\partial_d^2\\gamma\\|_2\\leq B\\|\\gamma\\|_2$ for every $\\gamma\\in\\Gamma$, with $B<\\infty$. Then the following conditions are sufficient for $\\bar Q<\\infty$ with $q=1$ in Example~\\ref{ex:deriv}:\n$$E\\{m_h(W,\\gamma)^2\\}\\leq\\bar Q E\\{\\gamma(W)^2\\}\\quad\\text{for all }\\gamma\\in\\Gamma.$$"
+ },
+ "cns_brr_local_alt3": {
+  "printed": "\\label{lemma:bounded_RR_local}\nSuppose $\\alpha_0^{\\min}$ exists and $\\Gamma\\subset \\mathbb{L}_2$. Further suppose there exist $(\\tilde{f}, \\bar f, \\bar f', h_0,\\bar{K})$ bounded away from zero and above such that the following conditions hold.\n\\begin{enumerate}\n  \\item Valid neighborhood. There exists $N_{h_0}(v)=(v':|v'-v|\\leq h)\\subset \\mathcal{V}$.\n    \\item Bounded density. The density $f_V$ obeys, for all $v'$ in $N_{h_0}(v)$,\n    $$\n  0< \\tilde{f} \\leq f_V(v') \\leq \\bar f,\\quad |\\partial f_V(v')| \\leq \\bar f'.\n    $$\n    \\item Bounded kernel. $|K(u)|\\leq \\bar{K}$.\n    \\item The conditions of Lemma~\\ref{lemma:bounded_RR_global} hold, allowing bandwidth to vanish.\n\\end{enumerate}\nThen the finite sample bound in the proof holds. In summary,\n$$\n\\bar{\\alpha}_h\\lesssim h^{-1}\\rightarrow \\infty.\n$$ [Hypotheses: ass:bounded-local-representer-exists, ass:bounded-local-space, ass:bounded-local-constants, ass:bounded-local-neighborhood, ass:bounded-local-density, ass:bounded-local-kernel, ass:bounded-local-global-conditions, ass:brr-global-setup, ass:brr-global-space, ass:brr-global-elasticity-bound]",
+  "corrected": "\\label{lemma:bounded_RR_local}\nSuppose $\\alpha_0^{\\min}$ exists and $\\Gamma\\subset\\mathbb{L}_2$. Further suppose there exist $(\\tilde f,\\bar f,\\bar f',h_0,\\bar K)$ bounded away from zero and above such that the following conditions hold.\n\\begin{enumerate}\n\\item Valid neighborhood. There exists $N_{h_0}(v)=\\{v':|v'-v|\\leq h_0\\}\\subset\\mathcal V$.\n\\item Bounded density. The density $f_V$ obeys, for all $v'$ in $N_{h_0}(v)$,\n$$0<\\tilde f\\leq f_V(v')\\leq\\bar f,\\quad|\\partial f_V(v')|\\leq\\bar f'.$$\n\\item Bounded kernel. $|K(u)|\\leq\\bar K$.\n\\item The conditions of Lemma~\\ref{lemma:bounded_RR_global} hold, allowing bandwidth to vanish. For Example~\\ref{ex:elasticity}, $\\alpha_0^{\\min}$ that solves $-\\partial_d\\log f(d\\mid x)=E\\{\\alpha(X,Z)\\mid D=d,X=x\\}$ is bounded above.\n\\end{enumerate}\nSuppose in addition that $\\partial_d\\ell_h(V)=0$ almost everywhere, $\\|\\alpha_0^{\\min}\\|_\\infty\\leq\\check\\alpha<\\infty$, and $c_\\omega=\\inf_{0<h<h_0}|\\omega_h|>0$. Then the finite sample bound\n$$\\|\\alpha_0^{\\min,h}\\|_\\infty\\leq\\frac{\\check\\alpha\\bar K}{c_\\omega h}$$\nholds. In summary,\n$$\\bar\\alpha_h\\lesssim h^{-1}\\rightarrow\\infty.$$"
+ },
+ "cns_local_clause": {
+  "printed": "Suppose bounded moment, heteroscedasticity, density, and derivative conditions defined in Supplement~2 hold. Then for local functionals\n$\n\\kappa_h/\\sigma_h \\lesssim h^{-1/6}$, $\\sigma_h \\asymp \\bar{M}_h \\asymp h^{-1/2} $, $\\kappa_h\\lesssim h^{-2/3}$, $\\zeta_h\\lesssim h^{-3/4}$, \n$\n\\bar{Q}_h\\lesssim h^{-2}$, $\\bar{\\alpha}_h\\lesssim h^{-1}$, and $\\Delta_h \\lesssim n^{1/2} h^{\\mathsf{v}+1/2}\n$\nwhere $\\mathsf{v}$ is the order of differentiability defined in Supplement~2. [Hypotheses: ass:thm-local-local-conditions]",
+  "corrected": "Suppose bounded moment, heteroscedasticity, density, and derivative conditions defined in Supplement~2 hold. Suppose the conditions of Lemmas~\\ref{lemma:local},~\\ref{lemma:cont_local},~\\ref{lemma:bounded_RR_local}, and~\\ref{lemma:approx} hold. Then for local functionals\n$\n\\kappa_h/\\sigma_h \\lesssim h^{-1/6}$, $\\sigma_h \\asymp \\bar{M}_h \\asymp h^{-1/2} $, $\\kappa_h\\lesssim h^{-2/3}$, $\\zeta_h\\lesssim h^{-3/4}$,\n$\n\\bar{Q}_h\\lesssim h^{-2}$, $\\bar{\\alpha}_h\\lesssim h^{-1}$, and $\\Delta_h \\lesssim n^{1/2} h^{\\mathsf{v}+1/2}\n$\nwhere $\\mathsf{v}$ is the order of differentiability defined in Supplement~2 and $\\Delta_h=n^{1/2}\\sigma_h^{-1}|\\theta_0^h-\\theta_0^{\\lim}|$."
+ },
+ "cns_resid2_restates": {
+  "id": "ass:patch-resid2-conditional-second-moment",
+  "condition": "$E[\\{Y-\\gamma_0(W)\\}^2\\mid W]\\leq\\bar\\sigma^2$ almost surely.",
+  "wire_into": [
+   "prop:resid2",
+   "prop:delta2",
+   "thm:var",
+   "thm:ci",
+   "thm:ci-local-clause",
+   "thm:ci-local",
+   "thm:ci-local-cate-alt2",
+   "thm:ci-local-cate-alt3",
+   "thm:ci-local-cate-alt4",
+   "thm:ci-local-rdd-alt1",
+   "thm:ci-local-rdd-alt2",
+   "thm:ci-local-rdd-alt3",
+   "thm:ci-local-rdd-alt4"
+  ],
+  "reason": "Bounding $\\Delta_{6\\ell}$ uses the conditional second moment. The square of the conditional mean can vanish with arbitrarily large variance, so it cannot supply that bound; the zero-mean high-variance instance violates the printed premise's intended implication.",
+  "restates": "Spells out the paper's conditional-noise bound in Theorem~\\ref{thm:var}."
+ },
+ "dfm_var_kurt_suggestion": {
+  "node": "thm:var-kurt",
+  "reason": "any repair weakens the contribution: patch hypothesis ass:patch-independent-complete-randomization: weakens the contribution: The paper conditions on the observed science table and says randomness comes only from assignment; this hypothesis requires independent sampling of potential-outcome pairs and excludes fixed science table sequences and matched-pair randomization. Independent bivariate normal pairs with balanced complete randomization satisfy the hypothesis, so it is consistent, but it does not merely restate the paper’s setting.",
+  "suggested_repair": {
+   "corrected_statement": "Assume that $Y(z)$ has finite kurtosis $\\kappa_z$. Suppose in addition that the potential-outcome pairs are independent draws from a common joint distribution with continuous, nondegenerate marginals, and that, independently of those draws, a complete randomization assigns exactly $N_1$ units to treatment and $N_0$ to control, with $N_1/N\\rightarrow r\\in(0,1)$. Under the null of equal variance,\n$$\nt_{kvar} \\equiv \\frac{\\log \\widehat{\\sigma}_1^2 - \\log \\widehat{\\sigma}_0^2}{\\sqrt{(\\widehat{\\kappa}_1-1)/N_1+(\\widehat{\\kappa}_0-1)/N_0}}\n\\stackrel{d}{\\longrightarrow}\\mathcal{N}(0,1),\n$$\nas $N\\rightarrow\\infty$, where $t_{kvar}$ is defined to be $0$ if either sample variance or the displayed denominator is $0$. \\label{thm::var-kurt}",
+   "add_assumptions": [
+    {
+     "id": "ass:patch-independent-complete-randomization",
+     "condition": "The potential-outcome pairs $(Y_i(1),Y_i(0))$ are independent draws from a common joint distribution with continuous, nondegenerate marginals, and, independently of those draws, a complete randomization assigns exactly $N_1$ units to treatment and $N_0$ to control, with $N_1/N\\rightarrow r\\in(0,1)$.",
+     "wire_into": [
+      "thm:var-kurt",
+      "thm:sks-nuisance"
+     ],
+     "reason": "The step combining the arm limits needs independent observed arm samples and an interior limiting allocation; separate marginal limits cannot supply their joint covariance, and the fixed grid science table and matched-pair assignment in the findings violate this sampling and assignment condition.",
+     "restates": "Spells out the paper's setting in which a potential outcome is “drawn from the distribution of $Y(z)$” and $N_1$ subjects are randomly assigned to treatment."
+    }
+   ],
+   "remove_depends_on": [],
+   "proof_edits": [
+    {
+     "anchor": {
+      "env": "thm::var-kurt",
+      "sentences": [
+       1,
+       1
+      ]
+     },
+     "original": "From the classic result \\citep{lehmann1999elements}, we have $$ \\sqrt{N_t} (\\widehat{\\sigma}_t^2 - \\sigma_t^2) \\stackrel{d}{\\longrightarrow} \\mathcal{N} \\left\\{ 0, \\text{var}(Y_t - \\mu_t)^2 = \\sigma^4 ( \\kappa_t - 1 ) \\right\\}, $$ and therefore using delta-method we have that $$ \\sqrt{N_t} (\\log \\widehat{\\sigma}_t^2 - \\log \\sigma_t^2) \\stackrel{d}{\\longrightarrow} \\mathcal{N}(0, \\kappa_t - 1 ). $$",
+     "replacement": "Under the independent sampling and complete randomization condition, conditional on the assignment the observations in arm $t$ are independent draws from $Y(t)$. Write $Q_t=(Y(t)-\\mu_t)^2$. Since $E(Q_t)=\\sigma_t^2$ and $\\operatorname{var}(Q_t)=E\\{(Y(t)-\\mu_t)^4\\}-\\sigma_t^4=\\sigma_t^4(\\kappa_t-1)$, the finite fourth moment and the central limit theorem give $\\sqrt{N_t}\\{N_t^{-1}\\sum Q_{ti}-\\sigma_t^2\\}\\stackrel{d}{\\longrightarrow}\\mathcal{N}\\{0,\\sigma_t^4(\\kappa_t-1)\\}$. The difference between $\\widehat{\\sigma}_t^2$ and $N_t^{-1}\\sum Q_{ti}$ is $O_P(N_t^{-1})$, because $\\widehat{\\\\mu}_t-\\mu_t=O_P(N_t^{-1/2})$; hence the same limit holds for $\\widehat{\\sigma}_t^2$. Since $\\sigma_t^2>0$, the delta method, with derivative $1/\\sigma_t^2$, yields $\\sqrt{N_t}(\\log\\widehat{\\sigma}_t^2-\\log\\sigma_t^2)\\stackrel{d}{\\longrightarrow}\\mathcal{N}(0,\\kappa_t-1)$."
+    }
+   ],
+   "insert_after": [
+    {
+     "anchor": {
+      "env": "thm::var-kurt",
+      "sentences": [
+       2,
+       2
+      ]
+     },
+     "text": "Conditional on any assignment of the fixed group sizes, the two observed arm samples involve disjoint independent potential-outcome pairs, so the two log-variance limits are independent; their unconditional joint law is the same. Put $V_N=(\\kappa_1-1)/N_1+(\\kappa_0-1)/N_0$. Continuity and nondegeneracy imply $\\kappa_t>1$: equality in $E(Q_t^2)\\geq E(Q_t)^2$ would make $|Y(t)-\\mu_t|$ constant almost surely. Thus $V_N>0$. Since $N_1/N\\rightarrow r\\in(0,1)$, both group sizes diverge and the independent weighted normal limits give $(\\log\\widehat{\\sigma}_1^2-\\log\\widehat{\\sigma}_0^2)/\\sqrt{V_N}\\stackrel{d}{\\longrightarrow}\\mathcal{N}(0,1)$ under $\\sigma_1^2=\\sigma_0^2$."
+    },
+    {
+     "anchor": {
+      "env": "thm::var-kurt",
+      "sentences": [
+       3,
+       3
+      ]
+     },
+     "text": "The law of large numbers for the sample second and fourth central moments gives $\\widehat{\\kappa}_t\\rightarrow\\kappa_t$ in probability. Because $N_1/N$ has an interior limit and $\\kappa_1+\\kappa_0>2$, the ratio of the estimated denominator squared to $V_N$ converges in probability to $1$. Each sample variance is positive with probability tending to $1$, and the estimated denominator is positive with probability tending to $1$; assigning $t_{kvar}=0$ on the complementary event therefore does not change the limit."
+    }
+   ],
+   "proof_note": "Under the independent sampling and complete randomization condition, conditional on the assignment the observations in arm $t$ are independent draws from $Y(t)$. Write $Q_t=(Y(t)-\\mu_t)^2$. Since $E(Q_t)=\\sigma_t^2$ and $\\operatorname{var}(Q_t)=E\\{(Y(t)-\\mu_t)^4\\}-\\sigma_t^4=\\sigma_t^4(\\kappa_t-1)$, the finite fourth moment and the central limit theorem give $\\sqrt{N_t}\\{N_t^{-1}\\sum Q_{ti}-\\sigma_t^2\\}\\stackrel{d}{\\longrightarrow}\\mathcal{N}\\{0,\\sigma_t^4(\\kappa_t-1)\\}$. The difference between $\\widehat{\\sigma}_t^2$ and $N_t^{-1}\\sum Q_{ti}$ is $O_P(N_t^{-1})$, because $\\widehat{\\\\mu}_t-\\mu_t=O_P(N_t^{-1/2})$; hence the same limit holds for $\\widehat{\\sigma}_t^2$. Since $\\sigma_t^2>0$, the delta method, with derivative $1/\\sigma_t^2$, yields $\\sqrt{N_t}(\\log\\widehat{\\sigma}_t^2-\\log\\sigma_t^2)\\stackrel{d}{\\longrightarrow}\\mathcal{N}(0,\\kappa_t-1)$.\nUnder the null, $\\sigma_1^2 = \\sigma_0^2$, and $\\log \\widehat{\\sigma}_1^2 - \\log \\widehat{\\sigma}_0^2$ has the following asymptotic distribution\n\\begin{equation}\n\\frac{\\log \\widehat{\\sigma}_1^2 - \\log \\widehat{\\sigma}_0^2}{  \\sqrt{  (  \\kappa_1 - 1  ) / N_1     + (\\kappa_0 - 1 ) / N_0}    } \n\\stackrel{d}{\\longrightarrow} \\mathcal{N}(0, 1).  \\label{eq:asmp_var}\n\\end{equation} Conditional on any assignment of the fixed group sizes, the two observed arm samples involve disjoint independent potential-outcome pairs, so the two log-variance limits are independent; their unconditional joint law is the same. Put $V_N=(\\kappa_1-1)/N_1+(\\kappa_0-1)/N_0$. Continuity and nondegeneracy imply $\\kappa_t>1$: equality in $E(Q_t^2)\\geq E(Q_t)^2$ would make $|Y(t)-\\mu_t|$ constant almost surely. Thus $V_N>0$. Since $N_1/N\\rightarrow r\\in(0,1)$, both group sizes diverge and the independent weighted normal limits give $(\\log\\widehat{\\sigma}_1^2-\\log\\widehat{\\sigma}_0^2)/\\sqrt{V_N}\\stackrel{d}{\\longrightarrow}\\mathcal{N}(0,1)$ under $\\sigma_1^2=\\sigma_0^2$.\nDue to the fact that $\\widehat{\\kappa}_t\\rightarrow \\kappa_t$ in probability and Slutsky's Theorem, we have\n$$\n\\frac{\\log \\widehat{\\sigma}_1^2 - \\log \\widehat{\\sigma}_0^2}{  \\sqrt{   \\left(  \\widehat{ \\kappa}_1 - 1 \\right) / N_1     + \\left(  \\widehat{ \\kappa}_0 - 1 \\right) / N_0    }   } \n\\stackrel{d}{\\longrightarrow} \\mathcal{N}(0, 1).\\Box\n$$ The law of large numbers for the sample second and fourth central moments gives $\\widehat{\\kappa}_t\\rightarrow\\kappa_t$ in probability. Because $N_1/N$ has an interior limit and $\\kappa_1+\\kappa_0>2$, the ratio of the estimated denominator squared to $V_N$ converges in probability to $1$. Each sample variance is positive with probability tending to $1$, and the estimated denominator is positive with probability tending to $1$; assigning $t_{kvar}=0$ on the complementary event therefore does not change the limit.",
+   "given_up": "patch hypothesis ass:patch-independent-complete-randomization: weakens the contribution: The paper conditions on the observed science table and says randomness comes only from assignment; this hypothesis requires independent sampling of potential-outcome pairs and excludes fixed science table sequences and matched-pair randomization. Independent bivariate normal pairs with balanced complete randomization satisfy the hypothesis, so it is consistent, but it does not merely restate the paper’s setting."
+  },
+  "suggested_by": "referee",
+  "owner_explanation": {
+   "claim": "Theorem 2 asserts that equal marginal variances and finite kurtosis give $t_{kvar}\\stackrel{d}{\\longrightarrow}\\mathcal{N}(0,1)$.",
+   "what_is_wrong": "(a) The step combining the two marginal log-variance limits treats the treatment and control terms as independent; conditional randomization from a fixed science table instead retains a finite-population covariance term. (b) The displayed statistic has no specified value when a sample variance or its denominator is $0$.",
+   "why": "For a balanced complete randomization of all pairs $(x_j,x_k)$ on the stated uniform grid, the marginal variances are equal and $\\kappa_z\\rightarrow9/5$, but $t_{kvar}\\stackrel{d}{\\longrightarrow}\\mathcal{N}(0,1/2)$.",
+   "fix": "The theorem states the independent sampling and complete randomization condition used by its joint central limit argument and assigns a value on the exceptional zero-denominator event.",
+   "gives_up": "The standard normal limit conditional on an arbitrary fixed science table."
+  }
+ },
+ "dfm_symbol_A_reading": {
+  "reading": "In Lemma 2, A is an arbitrary random variable with invertible CDF F_A; in the proof of the scaling theorem, A=f{Y(1)}.",
+  "evidence": "The lemma begins “Take random variables $A$ and $B$ with invertible CDFs”; the later proof says “define two new random variables $A= f\\{ Y(1) \\}$ and $B = f\\{ Y(0) \\}$.”"
+ },
+ "dfm_p22_why": "For a balanced randomization of all pairs $(x_j,x_k)$ on a uniform grid, the marginal variances are equal and $\\kappa_z\\to9/5$, yet $t_{kvar}\\stackrel{d}{\\longrightarrow}\\mathcal{N}(0,1/2)$.",
+ "dfm_sks": {
+  "printed": "{}\nLet $r = \\lim_{N\\rightarrow \\infty}N_1/N$, $BB(\\cdot)$ be a standard Brownian Bridge, and $\\xi(\\cdot)$ be a Gaussian Process with mean function $0$ and covariance function \n$\n\\text{cov}\\{ \\xi(x), \\xi(y) \\}  =  \\sigma_0^2 f_0(x)f_0(y).\n$ \nThe limiting distribution of the SKS statistic is\n$$\n\\sqrt{N}t_{SKS} = \\sup_y\\Big | \\sqrt{N} \\left\\{     \\widehat{F}_1( y+\\widehat{\\tau} ) - \\widehat{F}_0(y)  \\right\\}  \\Big|\n \\stackrel{d}{\\longrightarrow} \\sup_y \\Big |   \\frac{1}{\\sqrt{r}} SBB_1 + \\frac{1}{\\sqrt{1-r}} SBB_0  \\Big|,\n$$\n where $SBB_1(\\cdot)$ and $SBB_0(\\cdot)$ are independent realizations of the \\textit{shifted Brownian Bridge} processes:\n $\n SBB(\\cdot) \\equiv BB(\\cdot) + \\xi(\\cdot),\n $\n with covariance structure \n\\[ \n\\text{cov}\\{ BB(x), \\xi(y) \\}= f_0(y) F_0(x)\\{ 1\\!-\\! F_0(x) \\}  \\left[   E\\{ Y(0) \\mid Y(0)\\leq x\\} -  E\\{ Y(0) \\mid Y(0)  > x\\}  \\right] .\n\\]\\label{thm::sks-nuisance} [Hypotheses: ass:constant-shift-null]",
+  "corrected": "Suppose the potential-outcome pairs are independent draws from a common joint distribution with continuous, nondegenerate marginals, and that, independently of those draws, a complete randomization assigns exactly $N_1$ units to treatment and $N_0$ to control, with $N_1/N\\rightarrow r\\in(0,1)$. Suppose in addition that $F_0$ has a bounded uniformly continuous density $f_0$ and $E\\{Y(0)^2\\}<\\infty$. Let $r=\\lim_{N\\rightarrow\\infty}N_1/N$, $BB(\\cdot)$ be a standard Brownian Bridge on $[0,1]$, and $\\xi(\\cdot)$ be a Gaussian Process, jointly Gaussian with $BB\\{F_0(\\cdot)\\}$, with mean function $0$ and covariance function\n$\n\\text{cov}\\{\\xi(x),\\xi(y)\\}=\\sigma_0^2f_0(x)f_0(y).\n$\nThe limiting distribution of the SKS statistic is\n$$\n\\sqrt{N}t_{SKS}=\\sup_y\\Big|\\sqrt{N}\\left\\{\\widehat{F}_1(y+\\widehat{\\tau})-\\widehat{F}_0(y)\\right\\}\\Big|\n\\stackrel{d}{\\longrightarrow}\\sup_y\\Big|\\frac{1}{\\sqrt r}SBB_1(y)+\\frac{1}{\\sqrt{1-r}}SBB_0(y)\\Big|,\n$$\nwhere the supremum is over $y\\in\\mathbb{R}$ and $SBB_1(\\cdot)$ and $SBB_0(\\cdot)$ are independent realizations of the \\textit{shifted Brownian Bridge} process\n$\nSBB(y)\\equiv BB\\{F_0(y)\\}+\\xi(y),\n$\nwith covariance structure\n\\[\n\\text{cov}\\{BB\\{F_0(x)\\},\\xi(y)\\}=f_0(y)F_0(x)\\{1-F_0(x)\\}\\left[E\\{Y(0)\\mid Y(0)\\leq x\\}-E\\{Y(0)\\mid Y(0)>x\\}\\right].\n\\]\\label{thm::sks-nuisance}",
+  "tex_locator": {
+   "file": "Arxiv.tex",
+   "from": 986,
+   "to": 1004,
+   "env": "thm",
+   "label": "thm::sks-nuisance"
+  },
+  "free_symbols": [
+   "r",
+   "N",
+   "N_1",
+   "BB(\\cdot)",
+   "\\xi(\\cdot)",
+   "\\sigma_0^2",
+   "f_0",
+   "x",
+   "y",
+   "t_{SKS}",
+   "\\widehat{F}_1",
+   "\\widehat{F}_0",
+   "\\widehat{\\tau}",
+   "SBB(\\cdot)",
+   "SBB_1(\\cdot)",
+   "SBB_0(\\cdot)",
+   "F_0(\\cdot)",
+   "Y(0)",
+   "\\tau"
+  ],
+  "flat_1240_1270": [
+   "Unfortunately $\\tau$ is unknown in practice and is therefore a nuisance parameter. ",
+   "One natural-seeming approach is to plug in the difference-in-means estimate, $\\widehat{\\tau} = \\widehat{\\mu}_1 - \\widehat{\\mu}_0$,  yielding the ``shifted'' KS (SKS) statistic:",
+   "$$",
+   "t_{SKS}  =  \\max_y \\left | \\widehat{F}_0(y) - \\widehat{F}_1(y +\\widehat{\\tau}) \\right | .",
+   "$$",
+   "Comparing this test statistic to the usual null KS distribution, however, yields invalid $p$-values. ",
+   "As \\cite{Babu:2004ve} note, for such tests ``the asymptotic null distribution of the test statistic may depend in a complex way on the unknown parameters.'' See also \\cite[][Theorem 19.23]{van2000asymptotic}, and the relevant discussion in \\cite{koenker2002inference}. We show this more formally in Theorem~\\ref{thm::sks-nuisance}. ",
+   "",
+   "\\begin{thm}{}",
+   "Let $r = \\lim_{N\\rightarrow \\infty}N_1/N$, $BB(\\cdot)$ be a standard Brownian Bridge, and $\\xi(\\cdot)$ be a Gaussian Process with mean function $0$ and covariance function ",
+   "$",
+   "\\text{cov}\\{ \\xi(x), \\xi(y) \\}  =  \\sigma_0^2 f_0(x)f_0(y).",
+   "$ ",
+   "The limiting distribution of the SKS statistic is",
+   "$$",
+   "\\sqrt{N}t_{SKS} = \\sup_y\\Big | \\sqrt{N} \\left\\{     \\widehat{F}_1( y+\\widehat{\\tau} ) - \\widehat{F}_0(y)  \\right\\}  \\Big|",
+   " \\stackrel{d}{\\longrightarrow} \\sup_y \\Big |   \\frac{1}{\\sqrt{r}} SBB_1 + \\frac{1}{\\sqrt{1-r}} SBB_0  \\Big|,",
+   "$$",
+   " where $SBB_1(\\cdot)$ and $SBB_0(\\cdot)$ are independent realizations of the \\textit{shifted Brownian Bridge} processes:",
+   " $",
+   " SBB(\\cdot) \\equiv BB(\\cdot) + \\xi(\\cdot),",
+   " $",
+   " with covariance structure ",
+   "\\[ ",
+   "\\text{cov}\\{ BB(x), \\xi(y) \\}= f_0(y) F_0(x)\\{ 1\\!-\\! F_0(x) \\}  \\left[   E\\{ Y(0) \\mid Y(0)\\leq x\\} -  E\\{ Y(0) \\mid Y(0)  > x\\}  \\right] .",
+   "\\]\\label{thm::sks-nuisance}",
+   "\\end{thm}",
+   "",
+   "The correlation between $BB( \\cdot )$ and $\\xi(\\cdot )$  is the ``complex dependence'' referred to above. Since the $SBB$ processes depend on $F_0(y)$, $t_{SKS}$ also depends on $F_0(y)$ and is therefore not distribution free. ",
+   "",
+   "In other words, Theorem~\\ref{thm::sks-nuisance} demonstrates that ``naively\" plugging in $\\widehat{\\tau}$ for $\\tau$ yields a test statistic with a null distribution that is not the null distribution of the classic KS statistic. Intuitively, if $\\tau$ is known, the asymptotic distribution of $t_{KS}$ depends on the sum of two standard Brownian Bridges, which do not depend on $F_0(y)$. The uncertainty in $\\widehat{\\tau}$ changes these from standard Brownian Bridges to \\textit{shifted} Brownian Bridges, which do depend on $F_0(y)$:"
+  ]
+ },
+ "dfm_symbols": [
+  {
+   "name": "\\tau",
+   "type": "finite sample average treatment effect"
+  },
+  {
+   "name": "f_0",
+   "type": "marginal control-outcome PDF"
+  },
+  {
+   "name": "x",
+   "type": "process argument"
+  },
+  {
+   "name": "r",
+   "type": "limiting treatment proportion"
+  },
+  {
+   "name": "BB(\\cdot)",
+   "type": "standard Brownian Bridge"
+  },
+  {
+   "name": "\\xi(\\cdot)",
+   "type": "Gaussian Process"
+  }
+ ],
+ "_fields_note": "cns_cor51_note, cns_d6_note, cns_thm52_objects: the live texts above as fields (notes as fields, 2026-09-26), converted by hand from the same words.",
+ "cns_cor51_note": {
+  "claim": "Corollary~\\ref{cor:CI} asserts consistency, a Gaussian limit, and nominal coverage.",
+  "defects": [
+   {
+    "kind": "out_of_domain",
+    "step_unit": "cor:CI/proof/1/1",
+    "uses": "$\\sigma/\\sqrt n\\to0$",
+    "assumed_on": "no explicit part of the printed proof",
+    "applied_at": "the passage from a standardized limit to unnormalized consistency",
+    "detail": null
+   },
+   {
+    "kind": "out_of_domain",
+    "step_unit": "cor:CI/proof/1/2",
+    "uses": "the Gaussian critical value $c_a$",
+    "assumed_on": "the interval stated in the corollary",
+    "applied_at": "an intermediate interval with critical value $1$",
+    "detail": null
+   }
+  ],
+  "why": {
+   "objects": [
+    "$C_n=\\hat\\theta\\pm\\sigma n^{-1/2}$",
+    "$Z\\sim\\mathcal N(0,1)$ as the stated limit"
+   ],
+   "consequence": "coverage tends to $2\\Phi(1)-1$ rather than $1-a$ when $c_a\\ne1$"
+  },
+  "fix": "Use the fourth-moment rate to establish $\\sigma/\\sqrt n\\to0$, and use $c_a$ with relative variance consistency in the coverage argument.",
+  "gives_up": null
+ },
+ "cns_d6_note": {
+  "claim": "The proposition asserts the displayed probability bound on $n^{1/2}|\\hat\\theta-\\bar\\theta|/\\sigma$.",
+  "defects": [
+   {
+    "kind": "out_of_domain",
+    "step_unit": "prop:delta/proof/1/4",
+    "uses": "$n_\\ell^{1/2}(\\hat\\theta_\\ell-\\bar\\theta_\\ell)=\\Delta_{1\\ell}+\\Delta_{2\\ell}+\\Delta_{3\\ell}$ from Proposition~\\ref{prop:Taylor}",
+    "assumed_on": "its printed Taylor decomposition with half the mixed product",
+    "applied_at": "the foldwise estimator difference, whose mixed product is $2\\Delta_{3\\ell}$",
+    "detail": null
+   }
+  ],
+  "why": {
+   "objects": [
+    "$m=0$",
+    "$\\gamma_0=\\alpha_0^{\\min}=Y=0$",
+    "$u=v=1$"
+   ],
+   "consequence": "each fold has $n_\\ell^{1/2}(\\hat\\theta_\\ell-\\bar\\theta_\\ell)=-n_\\ell^{1/2}$, while $\\Delta_{1\\ell}+\\Delta_{2\\ell}+\\Delta_{3\\ell}=-n_\\ell^{1/2}/2$"
+  },
+  "fix": "Use $\\Delta_{1\\ell}+\\Delta_{2\\ell}+2\\Delta_{3\\ell}$ in the decomposition and recompute the product-term bound and the displayed $\\Delta$.",
+  "gives_up": "The displayed numerical $\\Delta$ until a bound for the full mixed product is established."
+ },
+ "cns_thm52_objects": [
+  "a bounded symmetric pulse kernel",
+  "a density singularity away from $v$"
+ ]
+}

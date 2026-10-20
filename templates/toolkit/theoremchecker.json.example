@@ -1,0 +1,28 @@
+{
+  "version": 1,
+  "owner": {
+    "name": "Your Name",
+    "email": "you@example.org"
+  },
+  "toolkit": {
+    "lib": "Toolkit",
+    "papers_lib": "Papers",
+    "divisions": [
+      "Foundations",
+      "Tricks"
+    ]
+  },
+  "base": [
+    {
+      "name": "Mathlib",
+      "kind": "transitive",
+      "search": [
+        "loogle",
+        "leansearch"
+      ]
+    }
+  ],
+  "lean": {
+    "toolchain": "leanprover/lean4:v4.33.0"
+  }
+}

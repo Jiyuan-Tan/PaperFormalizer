@@ -1,0 +1,26 @@
+[
+  {
+    "obj_id": "T-1",
+    "kind": "theorem",
+    "title": "Overlap bound",
+    "tex": { "label": "T-1", "line_range": "main.tex:10-14" },
+    "lean": { "file": "Basic.lean", "decl": "Verify.t1_thm", "decl_kind": "theorem", "line": 12 },
+    "verdict": "exact"
+  },
+  {
+    "obj_id": "L-1",
+    "kind": "lemma",
+    "title": "Unbiasedness",
+    "tex": { "label": "lem:aux", "line_range": "main.tex:20-24" },
+    "lean": { "file": "Basic.lean", "decl": "Verify.l1_lemma", "decl_kind": "theorem", "line": 40 },
+    "verdict": "equivalent"
+  },
+  {
+    "obj_id": "T-2",
+    "kind": "theorem",
+    "title": "Main theorem",
+    "tex": { "label": "T-2", "line_range": "main.tex:30-36" },
+    "lean": { "file": "Basic.lean", "decl": "Verify.t2_thm", "decl_kind": "theorem", "line": 70 },
+    "verdict": "exact"
+  }
+]

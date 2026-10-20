@@ -1,0 +1,122 @@
+{
+  "verdict": "PASS",
+  "summary": "dry run — no referee was called; the core is accepted unreviewed (1 node(s) graded synthetically, 3 carried).",
+  "nodes": [
+    {
+      "id": "thm:amgm",
+      "faithfulness": "ok",
+      "ambiguity": "ok",
+      "correctness": "ok",
+      "detail": "dry run: synthetic grade, no referee was called",
+      "witness": null,
+      "fix": null,
+      "bookkeeping_assumption": null,
+      "reading": null,
+      "minimality": false,
+      "weakens_contribution": false,
+      "follows_repair": false,
+      "shards": [
+        "L1-1"
+      ],
+      "basis": "69c071d5af6fb8eb2ae59a2fd62c3959e681a9edcfb2b393d7252b8499c52c74",
+      "basis_scheme": 5,
+      "basis_inputs": {
+        "scheme": 5,
+        "own": "5ba4cffa4825fcebde43fbb11a467e969df650f4457e71fe22ccda35902d6a0e",
+        "node": "198b2565fa0be357bc6a9676063ec7da52f10a78c871d1a452737e82ec129d12",
+        "closure": "7277122040f78cd9eb042a2a50d98bd9f1d95dc24f47ff40ba731553cec0376a",
+        "symbols": {},
+        "readings": {},
+        "verdicts": {
+          "lem:sq": "920f9b4482737dd23c751dabd1ba8d3048c55ea79efdbd72c3e15ab463482289"
+        }
+      },
+      "graded": "fresh"
+    },
+    {
+      "id": "lem:schur",
+      "faithfulness": "ok",
+      "ambiguity": "ok",
+      "correctness": "ok",
+      "detail": "dry run: synthetic grade, no referee was called",
+      "witness": null,
+      "fix": null,
+      "bookkeeping_assumption": null,
+      "reading": null,
+      "minimality": false,
+      "weakens_contribution": false,
+      "follows_repair": false,
+      "shards": [
+        "L1-1"
+      ],
+      "basis": "0c74feb18014bca8932eb1e423d82818083fc560186d879f87e5386b8e4de40d",
+      "basis_scheme": 5,
+      "basis_inputs": {
+        "scheme": 5,
+        "node": "c2d6b8bcf87380c393befd3f30009539a941834ac3add80ca4f098b6490f0532",
+        "closure": "c2d6b8bcf87380c393befd3f30009539a941834ac3add80ca4f098b6490f0532",
+        "symbols": {},
+        "readings": {}
+      },
+      "graded": "carried"
+    },
+    {
+      "id": "lem:sq",
+      "faithfulness": "ok",
+      "ambiguity": "ok",
+      "correctness": "ok",
+      "detail": "dry run: synthetic grade, no referee was called",
+      "witness": null,
+      "fix": null,
+      "bookkeeping_assumption": null,
+      "reading": null,
+      "minimality": false,
+      "weakens_contribution": false,
+      "follows_repair": false,
+      "shards": [
+        "L1-1"
+      ],
+      "basis": "bf04485cb2b37667269146a5e6e40bc723cd985c1beab87ab410d41bae26ca1a",
+      "basis_scheme": 5,
+      "basis_inputs": {
+        "scheme": 5,
+        "node": "73c799b8a50857e19cdc2516bfb518dec7b2bad318b17f392541b597af15fbf7",
+        "closure": "73c799b8a50857e19cdc2516bfb518dec7b2bad318b17f392541b597af15fbf7",
+        "symbols": {},
+        "readings": {}
+      },
+      "graded": "carried"
+    },
+    {
+      "id": "thm:cubic",
+      "faithfulness": "ok",
+      "ambiguity": "ok",
+      "correctness": "ok",
+      "detail": "dry run: synthetic grade, no referee was called",
+      "witness": null,
+      "fix": null,
+      "bookkeeping_assumption": null,
+      "reading": null,
+      "minimality": false,
+      "weakens_contribution": false,
+      "follows_repair": false,
+      "shards": [
+        "L2-1"
+      ],
+      "basis": "1bd655ae280f62381d37dd9950b5778d7bcedcc993a1a28e9078cc1bc9e7d4c2",
+      "basis_scheme": 5,
+      "basis_inputs": {
+        "scheme": 5,
+        "node": "d2b7c35214355adbf4e0c5f0e372ba651375b609b7cd081090be73a8f06379ec",
+        "closure": "95464f35207957ee385dc8fb1412a40a59056819cacea008a0eca2522d971f74",
+        "symbols": {},
+        "readings": {},
+        "verdicts": {
+          "lem:schur": "0ab4d537c7a15b6363729bbb0cb3def43df422057f78d2155a2931da4c7b16dd"
+        }
+      },
+      "graded": "carried"
+    }
+  ],
+  "symbols": []
+}

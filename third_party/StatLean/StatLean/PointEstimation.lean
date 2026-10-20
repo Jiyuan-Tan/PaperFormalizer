@@ -1,0 +1,63 @@
+module
+-- Area umbrella: StatLean.PointEstimation
+-- Maintained by the laptop session only (see CLAUDE.md §10). Imported by StatLean.lean once
+-- the batch merges to main; until then it serves as the batch build target.
+public import StatLean.PointEstimation.ForMathlib.CondDistribDensity
+public import StatLean.PointEstimation.ForMathlib.CondExpWithDensity
+public import StatLean.PointEstimation.ForMathlib.ConvexMinimizers
+public import StatLean.PointEstimation.ForMathlib.HalmosSavage
+public import StatLean.PointEstimation.ForMathlib.IntegrationByPartsReal
+public import StatLean.PointEstimation.ForMathlib.MGFUniqueness
+public import StatLean.PointEstimation.ForMathlib.MGFUniquenessPi
+public import StatLean.PointEstimation.ForMathlib.MeasurableArgmin
+public import StatLean.PointEstimation.Model.Defs
+public import StatLean.PointEstimation.ExponentialFamily.Defs
+public import StatLean.PointEstimation.ExponentialFamily.Basic
+public import StatLean.PointEstimation.ExponentialFamily.MGF
+public import StatLean.PointEstimation.ExponentialFamily.MinimalSufficient
+public import StatLean.PointEstimation.ExponentialFamily.NaturalStatistic
+public import StatLean.PointEstimation.ExponentialFamily.Smoothness
+public import StatLean.PointEstimation.ExponentialFamily.SteinIdentity
+public import StatLean.PointEstimation.Sufficiency.Defs
+public import StatLean.PointEstimation.Sufficiency.Basic
+public import StatLean.PointEstimation.Sufficiency.BayesianBridge
+public import StatLean.PointEstimation.Sufficiency.Factorization
+public import StatLean.PointEstimation.Sufficiency.HalmosSavageCriterion
+public import StatLean.PointEstimation.Sufficiency.Minimal
+public import StatLean.PointEstimation.Sufficiency.RegularConditional
+public import StatLean.PointEstimation.Sufficiency.RiskEquality
+public import StatLean.PointEstimation.Completeness.Defs
+public import StatLean.PointEstimation.Completeness.Basu
+public import StatLean.PointEstimation.Completeness.ExpFamily
+public import StatLean.PointEstimation.UMVU.Defs
+public import StatLean.PointEstimation.UMVU.Basic
+public import StatLean.PointEstimation.UMVU.CovarianceCriterion
+public import StatLean.PointEstimation.UMVU.LehmannScheffe
+public import StatLean.PointEstimation.UMVU.RaoBlackwell
+public import StatLean.PointEstimation.InformationInequality.Defs
+public import StatLean.PointEstimation.InformationInequality.Additivity
+public import StatLean.PointEstimation.InformationInequality.Attainment
+public import StatLean.PointEstimation.InformationInequality.Basic
+public import StatLean.PointEstimation.InformationInequality.CramerRao
+public import StatLean.PointEstimation.InformationInequality.DensityRegularity
+public import StatLean.PointEstimation.InformationInequality.ExpFamilyInfo
+public import StatLean.PointEstimation.InformationInequality.Multiparameter
+public import StatLean.PointEstimation.Equivariance.Defs
+public import StatLean.PointEstimation.Equivariance.ConditionalRiskEngine
+public import StatLean.PointEstimation.Equivariance.General
+public import StatLean.PointEstimation.Equivariance.LocationExamples
+public import StatLean.PointEstimation.Equivariance.LocationMRE
+public import StatLean.PointEstimation.Equivariance.LocationStructure
+public import StatLean.PointEstimation.Equivariance.NoGroup
+public import StatLean.PointEstimation.Equivariance.Pitman
+public import StatLean.PointEstimation.Equivariance.RiskUnbiased
+public import StatLean.PointEstimation.Equivariance.ScaleMRE
+public import StatLean.PointEstimation.Equivariance.ScaleStructure
+public import StatLean.PointEstimation.LinearModel.Defs
+public import StatLean.PointEstimation.LinearModel.Canonical
+public import StatLean.PointEstimation.LinearModel.Equivariant
+public import StatLean.PointEstimation.LinearModel.GaussMarkov
+public import StatLean.PointEstimation.LinearModel.LeastSquares
+public import StatLean.PointEstimation.LinearModel.RandomDesign
+
+@[expose] public section

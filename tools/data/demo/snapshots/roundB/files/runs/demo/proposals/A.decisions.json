@@ -1,0 +1,11 @@
+{
+  "slug": "demo",
+  "round": "A",
+  "decisions": {
+    "a-lem-schur": {
+      "kind": "accept",
+      "note": "as the agent recommended: Schur's inequality is a standard tool that Mathlib lacks; building it once lets this paper and later ones use it instead of assuming it."
+    }
+  },
+  "decided_at": "2026-10-17T18:38:19.772Z"
+}

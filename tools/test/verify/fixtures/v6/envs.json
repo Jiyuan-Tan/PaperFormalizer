@@ -1,0 +1,60 @@
+{
+  "main_file": "main.tex",
+  "files": ["main.tex"],
+  "newtheorem": { "thm": "theorem", "lem": "lemma", "ass": "assumption" },
+  "envs": [
+    {
+      "id": "ass:overlap",
+      "kind": "assumption",
+      "envName": "ass",
+      "label": "ass:overlap",
+      "title": "Overlap",
+      "body": "There is c > 0 with c \\le e(X) \\le 1 - c almost surely.",
+      "proof": null,
+      "proofLines": null,
+      "section": "Setup",
+      "lines": { "file": "main.tex", "from": 5, "to": 7, "env": "ass", "label": "ass:overlap" },
+      "refs": []
+    },
+    {
+      "id": "thm:overlap",
+      "kind": "theorem",
+      "envName": "thm",
+      "label": "thm:overlap",
+      "title": "Overlap bound",
+      "body": "Under Assumption 1 the IPW estimator has variance at most C/(nc^2).",
+      "proof": "Apply the cited moment bound to the weighted average.",
+      "proofLines": { "file": "main.tex", "from": 15, "to": 18, "env": "proof", "label": null },
+      "section": "Results",
+      "lines": { "file": "main.tex", "from": 10, "to": 14, "env": "thm", "label": "thm:overlap" },
+      "refs": ["ass:overlap"]
+    },
+    {
+      "id": "lem:aux",
+      "kind": "lemma",
+      "envName": "lem",
+      "label": "lem:aux",
+      "title": null,
+      "body": "The weighted average is unbiased for the ATE.",
+      "proof": "Take conditional expectations and integrate.",
+      "proofLines": { "file": "main.tex", "from": 25, "to": 27, "env": "proof", "label": null },
+      "section": "Results",
+      "lines": { "file": "main.tex", "from": 20, "to": 24, "env": "lem", "label": "lem:aux" },
+      "refs": []
+    },
+    {
+      "id": "thm:main",
+      "kind": "theorem",
+      "envName": "thm",
+      "label": "thm:main",
+      "title": "Main theorem",
+      "body": "The ATE is identified by the IPW functional.",
+      "proof": "Immediate from the definition.",
+      "proofLines": { "file": "main.tex", "from": 37, "to": 39, "env": "proof", "label": null },
+      "section": "Results",
+      "lines": { "file": "main.tex", "from": 30, "to": 36, "env": "thm", "label": "thm:main" },
+      "refs": []
+    }
+  ],
+  "bibliography": [{ "key": "imbens2004", "text": "Imbens (2004). Nonparametric estimation of average treatment effects." }]
+}

@@ -1,0 +1,80 @@
+{
+  "lean_toolchain": "leanprover/lean4:v4.33.0",
+  "mathlib_rev": "db584cd6d46c92f209a44c0f1c829460d327499d",
+  "domains": [
+    {
+      "id": "causal",
+      "label": "Causal inference",
+      "libraries": [
+        "Causalean"
+      ]
+    },
+    {
+      "id": "statistics",
+      "label": "Statistics and probability",
+      "libraries": [
+        "Causalean",
+        "StatLean"
+      ]
+    },
+    {
+      "id": "learning",
+      "label": "Statistical learning theory",
+      "libraries": [
+        "FoML"
+      ]
+    },
+    {
+      "id": "optimization",
+      "label": "Optimization",
+      "libraries": [
+        "optlib"
+      ]
+    },
+    {
+      "id": "general",
+      "label": "General mathematics (Mathlib only)",
+      "libraries": []
+    }
+  ],
+  "libraries": {
+    "Causalean": {
+      "summary": "Causal inference and statistics foundations (identification, estimation, semiparametrics, concentration).",
+      "require": {
+        "git": "https://github.com/Jiyuan-Tan/CausalSmith",
+        "rev": "a7085d88d2e4b30003db7097ca374f4718da0f01"
+      },
+      "lib": "Causalean",
+      "provides": [
+        "FoML",
+        "optlib"
+      ],
+      "index": "doc/library_index.json",
+      "alias_file": "tools/data/aliases/causalean.json",
+      "prompt_notes": "tools/data/prompt_notes/causalean.md",
+      "fetch_cache": "scripts/fetch_build_cache.sh"
+    },
+    "StatLean": {
+      "summary": "Mathematical statistics: estimation, hypothesis testing, asymptotic statistics, nonparametrics, time series (adapted Stat-Lean).",
+      "require": {
+        "path": "third_party/StatLean"
+      },
+      "lib": "StatLean",
+      "fetch_cache": "port/build_cache.sh fetch"
+    },
+    "FoML": {
+      "summary": "Rademacher complexity, McDiarmid, symmetrization, Dudley's entropy integral (adapted lean-rademacher).",
+      "require": {
+        "path": "third_party/lean-rademacher"
+      },
+      "lib": "FoML"
+    },
+    "optlib": {
+      "summary": "First-order KKT conditions under LICQ / affine constraint qualification and Farkas' lemma (adapted optlib, KKT closure only).",
+      "require": {
+        "path": "third_party/optlib"
+      },
+      "lib": "Optlib"
+    }
+  }
+}

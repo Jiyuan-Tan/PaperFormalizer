@@ -1,0 +1,14 @@
+{
+  "b-thm-cubic": {
+    "kind": "accept",
+    "why": "New to your toolkit and a natural companion of Schur's inequality, which round A added.",
+    "of": "f7c1cac35a4ccb5b",
+    "at": "2026-10-17T18:38:24.753Z"
+  },
+  "b-thm-amgm": {
+    "kind": "decline",
+    "why": "Mathlib already proves the weighted AM-GM inequality, which gives this one with weights $1/2$; a second copy adds nothing.",
+    "of": "424d7887e5bffa54",
+    "at": "2026-10-17T18:38:24.851Z"
+  }
+}

@@ -1,0 +1,229 @@
+{
+  "schema": 1,
+  "run": {
+    "qid": "demo",
+    "main_file": "main.tex",
+    "source_sha256": "943d23dc47c7585bada40a17d1f9f182973b8074b343002c8aa72696acf9a8b8",
+    "stage_completed": "5",
+    "early_stop": false
+  },
+  "verdict": "repaired",
+  "paper_grade": {
+    "grade": "major",
+    "major": [
+      {
+        "node": "thm:amgm",
+        "what": "weakened: the inequality is no longer claimed when $a$ or $b$ is negative"
+      }
+    ],
+    "minor": []
+  },
+  "summary": {
+    "verified": 3,
+    "verified_with_bookkeeping": 0,
+    "conditional": 0,
+    "repaired": 1,
+    "unresolved": 0,
+    "not_checked": 0,
+    "not_determined": 0,
+    "refuted": 0
+  },
+  "results": [
+    {
+      "env_id": "lem:schur",
+      "label": "lem:schur",
+      "kind": "lemma",
+      "title": "Schur's inequality {\\cite[Theorem~1]{hlp}}",
+      "locator": "main.tex:22-27",
+      "node_id": "lem:schur",
+      "statement": "\\label{lem:schur} For all real numbers $a, b, c \\ge 0$, \\[ a(a-b)(a-c) + b(b-a)(b-c) + c(c-a)(c-b) \\ge 0 . \\]",
+      "appended_hypotheses": null,
+      "bucket": "unresolved",
+      "lean": null,
+      "crosswalk_verdict": null,
+      "bookkeeping": [],
+      "change": null,
+      "cited_hypotheses": [
+        {
+          "id": "lem:schur",
+          "cite": "hlp",
+          "locator": "Theorem 1",
+          "source_check": null
+        }
+      ],
+      "assumed_substrate": [],
+      "added_premises": [],
+      "findings": [],
+      "axioms": null,
+      "v1_5": {
+        "faithfulness": "ok",
+        "ambiguity": "ok",
+        "correctness": "ok",
+        "detail": "dry run: synthetic grade, no referee was called"
+      },
+      "inherits_refutation_from": []
+    },
+    {
+      "env_id": "lem:sq",
+      "label": "lem:sq",
+      "kind": "lemma",
+      "title": null,
+      "locator": "main.tex:29-31",
+      "node_id": "lem:sq",
+      "statement": "\\label{lem:sq} For all real numbers $x$ and $y$, $x^2 + y^2 \\ge 2xy$.",
+      "appended_hypotheses": null,
+      "bucket": "unresolved",
+      "lean": null,
+      "crosswalk_verdict": null,
+      "bookkeeping": [],
+      "change": null,
+      "cited_hypotheses": [],
+      "assumed_substrate": [],
+      "added_premises": [],
+      "findings": [],
+      "axioms": null,
+      "v1_5": {
+        "faithfulness": "ok",
+        "ambiguity": "ok",
+        "correctness": "ok",
+        "detail": "dry run: synthetic grade, no referee was called"
+      },
+      "inherits_refutation_from": []
+    },
+    {
+      "env_id": "thm:amgm",
+      "label": "thm:amgm",
+      "kind": "theorem",
+      "title": null,
+      "locator": "main.tex:39-44",
+      "node_id": "thm:amgm",
+      "statement": "\\label{thm:amgm} For all real numbers $a$ and $b$, \\[ \\frac{a + b}{2} \\ge \\sqrt{ab} . \\]",
+      "appended_hypotheses": null,
+      "bucket": "refuted",
+      "lean": null,
+      "crosswalk_verdict": null,
+      "bookkeeping": [],
+      "change": {
+        "printed": "\\label{thm:amgm} For all real numbers $a$ and $b$, \\[ \\frac{a + b}{2} \\ge \\sqrt{ab} . \\]",
+        "corrected": "For all real numbers $a, b \\ge 0$, \\[ \\frac{a + b}{2} \\ge \\sqrt{ab} . \\]",
+        "referee_conditions": [],
+        "dropped_dependencies": [],
+        "proof_change": "Apply Lemma~\\ref{lem:sq} to $x = \\sqrt{a}$ and $y = \\sqrt{b}$, real numbers since $a, b \\ge 0$: then $x^2 = a$, $y^2 = b$ and $xy = \\sqrt{ab}$, so $a + b \\ge 2\\sqrt{ab}$.",
+        "descoped": false
+      },
+      "cited_hypotheses": [],
+      "assumed_substrate": [],
+      "added_premises": [],
+      "findings": [
+        {
+          "node": "thm:amgm",
+          "stage": "V1.5",
+          "kind": "refuted",
+          "detail": "False for negative numbers: for $a=b=-1$ the left side is $-1$ while the right side is $\\sqrt{1}=1$. The proof takes $\\sqrt{a}$ and $\\sqrt{b}$, which are real numbers only when $a,b\\ge 0$.",
+          "witness": "$a=b=-1$: $\\frac{a+b}{2}=-1<1=\\sqrt{ab}$.",
+          "suggested_repair": "For all real numbers $a, b \\ge 0$, \\[ \\frac{a + b}{2} \\ge \\sqrt{ab} . \\]",
+          "at": "2026-10-17T12:00:00.000Z"
+        }
+      ],
+      "axioms": null,
+      "v1_5": {
+        "faithfulness": "ok",
+        "ambiguity": "ok",
+        "correctness": "ok",
+        "detail": "dry run: synthetic grade, no referee was called"
+      },
+      "inherits_refutation_from": []
+    },
+    {
+      "env_id": "thm:cubic",
+      "label": "thm:cubic",
+      "kind": "theorem",
+      "title": null,
+      "locator": "main.tex:51-56",
+      "node_id": "thm:cubic",
+      "statement": "\\label{thm:cubic} For all real numbers $a, b, c \\ge 0$, \\[ (a + b + c)^3 + 9abc \\ge 4(a + b + c)(ab + bc + ca) . \\]",
+      "appended_hypotheses": null,
+      "bucket": "unresolved",
+      "lean": null,
+      "crosswalk_verdict": null,
+      "bookkeeping": [],
+      "change": null,
+      "cited_hypotheses": [
+        {
+          "id": "lem:schur",
+          "cite": "hlp",
+          "locator": "Theorem 1",
+          "source_check": null
+        }
+      ],
+      "assumed_substrate": [],
+      "added_premises": [],
+      "findings": [],
+      "axioms": null,
+      "v1_5": {
+        "faithfulness": "ok",
+        "ambiguity": "ok",
+        "correctness": "ok",
+        "detail": "dry run: synthetic grade, no referee was called"
+      },
+      "inherits_refutation_from": []
+    }
+  ],
+  "run_level_findings": [],
+  "patch_review": null,
+  "unclear_notes": [],
+  "symbol_readings": [],
+  "v1_warnings": {
+    "lint": [],
+    "parser": []
+  },
+  "lean_build": null,
+  "sorry_scan": null,
+  "flags": {},
+  "inputs": {
+    "v1_5_review": "present (verdict PASS)",
+    "crosswalk_full": "absent: dry run (the F stages wrote nothing)",
+    "graph_json": "absent: dry run (the F stages wrote nothing)",
+    "v1_scope": "present (4 environment(s))",
+    "lean_evidence": "not collected: --dry-run"
+  },
+  "disclaimer": "This is a conditional report. A `verified` result is verified only up to the cited results it assumes, the substrate gates left assumed, and the conditions added during formalization — all listed in full below. `unresolved` means the formalization did not close; it is NOT a claim that the result is wrong. A `refuted` row is a result shown false by a positive witness with no confirmed repair; a `repaired` row was false as printed, and an independent referee confirmed its minimal repair. A `not_determined` row could not be checked as printed: the paper does not say enough to determine the claim, and no reading or repair was adopted; it is NOT a claim that the result is wrong.",
+  "annotated": {
+    "tex": "annotated/main.tex",
+    "pdf": "annotated/main.pdf",
+    "index": "annotated/ANNOTATIONS.md",
+    "annotations": 1,
+    "unlocated": 0,
+    "compile": {
+      "status": "passed",
+      "tool": "pdflatex",
+      "reason": ""
+    }
+  },
+  "names": {
+    "lem:schur": "Lemma 1",
+    "lem:sq": "Lemma 2",
+    "thm:amgm": "Theorem 3",
+    "thm:cubic": "Theorem 4"
+  },
+  "bundle": {
+    "dir": "bundle",
+    "paper": {
+      "dir": "corrected_paper",
+      "main": "main.tex",
+      "pdf": "main.pdf",
+      "pages": 2,
+      "compile": {
+        "status": "passed",
+        "tool": "pdflatex",
+        "reason": ""
+      }
+    },
+    "todo": {
+      "total": 1,
+      "blocking": 1
+    },
+    "lean": null,
+    "page": "page/page.json"
+  }
+}

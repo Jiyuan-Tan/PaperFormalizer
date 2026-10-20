@@ -1,0 +1,93 @@
+%% Fixture for test/verify/inline_citations.test.ts — NOT a compilable paper.
+%% A synthetic paper written for these tests (an empirical risk minimizer and a U-statistic CLT), laid out
+%% as a real run's source is: whole paragraphs, the citations a proof invokes with and without a
+%% locator. A `%%% <env id> <kind> <body|proof> — <file>:<lines>` line opens the body or the proof of
+%% one environment (the text between its \begin and \end; lem:emp-pop-rad WITH them, for its title); a
+%% `%% [lines a-b omitted]` line marks a cut. The test drops every `%%` line.
+%%% thm:excess_risk theorem body — learning.tex:80-89
+\label{thm:excess_risk}
+Let $W_1, \dots, W_n \sim Q$ be i.i.d., and let $\hat{h}$ be an estimate of the nuisance $h_0$ fitted on an independent sample. Let $\mathcal{F} \subset L^\infty(Q)$ be a class of functions bounded by one, and suppose Assumption~\ref{ass:bounded_loss} holds. Let $\hat{f} := \arg\min_{f \in \mathcal{F}}\frac{1}{n}\sum_{i = 1}^n \ell(W_i; f, \hat{h})$ be the empirical risk minimizer, let $\delta_n^\ast$ be the critical radius of the localized complexity of $\mathcal{F} - f_0$, and let $\delta_n \gtrsim \sqrt{\log n/n} \lor \delta_n^\ast$.
+Then
+\[
+\|\hat f - f_0\|_{L^2(Q)}^2 = O_P(\delta_n^2) + O_P\left(\|\hat h - h_0\|^4\right).
+\]
+In particular, if $\|\hat h - h_0\| = o_P(\delta_n^{1/2})$, then
+$\|\hat f - f_0\|_{L^2(Q)}^2 = O_P(\delta_n^2)$.
+
+%%% thm:excess_risk theorem proof — appendix/learning.tex:816-1003
+Throughout, write $Q_n$ for the empirical measure of $W_1, \dots, W_n$ and $Qg$ for $\int g \, dQ$.
+Put the excess loss at $\hat h$ as
+\[
+D(W; f) := \ell(W; f, \hat h) - \ell(W; f_0, \hat h),
+\qquad
+B := Q D(\cdot\,; \hat f).
+\]
+As $\hat f$ minimizes the empirical risk, $Q_n D(\cdot\,; \hat f) \le 0$, and therefore
+\begin{equation}\label{eq:B-basic}
+B \le (Q - Q_n) D(\cdot\,; \hat f).
+\end{equation}
+%% [lines 828-896 omitted]
+For a class $\mathcal G$ of measurable functions of $W$, the standard symmetrization argument \citep{wainwright2019high} gives
+\[
+\mathbb{E}\Big[\sup_{g \in \mathcal G}\big|(Q - Q_n) g\big|\Big]
+\le
+2\, \mathbb{E}\Big[\sup_{g \in \mathcal G}\Big|\frac1n\sum_{i = 1}^n \varepsilon_i g(W_i)\Big|\Big].
+\]
+%% [lines 904-989 omitted]
+
+
+Under the boundedness of Assumption~\ref{ass:bounded_loss}, every function of the class
+$\{D(\cdot\,; f) : \|f - f_0\| \le \delta\}$ is bounded by a multiple of $\delta$
+and has variance at most a multiple of $\delta^2$ (Lemma~\ref{lem:var-bound}).
+Hence a standard concentration inequality (Theorem 3.27 \citet{wainwright2019high}) for suprema of bounded empirical processes gives: for every $t \in (0,1)$,
+with probability at least $1 - t$,
+\begin{equation}
+\label{eq:local-dev}
+\sup_{\|f - f_0\| \le \delta}\Big|(Q - Q_n) D(\cdot\,; f)\Big|
+ \lesssim
+\mathcal{C}_n(\delta) + \delta\sqrt{\frac{\log(1/t)}{n}} + \frac{\log(1/t)}{n},
+\qquad \forall \delta \ge 0.
+\end{equation}
+%%% lem:emp-pop-rad lemma body — appendix/learning.tex:761-769
+\begin{lemma}[Theorem A.4 in \citet{bartlett2005local}]\label{lem:emp-pop-rad}
+Assume the class is bounded by one. Then for every $t \in (0,1)$, with probability at least $1 - t$,
+\[
+\mathcal{C}_n(\delta)
+ \lesssim
+\hat{\mathcal{C}}_n(\delta) + \delta\sqrt{\frac{\log(1/t)}{n}} + \frac{\log(1/t)}{n}
+\qquad \forall \delta \ge 0.
+\]
+\end{lemma}
+%%% thm:smooth_clt theorem body — appendix/ustat.tex:7-50
+\label{thm:smooth_clt}
+Let $k \ge 1$ and, for each $s > 0$, let $\kappa_s(w_1, \dots, w_k; h)$ be a kernel that is symmetric in $w_1, \dots, w_k$ and depends on a nuisance function $h$. Put $\vartheta_s := \mathbb{E}\left[\kappa_s(W_1, \dots, W_k; h_s)\right]$ for i.i.d.\ $W_1, \dots, W_k \sim Q$ and a nuisance $h_s \in L^2(Q)$.
+%% [lines 9-41 omitted]
+Then, with $\vartheta_0 := \mathbb{E}\left[\kappa_0(W_1, \dots, W_k; h_0)\right]$,
+\[
+\sqrt{n}(\hat{\vartheta}_n - \vartheta_{s_n}) = \frac{1}{\sqrt{n}}\sum_{i = 1}^n \psi(W_i) + o_P(1),
+\]
+where $\psi(w) := k\left\{\mathbb{E}[\kappa_0(W_1, \dots, W_k; h_0) \mid W_1 = w] - \vartheta_0\right\}$. Consequently
+\[
+\sqrt{n}(\hat{\vartheta}_n - \vartheta_{s_n}) \Rightarrow \mathcal{N}(0, \sigma^2)
+\]
+whenever $\sigma^2 := k^2 \operatorname{Var}[\psi(W)]$ is positive.
+%%% thm:smooth_clt theorem proof — appendix/ustat.tex:77-98
+hence $\sqrt{n}\, R_3 = o_P(1)$. It remains to treat $R_2$.
+Split $R_2$ as
+\[
+R_2 = \mathbb{U}_{n} \kappa_0(W_{1}, \dots, W_{k}; h_0) + \underbrace{\left\{\mathbb{U}_{n} \kappa_s(W_{1}, \dots, W_{k}; h_s) - \mathbb{U}_{n} \kappa_0(W_{1}, \dots, W_{k}; h_0)\right\}}_{R_2'}.
+\]
+The first term is a U-statistic with a fixed kernel, so Theorems 11.2 and 12.3 from \citet{van2000asymptotic} imply that
+\begin{align*}
+\mathbb{U}_{n} \kappa_0(W_1, \dots, W_k; h_0) &= \frac{1}{\sqrt{n}}\sum_{i = 1}^n \psi(W_i) + o_P(1),
+\end{align*}
+with $\psi$ as in the statement. It therefore suffices to show that $R_2' = o_P(1)$, which we do through its second moment and Chebyshev's inequality. We have
+\begin{align*}
+&\mathbb{E}\left[\left(\mathbb{U}_{n}\left\{ \kappa_s(W_1, \dots, W_k; h_s) - \kappa_0(W_{1}, \dots, W_{k}; h_0)\right\}\right)^2\right] \\
+&\qquad = n\binom{n}{k}^{-2}\sum_{c = 0}^k\binom{n}{k}\binom{k}{c}\binom{n - k}{k - c}\gamma_c
+\end{align*}
+where the last equality follows from an analogous argument to the one used in the proof of Theorem 12.3 in \citet{van2000asymptotic}, with $W_1', \dots, W_k'$ an independent copy of $W_1, \dots, W_k$ and
+\begin{align*}
+\gamma_c &:= \operatorname{Cov}\Big(\kappa_s(W_1, \dots, W_k; h_s) - \kappa_0(W_1, \dots, W_k; h_0), \kappa_s(W_1, \dots, W_c, W_{c + 1}', \dots, W_k'; h_s) \\
+&\qquad - \kappa_0(W_1, \dots, W_c, W_{c + 1}', \dots, W_k'; h_0)\Big).
+\end{align*}

@@ -1,0 +1,65 @@
+{
+ "_source": "cut from runs/cns_simple_dml (discovery/envs.json bodies, discovery/patches.json conditions and ops), 2026-09-26",
+ "bodies": {
+  "prop:resid2": "\\label{prop:resid2}\nSuppose Assumption~\\ref{assumption:cont} holds and\n$$\nE[\\{Y-\\gamma_0(W)\\} \\mid W ]^2\\leq \\bar{\\sigma}^2,\\quad \\|\\hat{\\alpha}_{\\ell}\\|_{\\infty}\\leq\\bar{\\alpha}'.\n$$\nThen with probability $1-\\epsilon'/(2L)$,\n\\begin{align*}\n    \\Delta_{4\\ell}&\\leq t_4=\\frac{6L}{\\epsilon'}\\bar{Q}\\mathcal{R}(\\hat{\\gamma}_{\\ell})^q; \\\\\n     \\Delta_{5\\ell}&\\leq t_5=\\frac{6L}{\\epsilon'}(\\bar{\\alpha}')^2\\mathcal{R}(\\hat{\\gamma}_{\\ell}); \\\\\n     \\Delta_{6\\ell}&\\leq t_6=\\frac{6L}{\\epsilon'}\\bar{\\sigma}^2\\mathcal{R}(\\hat{\\alpha}_{\\ell}). \n\\end{align*}",
+  "thm:dml": "\\label{thm:dml}Suppose Assumption~\\ref{assumption:cont} holds,\n$\nE[\\{Y-\\gamma_0(W)\\}^2 \\mid W]\\leq \\bar{\\sigma}^2,$\nand\n$\\|\\alpha^{\\min}_0\\|_{\\infty}\\leq\\bar{\\alpha}.\n$\nThen with probability $1-\\epsilon$,\n$$\n\\sup_{z\\in\\mathbb{R}} \\left| \\text{\\normalfont pr} \\left\\{\\frac{n^{1/2}}{\\sigma}(\\hat{\\theta}-\\theta_0)\\leq z\\right\\}-\\Phi(z)\\right|\\leq c^{BE}\\left(\\frac{\\kappa}{\\sigma}\\right)^3 n^{-1/2}+\\frac{\\Delta}{(2\\pi)^{1/2}}+\\epsilon,\n$$\nwhere $\\Phi(z)$ is the standard Gaussian cumulative distribution function and\n$$\n\\Delta=\\frac{3 L}{\\epsilon   \\sigma}\\left[(\\bar{Q}^{1/2}+\\bar{\\alpha})\\{\\mathcal{R}(\\hat{\\gamma}_{\\ell})\\}^{q/2}+\\bar{\\sigma}\\{\\mathcal{R}(\\hat{\\alpha}_{\\ell})\\}^{1/2}+\\{n \\mathcal{R}(\\hat{\\gamma}_{\\ell}) \\mathcal{R}(\\hat{\\alpha}_{\\ell}) \\}^{1/2}\\right].\n$$\nIf in addition $\\|\\hat{\\alpha}_{\\ell}\\|_{\\infty}\\leq\\bar{\\alpha}'$ then the same result holds updating $\\Delta$ to be\n$$\n\\frac{4 L}{\\epsilon^{1/2}  \\sigma}\\left[(\\bar{Q}^{1/2}+\\bar{\\alpha}+\\bar{\\alpha}')\\{\\mathcal{R}(\\hat{\\gamma}_{\\ell})\\}^{q/2}\n    +\\bar{\\sigma}\\{\\mathcal{R}(\\hat{\\alpha}_{\\ell})\\}^{1/2}\\right]+\\frac{1}{\\sigma}[\\{n\\mathcal{P}(\\hat{\\gamma}_{\\ell})\\mathcal{R}(\\hat{\\alpha}_{\\ell})\\}^{1/2} \\wedge \\{n\\mathcal{R}(\\hat{\\gamma}_{\\ell})\\mathcal{P}(\\hat{\\alpha}_{\\ell})\\}^{1/2}].\n$$\nFor local functionals, further suppose approximation error of size $\\Delta_h=\nn^{1/2} \\sigma_h^{-1}|\\theta_0^h-\\theta_0^{\\lim}|$. Then the same result holds replacing $(\\hat{\\theta},\\theta_0,\\Delta)$ with $(\\hat{\\theta}^h,\\theta_0^{\\lim},\\Delta+\\Delta_h)$.",
+  "thm:var": "\\label{thm:var}\nSuppose Assumption~\\ref{assumption:cont} holds, $\nE[\\{Y-\\gamma_0(W)\\}^2 \\mid W]\\leq \\bar{\\sigma}^2,$ and $\\|\\hat{\\alpha}_{\\ell}\\|_{\\infty}\\leq\\bar{\\alpha}'.\n$\nThen with probability $1-\\epsilon'$,\n$\n|\\hat{\\sigma}^2-\\sigma^2|\\leq \\Delta'+2(\\Delta')^{1/2}\\{(\\Delta'')^{1/2}+\\sigma\\}+\\Delta'',\n$ where\n$$\n \\Delta'=4(\\hat{\\theta}-\\theta_0)^2+\\frac{24 L}{\\epsilon'}\\left[\\{\\bar{Q}+(\\bar{\\alpha}')^2\\}\\mathcal{R}(\\hat{\\gamma}_{\\ell})^q+\\bar{\\sigma}^2\\mathcal{R}(\\hat{\\alpha}_{\\ell})\\right],\\quad \n    \\Delta''=\\left(\\frac{2}{\\epsilon'}\\right)^{1/2}\\zeta^2 n^{-1/2}.\n$$",
+  "prop:Delta2": "\\label{prop:Delta2}\nSuppose the conditions of Proposition~\\ref{prop:resid2} hold. Then with probability $1-\\epsilon'/2$\n$$\nE_n[\\{\\hat{\\psi}(W)-\\psi_0(W)\\}^2]\\leq \\Delta'=4(\\hat{\\theta}-\\theta_0)^2+\\frac{24 L}{\\epsilon'}\\left[\\{\\bar{Q}+(\\bar{\\alpha}')^2\\}\\mathcal{R}(\\hat{\\gamma}_{\\ell})^q+\\bar{\\sigma}^2\\mathcal{R}(\\hat{\\alpha}_{\\ell})\\right].\n$$",
+  "lemma:cont_local": "\\label{lemma:cont_local}\nSuppose $\\alpha_0^{\\min}$ exists and $\\Gamma\\subset \\mathbb{L}_2$. Further suppose there exist $(\\tilde{f}, \\bar f, \\bar f', h_0)$ bounded away from zero and above such that the following conditions hold.\n\\begin{enumerate}\n  \\item Valid neighborhood. There exists $N_{h_0}(v)=(v':|v'-v|\\leq h)\\subset \\mathcal{V}$.\n    \\item Bounded density. The density $f_V$ obeys, for all $v'$ in $N_{h_0}(v)$,\n    $$\n  0< \\tilde{f} \\leq f_V(v') \\leq \\bar f,\\quad |\\partial f_V(v')| \\leq \\bar f'.\n    $$\n    \\item The conditions of Lemma~\\ref{lemma:cont} hold.\n\\end{enumerate}\nThen the finite sample bound in the proof holds for Examples~\\ref{ex:CATE} and~\\ref{ex:RDD}. In summary,\n$$\n\\bar{Q}_h\\lesssim h^{-2} \\rightarrow \\infty.\n$$",
+  "thm:local": "\\label{thm:local}\nIf noise has finite variance then $\\bar{\\sigma}^2<\\infty$. Suppose bounded moment and heteroscedasticity conditions defined in Supplement~2 hold. Then for global functionals\n$\n\\kappa/\\sigma \\lesssim \\sigma \\asymp \\bar{M} < \\infty$; $\\kappa, \\zeta\\lesssim \\bar{M}^2\\leq \\bar{Q}<\\infty$; and $\\bar{\\alpha}<\\infty.$\nSuppose bounded moment, heteroscedasticity, density, and derivative conditions defined in Supplement~2 hold. Then for local functionals\n$\n\\kappa_h/\\sigma_h \\lesssim h^{-1/6}$, $\\sigma_h \\asymp \\bar{M}_h \\asymp h^{-1/2} $, $\\kappa_h\\lesssim h^{-2/3}$, $\\zeta_h\\lesssim h^{-3/4}$, \n$\n\\bar{Q}_h\\lesssim h^{-2}$, $\\bar{\\alpha}_h\\lesssim h^{-1}$, and $\\Delta_h \\lesssim n^{1/2} h^{\\mathsf{v}+1/2}\n$\nwhere $\\mathsf{v}$ is the order of differentiability defined in Supplement~2.",
+  "lemma:RR_exists": "\\label{lemma:RR_exists}\nIn Examples~\\ref{ex:CATE},~\\ref{ex:RDD},~\\ref{ex:elasticity}, and~\\ref{ex:deriv}, the minimal representer $\\alpha_0^{\\min}(w)$ can be obtained by projecting the following Riesz representer $\\alpha_0(w)$ onto $\\Gamma$.\n\\begin{enumerate}\n    \\item Example~\\ref{ex:CATE}. Denote the propensity score $\\pi_0(v,x)=\\text{\\normalfont pr}(D=1\\mid V=v,X=x)$. Then\n    $$\n    \\alpha_0(d,v,x)=\\ell_h(v)\\left\\{\\frac{d}{\\pi_0(v,x)}-\\frac{1-d}{1-\\pi_0(v,x)}\\right\\}.\n    $$\n    Hence the minimal Riesz representer $\\alpha^{\\min}_0$ exists if $\\pi_0(v,x)$ is bounded away from zero and one.\n    \\item Example~\\ref{ex:RDD}. Denote the Riesz representer for the first term by $\\alpha_0^{+}$ and the Riesz representer for the second term by $\\alpha_0^{-}$. Then\n    $$\n    \\alpha^+_0(d,x)=\\ell_h^{+}(d),\n    \\quad \n     \\alpha^-_0(d,x)=\\ell_h^{-}(d).\n    $$\n    Hence the minimal Riesz representer $\\alpha^{\\min}_0$ exists.\n    \\item Example~\\ref{ex:elasticity}. Denote the density $f(d,x)$. If $f(d\\mid x)$ vanishes for each $d$ in the boundary of the support of $D$ given $X=x$ almost everywhere then\n    $$\n    \\eta_0(d,x)\n    =-\\partial_d \\log f(d \\mid x).$$ Hence the minimal representer $\\eta_0^{\\min}$ exists if $-\\partial_d \\log f(d \\mid x)$ is bounded above. Subsequently, $\\alpha_0^{\\min}$ is the solution $\\alpha$ to\n    $$\n    \\eta_0^{\\min}(d,x)=E\\{\\alpha(X,Z) \\mid D=d,X=x\\}.\n    $$\n    \\item Example~\\ref{ex:deriv}. Denote the density $f(d,v,x)$. If $f(d\\mid v,x)$ vanishes for each $d$ in the boundary of the support of $D$ given $(V,X)=(v,x)$ almost everywhere then\n    $$\n    \\alpha_0(d,v,x)\n    =-\\ell_h(v)\\partial_d \\log f(d \\mid v,x).$$\n\\end{enumerate}",
+  "lemma:approx": "\\label{lemma:approx}\nSuppose there exist constants $(h_0,K, \\mathsf{v}, \\bar g_{\\mathsf{v}}$,  $\\bar f_{\\mathsf{v}}$, $\\tilde{f}, \\bar{g})$ bounded away from zero and above such that the following conditions hold.\n\\begin{enumerate}\n  \\item Valid neighborhood. There exists $N_{h_0}(v)=(v':|v'-v|\\leq h)\\subset \\mathcal{V}$.\n    \\item Differentiability. On $N_{h_0}(v)$, $m(v')$ and $f_V(v')$ are differentiable to the integer order $\\mathsf{sm}$.\n    \\item Bounded derivatives. Let $\\mathsf{v}= \\mathsf{sm} \\wedge \\mathsf{o}$ where $\\mathsf{o}$ is the order of the kernel $K$. Let $\\partial^\\mathsf{v}_d$ denote the $\\mathsf{v}$ order derivative $\\partial^{\\mathsf{v}}/(\\partial d)^{\\mathsf{v}}$. Assume\n    $$\n\\sup_{ v' \\in N_{h_0}(v)}  \\| \\partial^{\\mathsf{v}}_v (m(v') f_V(v')) \\|_{op} \\leq \\bar g_{\\mathsf{v}}, \\quad \\sup_{ v' \\in N_{h_0}(v) } \\|\\partial^{\\mathsf{v}}_v f_V(v')  \\|_{op} \\leq \\bar f_{\\mathsf{v}},\n \\quad  \\inf_{ v' \\in N_{h_0}(v) } f_V(v') \\geq \\tilde{f}.\n$$ \n\\item Bounded conditional formula.\n$\nm(v)f_V(v)\\leq \\bar{g}.\n$\n\\end{enumerate}\nThen there exist constants $(C,h_1)$ depending only on $(h_0,K, \\mathsf{v}, \\bar g_{\\mathsf{v}}$,  $\\bar f_{\\mathsf{v}}$, $\\tilde{f}, \\bar{g})$ such that for all $h_1$ in $(h,h_0)$, $|\\theta_0^h-\\theta_0^{\\lim}|\\leq C h^\\mathsf{v}.$\nIn summary,\n$$\n\\Delta_h \\lesssim n^{1/2} h^{\\mathsf{v}+1/2}.\n$$"
+ },
+ "titles": {
+  "prop:resid2": "Residuals",
+  "thm:dml": "Finite sample Gaussian approximation",
+  "thm:var": "Variance estimation",
+  "prop:Delta2": "Oracle approximation",
+  "lemma:cont_local": "Mean square continuity for local functionals",
+  "thm:local": "Characterization of key quantities",
+  "lemma:RR_exists": null
+ },
+ "hyps": {
+  "ass:patch-fitted-errors-in-gamma": "For every fold $\\ell$, $\\hat\\gamma_\\ell-\\gamma_0\\in\\Gamma$ almost surely.",
+  "ass:patch-resid2-conditional-second-moment": "$E[\\{Y-\\gamma_0(W)\\}^2\\mid W]\\leq\\bar\\sigma^2$ almost surely.",
+  "ass:patch-local-normalizer": "For the bandwidths in the lemma, each applicable normalizer $\\omega_h=E[h^{-1}K((V-v)/h)]$ satisfies $\\inf_{0<h<h_0}|\\omega_h|>0$.",
+  "ass:patch-deriv-score-absolute-local": "$\\|\\partial_d\\log f(D\\mid V,X)\\|_\\infty\\leq\\check\\alpha<\\infty$.",
+  "ass:patch-deriv-weighted-score-l2": "$E[\\ell_h(V)^2\\{\\partial_d\\log f(D\\mid V,X)\\}^2]<\\infty$."
+ },
+ "global_ops": [
+  {
+   "op": "replace_conclusion",
+   "env": "thm:local",
+   "tex": "Then for global functionals $\\sigma<\\infty$, $\\kappa<\\infty$, $\\zeta<\\infty$, and $\\bar M^2\\leq\\bar Q<\\infty$."
+  },
+  {
+   "op": "narrow",
+   "env": "thm:local",
+   "gives_up": "Comparability with $\\bar M$, the ratio $\\kappa/\\sigma$ without $\\sigma>0$, and the asserted finite $\\bar\\alpha$."
+  }
+ ],
+ "global_proof_note": "Put $A=\\|\\alpha_0^{\\min}\\|_2$ and write $\\psi_0=U_1+\\alpha_0^{\\min}U_2$. By the conditional second-moment bound, $\\|\\alpha_0^{\\min}U_2\\|_2\\leq\\bar c A$, while $\\|U_1\\|_2\\leq\\bar c$; hence Minkowski gives $\\sigma\\leq\\bar c(1+A)<\\infty$. For $r=3,4$, conditional expectation and Minkowski give $\\|\\psi_0\\|_r\\leq\\|U_1\\|_r+\\bar c\\|\\alpha_0^{\\min}\\|_r\\leq\\bar c\\{1+c(A^2\\vee1)\\}<\\infty$, proving finiteness of $\\kappa$ and $\\zeta$. Assumption~\\ref{assumption:cont}, applied to unit-norm directions and their scalar multiples, gives $\\bar M^2\\leq\\bar Q$ for a nonzero linear functional; the zero functional satisfies the same inequality.",
+ "global_given_up": "Comparability with $\\bar M$, the ratio $\\kappa/\\sigma$ without $\\sigma>0$, and the asserted finite $\\bar\\alpha$.",
+ "approx_ops": [
+  {
+   "op": "replace",
+   "unit": "lemma:approx/1/1",
+   "tex": "Suppose there exist constants $(h_0,K,\\mathsf v,\\bar g_{\\mathsf v},\\bar f_{\\mathsf v},\\tilde f,\\bar g)$ bounded away from zero and above such that the following conditions hold."
+  },
+  {
+   "op": "replace",
+   "unit": "lemma:approx/1/2",
+   "tex": "Valid neighborhood. There exists $N_{h_0}(v)=\\{v':|v'-v|\\leq h_0\\}\\subset\\mathcal V$."
+  },
+  {
+   "op": "replace",
+   "unit": "lemma:approx/1/4",
+   "tex": "Bounded derivatives. Let $\\mathsf v=\\mathsf{sm}\\wedge\\mathsf o$, where $\\mathsf o$ is the order of the kernel $K$. Let $\\partial_d^{\\mathsf v}$ denote the $\\mathsf v$ order derivative $\\partial^{\\mathsf v}/(\\partial d)^{\\mathsf v}$. Assume\n$$\\sup_{v'\\in N_{h_0}(v)}\\|\\partial_v^{\\mathsf v}(m(v')f_V(v'))\\|_{op}\\leq\\bar g_{\\mathsf v},\\quad\\sup_{v'\\in N_{h_0}(v)}\\|\\partial_v^{\\mathsf v}f_V(v')\\|_{op}\\leq\\bar f_{\\mathsf v},\\quad\\inf_{v'\\in N_{h_0}(v)}f_V(v')\\geq\\tilde f.$$"
+  },
+  {
+   "op": "replace",
+   "unit": "lemma:approx/1/5",
+   "tex": "Bounded conditional formula. $m(v)f_V(v)\\leq\\bar g$."
+  }
+ ]
+}

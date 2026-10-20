@@ -1,0 +1,45 @@
+<!doctype html>
+<!-- The page of a shared paper, drawn read-only from its bundle's page/page.json by app.js (snapshot
+     mode). The registry's site build fills the fields in double braces; tools/scripts/sync_viewer.mjs copies
+     this file beside app.js. The elements of the live page's header that app.js wires are kept,
+     hidden. No inline script: the page's CSP allows scripts of the site only. -->
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta http-equiv="Content-Security-Policy" content="{{CSP}}">
+<meta name="referrer" content="no-referrer">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>{{TITLE}}</title>
+<link rel="stylesheet" href="{{VIEWER}}katex/katex.min.css">
+<link rel="stylesheet" href="{{VIEWER}}app.css">
+</head>
+<body class="snapshot">
+<header class="topbar">
+  <div class="topbar-in">
+    <a class="brand" href="{{HOME}}"><span class="brand-mark">⊢</span><span class="txt">TheoremChecker</span></a>
+    <nav class="nav" aria-label="Pages">
+      <a href="{{HOME}}">Checked papers</a>
+      <a href="#/" data-nav="paper" id="nav-paper" hidden></a>
+    </nav>
+    <span class="grow"></span>
+    <span class="conn" id="conn" hidden></span>
+    <button class="linkbtn" id="notify-btn" type="button" hidden></button>
+    <div class="inbox-wrap" hidden>
+      <button class="inbox-btn" id="inbox-btn" type="button" aria-expanded="false"><span class="count" id="inbox-count">0</span></button>
+      <div class="inbox-pop" id="inbox-pop" hidden><div id="inbox-list"></div></div>
+    </div>
+  </div>
+</header>
+<main id="app" aria-live="polite">{{FALLBACK}}</main>
+<aside class="drawer" id="drawer" aria-hidden="true" aria-label="Result details">
+  <div class="dhead"><button class="x" id="drawer-x" type="button" aria-label="Close">✕</button><span class="pill b-neutral" id="d-kind"></span><span class="dtitle" id="d-title"></span><span class="dsub" id="d-sub"></span></div>
+  <div class="dbody" id="d-body"></div>
+</aside>
+<div class="modal" id="modal" hidden role="dialog" aria-modal="true" aria-labelledby="modal-title">
+  <div class="modal-card"><h3 id="modal-title"></h3><div id="modal-body"></div><div class="modal-actions"><button class="btn btn-ghost" id="modal-cancel" type="button">Cancel</button><button class="btn btn-primary" id="modal-ok" type="button">OK</button></div></div>
+</div>
+<script src="{{VIEWER}}purify.min.js"></script>
+<script src="{{VIEWER}}katex/katex.min.js"></script>
+<script src="{{VIEWER}}app.js" data-snapshot="page/page.json"></script>
+</body>
+</html>

@@ -1,0 +1,17 @@
+You are re-proving one result of a verified paper's Lean as a corollary of a general result that now lives in the owner's toolkit.
+
+The paper result is `{{PAPER_DECL}}` in `{{PAPER_FILE}}`. The toolkit result is `{{GENERAL_DECL}}` in module `{{GENERAL_MODULE}}`:
+
+{{GENERAL_STATEMENT}}
+
+Do exactly this:
+1. Make `{{GENERAL_MODULE}}` available to `{{PAPER_FILE}}`: add `public import {{GENERAL_MODULE}}` to its import block when it is not already imported (directly or through another import).
+2. Replace the proof of `{{PAPER_DECL}}` (everything after its `:=`) with a proof that applies `{{GENERAL_DECL}}`, instantiating its general objects at the paper's and discharging its hypotheses from the paper result's own.
+
+Rules:
+- The statement of `{{PAPER_DECL}}` — its name, binders, hypotheses and conclusion, everything before `:=` — stays character for character. The runner compares it and restores the file if it changed.
+- Edit nothing else in the file and no other file. Declarations that only the old proof used stay where they are. After the build the runner has Lean compare what every declaration of the paper states with what it stated before; any difference restores the file.
+- No `sorry`, `admit` or `axiom`. If the general result does not specialize to this statement, leave the file as it was and say why.
+- Check with `lake build {{PAPER_MODULE}}` from the toolkit root (or lean-lsp diagnostics on the file) before you finish.
+
+End with one line: `COROLLARY: done` or `COROLLARY: not possible — <reason>`.

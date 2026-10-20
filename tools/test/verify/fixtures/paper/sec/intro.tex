@@ -1,0 +1,21 @@
+Causal inference needs notation. % this trailing comment is dropped
+\begin{defn}[Potential outcome]\label{def:po}
+For each unit \(i\) and treatment \(a\), write \(Y_i(a)\) for the outcome under \(a\).
+At most \(5\%\) of units are missing. % the escaped percent above is data, not a comment
+\end{defn}
+
+\begin{assump}[Unconfoundedness]\label{ass:unconf}
+\(Y(a) \perp A \mid X\) holds for every \(a\).
+\end{assump}
+
+\begin{comment}
+\begin{theorem}\label{thm:fake}
+This theorem lives in a comment block and must never be extracted.
+\end{theorem}
+\end{comment}
+
+\iffalse
+\begin{lem}\label{lem:fake}
+Also invisible.
+\end{lem}
+\fi

@@ -1,0 +1,35 @@
+{
+  "slug": "demo",
+  "dir": "bundle",
+  "paper": {
+    "dir": "corrected_paper",
+    "main": "main.tex",
+    "pdf": "main.pdf",
+    "pages": 2,
+    "compile": {
+      "status": "passed",
+      "tool": "pdflatex",
+      "reason": ""
+    }
+  },
+  "todo": {
+    "total": 1,
+    "blocking": 1
+  },
+  "lean": null,
+  "page": "page/page.json",
+  "names": {
+    "lem:schur": "Lemma 1",
+    "lem:sq": "Lemma 2",
+    "thm:amgm": "Theorem 3",
+    "thm:cubic": "Theorem 4"
+  },
+  "todo_items": [
+    {
+      "group": "not-established",
+      "file": "main.tex",
+      "line": 43,
+      "text": "Theorem 3: the review refuted this result and no repair was adopted; it is printed as in the original"
+    }
+  ]
+}

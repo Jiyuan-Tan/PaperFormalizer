@@ -1,0 +1,68 @@
+{
+  "schema": 1,
+  "paper": "Papers.Demo",
+  "candidates": [
+    {
+      "name": "Papers.Demo.lem_schur",
+      "kind": "theorem",
+      "module": "Papers.Demo.Main",
+      "file": "Papers/Demo/Main.lean",
+      "line": 10,
+      "end_line": 12,
+      "type": "\\label{lem:schur} For all real numbers $a, b, c \\ge 0$, \\[ a(a-b)(a-c) + b(b-a)(b-c) + c(c-a)(c-b) \\ge 0 . \\]",
+      "doc": null,
+      "moves_with": [],
+      "used_by": [],
+      "paper_objects": {}
+    },
+    {
+      "name": "Papers.Demo.lem_sq",
+      "kind": "theorem",
+      "module": "Papers.Demo.Main",
+      "file": "Papers/Demo/Main.lean",
+      "line": 20,
+      "end_line": 22,
+      "type": "\\label{lem:sq} For all real numbers $x$ and $y$, $x^2 + y^2 \\ge 2xy$.",
+      "doc": null,
+      "moves_with": [],
+      "used_by": [],
+      "paper_objects": {}
+    },
+    {
+      "name": "Papers.Demo.thm_amgm",
+      "kind": "theorem",
+      "module": "Papers.Demo.Main",
+      "file": "Papers/Demo/Main.lean",
+      "line": 30,
+      "end_line": 32,
+      "type": "For all real numbers $a, b \\ge 0$, \\[ \\frac{a + b}{2} \\ge \\sqrt{ab} . \\]",
+      "doc": null,
+      "moves_with": [],
+      "used_by": [],
+      "paper_objects": {}
+    },
+    {
+      "name": "Papers.Demo.thm_cubic",
+      "kind": "theorem",
+      "module": "Papers.Demo.Main",
+      "file": "Papers/Demo/Main.lean",
+      "line": 40,
+      "end_line": 42,
+      "type": "\\label{thm:cubic} For all real numbers $a, b, c \\ge 0$, \\[ (a + b + c)^3 + 9abc \\ge 4(a + b + c)(ab + bc + ca) . \\]",
+      "doc": null,
+      "moves_with": [],
+      "used_by": [],
+      "paper_objects": {}
+    }
+  ],
+  "movable": [
+    "Papers.Demo.lem_schur",
+    "Papers.Demo.lem_sq",
+    "Papers.Demo.thm_amgm",
+    "Papers.Demo.thm_cubic"
+  ],
+  "rejected": [],
+  "slug": "demo",
+  "scan_path": "@@TOOLKIT@@/runs/demo/formalization/candidate_scan.json",
+  "synthetic": true
+}

@@ -1,0 +1,128 @@
+\documentclass{article}
+\usepackage{xcolor}% added by TheoremChecker
+
+\usepackage{amsmath,amssymb,amsthm}
+\newtheorem{theorem}{Theorem}
+\newtheorem{lemma}[theorem]{Lemma}
+
+\title{Two Elementary Inequalities}
+\author{A.~Demo\thanks{A made-up paper for the TheoremChecker demo.}}
+\date{}
+
+% TheoremChecker annotation macros
+\RequirePackage{graphicx}
+\definecolor{vsRed}{rgb}{0.80,0.00,0.00}
+\definecolor{vsBlue}{rgb}{0.00,0.20,0.80}
+\definecolor{vsNote}{rgb}{0.80,0.40,0.00}
+\newcommand{\vsIndent}{1.5em}
+\newcommand{\vsFirst}[2]{#1}
+\newcommand{\vsSecond}[2]{#2}
+\newcommand{\vsIfInner}{\ifhmode\ifinner\expandafter\expandafter\expandafter\vsFirst\else\expandafter\expandafter\expandafter\vsSecond\fi\else\expandafter\vsSecond\fi}
+\newcommand{\vsBreak}{\ifhmode\ifinner\quad\else\unskip\par\fi\fi}
+\makeatletter\newcommand{\vsEatCr}{\@ifnextchar\\{\vsGobbleCr}{}}\def\vsGobbleCr\\{\@ifstar{\@ifnextchar[\vsGobbleOpt{}}{\@ifnextchar[\vsGobbleOpt{}}}\def\vsGobbleOpt[#1]{}\makeatother
+\newcommand{\vsBlock}[4]{\vsIfInner{\quad{\color{#1}#2\textbf{#3} #4}\quad}{\vsBreak\par\smallskip{\noindent\color{#1}#2\textbf{#3}\par\nopagebreak{\leftskip=\vsIndent\relax\parindent=0pt\noindent #4\par}}\smallskip\vsEatCr}}
+\newcommand{\vsLine}{\vsBreak\noindent}
+\newcommand{\vsLabel}[1]{}
+\newcommand{\vsSub}{\vsIfInner{\ }{\vsBreak\noindent\hangindent=\vsIndent\hangafter=0\relax}}
+\newcommand{\vsItem}[1]{\vsIfInner{\ #1~}{\vsBreak\noindent\hangindent=2.2em\hangafter=1\relax\makebox[2.2em][l]{#1}}}
+\newcommand{\vsPar}{\vsIfInner{\quad}{\vsBreak}}
+\newif\ifvsCheck
+\newcommand{\vsFitIn}[2]{\vsIfInner{$#2$}{\[\displayindent=\dimexpr\displayindent+\leftskip\relax\displaywidth=\dimexpr\displaywidth-\leftskip-\rightskip\relax\sbox0{$\displaystyle #2$}#1\ifdim\wd0>\displaywidth\resizebox{\displaywidth}{!}{\usebox0}\else\usebox0\fi\]}}
+\newif\ifvsTooWide
+\newcommand{\vsFit}[1]{\vsFitIn{\ifvsCheck\ifdim\wd0>1.2\displaywidth\ifvsTooWide\else\global\vsTooWidetrue\xdef\vsTooWideMsg{Display too wide (\the\wd0, line \the\displaywidth): split it into rows (an aligned environment inside the display)}\fi\fi\fi}{#1}}
+\newcommand{\vsCheckEnd}{\ifvsTooWide\errmessage{\vsTooWideMsg}\fi}
+\newcommand{\vsDisplay}[1]{\vsFitIn{}{#1}}
+\newcommand{\vsMathEnv}[2]{\vsIfInner{$#1$}{#2}}
+\newcommand{\vsOriginal}[1]{\vsBlock{vsRed}{}{Original:}{#1}}
+\newcommand{\vsCorrected}[1]{\vsBlock{vsBlue}{}{Corrected:}{#1}}
+\newcommand{\vsClarified}[1]{\vsBlock{vsBlue}{}{Clarified statement:}{#1}}
+\newcommand{\vsNote}[1]{\vsBlock{vsNote}{\normalfont\small}{TheoremChecker:}{#1}}
+\newcommand{\vsReading}[1]{\vsBlock{vsNote}{\normalfont\small}{Clarification:}{#1}}
+\newcommand{\vsReadingOwner}[1]{\vsBlock{vsNote}{\normalfont\small}{Clarification (author):}{#1}}
+\newcommand{\vsReadingSymbol}[2]{\vsBlock{vsNote}{\normalfont\small}{Clarification (symbol #1):}{#2}}
+\newcommand{\vsCondition}[1]{\vsBlock{vsNote}{\normalfont\small}{Bookkeeping condition:}{#1}}
+\newcommand{\vsConditionOwner}[1]{\vsBlock{vsNote}{\normalfont\small}{Bookkeeping condition:}{#1}}
+\newcommand{\vsProof}[1]{\vsBlock{vsBlue}{}{Corrected proof (confirmed):}{#1}}
+\newcommand{\vsStep}[1]{\vsBlock{vsRed}{}{Original:}{#1}}
+\newcommand{\vsCorrectedStep}[1]{\vsBlock{vsBlue}{}{Corrected:}{#1}}
+\newcommand{\vsCorollary}[3]{\vsBlock{vsBlue}{}{Corollary of #2:}{#3}}
+\newcommand{\vsProposedCorollary}[3]{\vsBlock{vsBlue}{}{Proposed corollary of #2 (awaiting your decision):}{#3}}
+\newcommand{\vsSplitProposition}[3]{\vsBlock{vsBlue}{}{Proposition stated in #2:}{#3}}
+\newcommand{\vsProposedSplitProposition}[3]{\vsBlock{vsBlue}{}{Proposed proposition stated in #2 (awaiting your decision):}{#3}}
+\newcommand{\vsProposed}[1]{\vsBlock{vsBlue}{}{Proposed repair (awaiting your decision):}{#1}}
+\newcommand{\vsProposedProof}[1]{\vsBlock{vsBlue}{}{Proof of the proposed statement:}{#1}}
+\newcommand{\vsProposedStep}[1]{\vsBlock{vsBlue}{}{Corrected (for the proposed statement):}{#1}}
+\newcommand{\vsRewind}[1]{\vsBlock{vsNote}{\normalfont\small}{Proposed correction (awaiting your decision):}{#1}}
+\newcommand{\vsCap}[1]{\vsBlock{vsNote}{\normalfont\small}{Repair not settled (awaiting your decision):}{#1}}
+\makeatletter\@ifpackageloaded{ulem}{}{\usepackage[normalem]{ulem}}\makeatother
+\newcommand{\vsStruck}[1]{{\color{vsRed}\sout{#1}}}
+\newcommand{\vsStruckRed}[1]{{\color{vsRed}#1}}
+\AtBeginDocument{\providecommand{\eqref}[1]{(\ref{#1})}\providecommand{\cref}{\ref}\providecommand{\Cref}{\ref}\providecommand{\autoref}{\ref}\providecommand{\citet}{\cite}\providecommand{\citep}{\cite}\providecommand{\citeauthor}{\cite}\providecommand{\citeyear}{\cite}}
+\AtBeginDocument{\providecommand{\mathbb}{\mathbf}\providecommand{\mathfrak}{\mathrm}\providecommand{\lesssim}{\mathrel{\vcenter{\offinterlineskip\hbox{$<$}\hbox{$\sim$}}}}\providecommand{\gtrsim}{\mathrel{\vcenter{\offinterlineskip\hbox{$>$}\hbox{$\sim$}}}}}
+% end of TheoremChecker annotation macros
+\begin{document}
+\maketitle
+
+\begin{abstract}
+We prove the two-variable inequality between the arithmetic and the geometric mean, and a cubic
+inequality in three variables that follows from Schur's inequality.
+\end{abstract}
+
+\section{Preliminaries}
+
+We use one classical result, which we cite without proof.
+
+\begin{lemma}[Schur's inequality {\cite[Theorem~1]{hlp}}]\label{lem:schur}
+For all real numbers $a, b, c \ge 0$,
+\[
+  a(a-b)(a-c) + b(b-a)(b-c) + c(c-a)(c-b) \ge 0 .
+\]
+\end{lemma}
+
+\begin{lemma}\label{lem:sq}
+For all real numbers $x$ and $y$, $x^2 + y^2 \ge 2xy$.
+\end{lemma}
+
+\begin{proof}
+$x^2 + y^2 - 2xy = (x - y)^2 \ge 0$.
+\end{proof}
+
+\section{Main results}
+
+\begin{theorem}\label{thm:amgm}
+\vsOriginal{For all real numbers $a$ and $b$,
+\[
+  \frac{a + b}{2} \ge \sqrt{ab} .
+\]} \vsProposed{For all real numbers $a, b \ge 0$, \vsFit{\frac{a + b}{2} \ge \sqrt{ab} .}} \vsNote{The proposed repair restates the result as in blue. False for negative numbers: for $a=b=-1$ the left side is $-1$ while the right side is $\sqrt{1}=1$. The proof takes $\sqrt{a}$ and $\sqrt{b}$, which are real numbers only when $a,b\ge 0$. Counterexample: $a=b=-1$: $\frac{a+b}{2}=-1<1=\sqrt{ab}$. \vsLine\textbf{Gives up:} The inequality is no longer claimed when $a$ or $b$ is negative.}
+\end{theorem}
+
+\begin{proof}
+Apply Lemma~\ref{lem:sq} to $x = \sqrt{a}$ and $y = \sqrt{b}$: then $x^2 = a$, $y^2 = b$ and
+$xy = \sqrt{ab}$, so $a + b \ge 2\sqrt{ab}$.
+\end{proof}
+\vsProposedProof{Apply Lemma~\ref{lem:sq} to $x = \sqrt{a}$ and $y = \sqrt{b}$, real numbers since $a, b \ge 0$: then $x^2 = a$, $y^2 = b$ and $xy = \sqrt{ab}$, so $a + b \ge 2\sqrt{ab}$.}
+
+\begin{theorem}\label{thm:cubic}
+For all real numbers $a, b, c \ge 0$,
+\[
+  (a + b + c)^3 + 9abc \ge 4(a + b + c)(ab + bc + ca) .
+\]
+\end{theorem}
+
+\begin{proof}
+Expanding both sides,
+\[
+  (a+b+c)^3 + 9abc - 4(a+b+c)(ab+bc+ca)
+  = a^3 + b^3 + c^3 - \sum_{\mathrm{sym}} a^2 b + 3abc ,
+\]
+where $\sum_{\mathrm{sym}} a^2 b$ is the sum of the six terms $a^2 b$, $a^2 c$, $b^2 a$, $b^2 c$,
+$c^2 a$, $c^2 b$. The right-hand side equals
+$a(a-b)(a-c) + b(b-a)(b-c) + c(c-a)(c-b)$, which is nonnegative by Lemma~\ref{lem:schur}.
+\end{proof}
+
+\begin{thebibliography}{1}
+\bibitem{hlp} G.~H. Hardy, J.~E. Littlewood and G.~P\'olya, \emph{Inequalities}, 2nd ed.,
+Cambridge University Press, 1952.
+\end{thebibliography}
+
+\end{document}

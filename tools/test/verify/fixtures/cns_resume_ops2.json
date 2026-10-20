@@ -1,0 +1,380 @@
+{
+ "_source": {
+  "run": "<toolkit>/runs/cns_simple_dml (live resume 2026-09-26, logs/live_resume_ops2.log)",
+  "symbols_B1": "codex_raw/v1_5_symbols_B1__2026-09-26T07-55-10-406Z.txt",
+  "symbols_B1_retry": "codex_raw/v1_5_symbols_B1_retry__2026-09-26T07-56-21-131Z.txt",
+  "retry_prompt_tail": "discovery/prompts/v1_5_symbols_B1_retry__2026-09-26T07-55-13-161Z.txt (its CONTRACT VIOLATIONS section)",
+  "prior_symbols": "discovery/v1_5_symbols.json (\\zeta, h)",
+  "clarity": "codex_raw/v1_5_clarity_round2_2__2026-09-26T07-59-22-621Z.txt, v1_5_clarity_round3_3__2026-09-26T08-01-00-453Z.txt (prop:delta rewrites)",
+  "flat_prop_delta": "discovery/flat.tex lines 1395-1442 (Proposition prop:Delta and its proof)",
+  "referee_fragments": "logs/annotated_render.json (2026-09-26T08:01:07Z, V1.5 render: the two referee fragments)",
+  "referee_ledger": "state.json verify.paper_errors[thm:local-local-clause, lem:local]"
+ },
+ "symbols_B1": [
+  {
+   "name": "\\zeta",
+   "meaning": "drift",
+   "fix": {
+    "type": null,
+    "def": "$\\zeta^4=E\\{\\psi_0(W)^4\\}$"
+   },
+   "ambiguity": "pinned",
+   "reading": {
+    "reading": "In the oracle-moment results, $\\zeta$ is the nonnegative population fourth-moment scale defined by $\\zeta^4=E\\{\\psi_0(W)^4\\}$; for local functionals it is indexed as $\\zeta_h$. In the Gateaux derivative definition, $\\zeta\\in\\mathbb R$ is instead a scalar perturbation parameter.",
+    "evidence": "The oracle-moment definition gives $\\zeta^4=E\\{\\psi_0(W)^4\\}$; Theorem~\\ref{thm:local} uses $\\zeta_h$; Definition [Gateaux derivative] introduces the scalar perturbation."
+   },
+   "redefined_at": "Let $u(w),v(w)$ be functions and let $\\tau,\\zeta \\text{ in }  \\mathbb{R}$ be scalars.",
+   "detail": "The recorded scale omits its displayed fourth-moment definition. The later Gateaux definition reuses the same symbol for an unrelated scalar."
+  },
+  {
+   "name": "\\sigma",
+   "meaning": "drift",
+   "fix": {
+    "type": null,
+    "def": "$\\sigma^2=E\\{\\psi_0(W)^2\\}$"
+   },
+   "ambiguity": "unresolvable",
+   "reading": null,
+   "redefined_at": null,
+   "detail": "The recorded type omits the displayed population definition. The paper uses $\\sigma_h$ for local functionals but does not generally exclude $\\sigma=0$; the confirmed version of Lemma~\\ref{lemma:global} permits it, while results dividing by $\\sigma$ require a positive value. Whether zero-variance cases are excluded therefore remains unresolved."
+  },
+  {
+   "name": "K",
+   "meaning": "ok",
+   "fix": null,
+   "ambiguity": "pinned",
+   "reading": {
+    "reading": "$K$ is a fixed kernel: in Example~\\ref{ex:CATE} it is bounded, symmetric, and integrates to one; in Example~\\ref{ex:RDD} it vanishes outside $(-1/2,1/2)$. Additional kernel bounds and moment conditions apply where stated in Lemma~\\ref{lemma:approx} and Lemma~\\ref{lemma:bounded_RR_local}.",
+    "evidence": "Examples~\\ref{ex:CATE} and~\\ref{ex:RDD} specify the kernel properties; Lemma~\\ref{lemma:approx} and Lemma~\\ref{lemma:bounded_RR_local} state additional conditions."
+   },
+   "redefined_at": null,
+   "detail": "The type is right, but the entry does not record the properties and support conditions the paper assigns to the kernel in its examples and lemmas."
+  },
+  {
+   "name": "\\tilde{c}",
+   "meaning": "ok",
+   "fix": null,
+   "ambiguity": "pinned",
+   "reading": {
+    "reading": "$\\tilde{c}$ is a deterministic constant bounded away from zero and above that lower-bounds $\\|Y-\\gamma_0(W)\\mid W\\|_{\\text{\\normalfont pr},q}$ for $q=2,3,4$ in Lemma~\\ref{lemma:global} and Lemma~\\ref{lemma:local}.",
+    "evidence": "Both lemmas introduce $\\tilde c$ among constants bounded away from zero and above and use it in their bounded-heteroscedasticity clauses."
+   },
+   "redefined_at": null,
+   "detail": "The positive-constant type is right; its fixed status, bounds, and conditional-moment role are settled by the paper."
+  },
+  {
+   "name": "h",
+   "meaning": "ok",
+   "fix": null,
+   "ambiguity": "pinned",
+   "reading": {
+    "reading": "$h>0$ is the localization bandwidth tending to zero for local-functional limits; Lemma~\\ref{lemma:approx} uses $0<h<h_1\\leq h_0$. In the simulation tuning paragraph, $h=c_h\\hat\\sigma_v n^{-0.2}$ is data-dependent, with $c_h$ chosen by the analyst.",
+    "evidence": "The local-functional definition takes $h\\rightarrow0$; Lemma~\\ref{lemma:approx} specifies its positive range; the simulation tuning paragraph gives the sample-variance rule."
+   },
+   "redefined_at": "Finally, to tune the bandwidth, we use the heuristic $h=c_h\\hat{\\sigma}_vn^{-0.2}$ \\cite{colangelo2020double}, where $\\hat{\\sigma}^2_v$ is the sample variance of $(V_i)$ $(i=1,...,n)$. ",
+   "detail": "The bandwidth type is right. The theoretical local results take a positive bandwidth tending to zero, while the later simulation paragraph specifies a sample-dependent tuning rule."
+  },
+  {
+   "name": "\\hat{\\theta}",
+   "meaning": "drift",
+   "fix": {
+    "type": null,
+    "def": "$\\hat{\\theta}=n^{-1}\\sum_{\\ell=1}^L\\sum_{i\\in I_{\\ell}}[m(W_i,\\hat{\\gamma}_{\\ell})+\\hat{\\alpha}_{\\ell}(W_i)\\{Y_i-\\hat{\\gamma}_{\\ell}(W_i)\\}]$"
+   },
+   "ambiguity": "pinned",
+   "reading": {
+    "reading": "$\\hat\\theta$ is the sample-dependent estimator in Algorithm~\\ref{alg:target}, evaluated on each fold $I_\\ell$ using $\\hat\\gamma_\\ell$ and $\\hat\\alpha_\\ell$ trained on $I_\\ell^c$; the folds satisfy $|I_\\ell|=n/L$, so its later expression $L^{-1}\\sum_{\\ell=1}^L\\hat\\theta_\\ell$ has the same meaning.",
+    "evidence": "Algorithm~\\ref{alg:target} defines the estimator and training split; the proof states $n_\\ell=|I_\\ell|=n/L$; Definition [Overall target and oracle] gives the fold-average expression."
+   },
+   "redefined_at": null,
+   "detail": "The recorded type identifies an estimator but omits its displayed formula, which determines the score and sample-splitting structure. The later fold-average formula is consistent with it under the paper's equal-fold convention."
+  },
+  {
+   "name": "f",
+   "meaning": "ok",
+   "fix": null,
+   "ambiguity": "pinned",
+   "reading": {
+    "reading": "In Example~\\ref{ex:elasticity}, $f(d,x)$ denotes the population joint density of $(D,X)$ and $f(d\\mid x)$ the population conditional density of $D$ given $X=x$; in Example~\\ref{ex:deriv}, $f(d,v,x)$ and $f(d\\mid v,x)$ play the corresponding roles for $(D,V,X)$ and $D$ given $(V,X)=(v,x)$. Boundary statements concern the support of the indicated conditional law.",
+    "evidence": "The framework calls $f(d\\mid x)$ a conditional density; Lemma~\\ref{lemma:RR_exists} introduces $f(d,x)$ and $f(d,v,x)$ and states the respective conditional-support boundary conditions."
+   },
+   "redefined_at": null,
+   "detail": "The density type is right, but the arguments distinguish joint from conditional population densities and determine which conditional support the boundary clauses use."
+  }
+ ],
+ "symbols_B1_retry": [
+  {
+   "name": "\\zeta",
+   "meaning": "drift",
+   "fix": {
+    "type": null,
+    "def": "$\\zeta^4=E\\{\\psi_0(W)^4\\}$"
+   },
+   "ambiguity": "pinned",
+   "reading": {
+    "reading": "In the oracle-moment results, $\\zeta$ is the nonnegative population fourth-moment scale of $\\psi_0(W)$, written $\\zeta_h$ for local functionals; in Definition [Gateaux derivative], $\\zeta\\in\\mathbb{R}$ is instead a scalar perturbation of $\\alpha$.",
+    "evidence": "The oracle-moment definition gives $\\zeta^4=E\\{\\psi_0(W)^4\\}$; Theorem~\\ref{thm:local} uses $\\zeta_h$; Definition [Gateaux derivative] introduces $\\zeta$ as a scalar."
+   },
+   "redefined_at": "Let $u(w),v(w)$ be functions and let $\\tau,\\zeta \\text{ in }  \\mathbb{R}$ be scalars.",
+   "detail": "The recorded type identifies the oracle moment, but omits its defining fourth-moment equation. Later, the same command denotes an unrelated real scalar in the Gateaux derivative."
+  },
+  {
+   "name": "\\sigma",
+   "meaning": "drift",
+   "fix": {
+    "type": null,
+    "def": "$\\sigma^2=E\\{\\psi_0(W)^2\\}$"
+   },
+   "ambiguity": "pinned",
+   "reading": {
+    "reading": "$\\sigma$ is the nonnegative population standard deviation of the oracle moment $\\psi_0(W)$; for local functionals it is indexed $\\sigma_h$ and may vary as $h\\rightarrow0$, while for global functionals it is constant.",
+    "evidence": "The oracle-moment definition gives $\\sigma^2=E\\{\\psi_0(W)^2\\}$. The paragraph preceding Theorem~\\ref{thm:local} distinguishes constant global $\\sigma$ from bandwidth-indexed local $\\sigma_h$."
+   },
+   "redefined_at": null,
+   "detail": "The recorded type is accurate but omits the population moment that defines the scale used to standardize the estimator."
+  },
+  {
+   "name": "K",
+   "meaning": "ok",
+   "fix": null,
+   "ambiguity": "pinned",
+   "reading": {
+    "reading": "$K$ is a fixed kernel: in Example~\\ref{ex:CATE} it is bounded, symmetric, and integrates to one; in Example~\\ref{ex:RDD} it vanishes outside $(-1/2,1/2)$; Lemma~\\ref{lemma:approx} additionally assumes the displayed kernel moment and integrability conditions when deriving its approximation bound.",
+    "evidence": "The two examples state their kernel properties, and Lemma~\\ref{lemma:approx} states its additional conditions on $K$."
+   },
+   "redefined_at": null,
+   "detail": "The kernel type is right. Its support and moment restrictions depend on the example or result in which it appears."
+  },
+  {
+   "name": "\\tilde{c}",
+   "meaning": "ok",
+   "fix": null,
+   "ambiguity": "pinned",
+   "reading": {
+    "reading": "$\\tilde{c}$ is a fixed positive lower bound, bounded away from zero, in $\\tilde{c}\\leq\\|Y-\\gamma_0(W)\\mid W\\|_{\\text{\\normalfont pr},q}$ for each $q=2,3,4$ in Lemma~\\ref{lemma:global} and Lemma~\\ref{lemma:local}.",
+    "evidence": "Both lemmas introduce $\\tilde{c}$ among constants bounded away from zero and above and use it in their bounded-heteroscedasticity conditions."
+   },
+   "redefined_at": null,
+   "detail": "The entry correctly calls it positive; the paper also fixes its role as a conditional noise-moment lower bound."
+  },
+  {
+   "name": "h",
+   "meaning": "ok",
+   "fix": null,
+   "ambiguity": "pinned",
+   "reading": {
+    "reading": "$h>0$ is the bandwidth indexing local weights and targets $\\ell_h$ and $\\theta_0^h$; it is held at a value when a finite-sample local quantity is defined and tends to zero in the local asymptotic results, whereas the simulation choice $h=c_h\\hat{\\sigma}_vn^{-0.2}$ is sample-dependent.",
+    "evidence": "The local-functional definition takes $h\\rightarrow0$; Lemma~\\ref{lemma:approx} specifies $0<h<h_1$; the simulation tuning paragraph gives the displayed data-dependent heuristic."
+   },
+   "redefined_at": "Finally, to tune the bandwidth, we use the heuristic $h=c_h\\hat{\\sigma}_vn^{-0.2}$ \\cite{colangelo2020double}, where $\\hat{\\sigma}^2_v$ is the sample variance of $(V_i)$ $(i=1,...,n)$.",
+   "detail": "The theoretical bandwidth indexes local population quantities. The simulation paragraph gives it a data-dependent tuning choice."
+  },
+  {
+   "name": "\\hat{\\theta}",
+   "meaning": "drift",
+   "fix": {
+    "type": null,
+    "def": "$\\hat{\\theta}=n^{-1}\\sum_{\\ell=1}^L\\sum_{i\\in I_{\\ell}}[m(W_i,\\hat{\\gamma}_{\\ell})+\\hat{\\alpha}_{\\ell}(W_i)\\{Y_i-\\hat{\\gamma}_{\\ell}(W_i)\\}]$"
+   },
+   "ambiguity": "pinned",
+   "reading": {
+    "reading": "$\\hat{\\theta}$ is the sample-dependent cross-fold estimator in Algorithm~\\ref{alg:target}, with $(\\hat{\\gamma}_{\\ell},\\hat{\\alpha}_{\\ell})$ trained on $I_{\\ell}^c$ and evaluated on $I_{\\ell}$; the later expression $\\hat{\\theta}=L^{-1}\\sum_{\\ell=1}^L\\hat{\\theta}_{\\ell}$ uses folds of size $n/L$.",
+    "evidence": "Algorithm~\\ref{alg:target} gives the estimator and training split; the proof defines $n_{\\ell}=|I_{\\ell}|=n/L$ and the foldwise average before the displayed overall-target definition."
+   },
+   "redefined_at": null,
+   "detail": "The recorded label omits the defining estimating formula. The later foldwise expression is the same estimator under the paper's equal-fold convention."
+  },
+  {
+   "name": "f",
+   "meaning": "ok",
+   "fix": null,
+   "ambiguity": "pinned",
+   "reading": {
+    "reading": "$f(d\\mid x)$ is the conditional density of $D$ given $X=x$ in Example~\\ref{ex:elasticity}, while $f(d,x)$ there denotes a joint density; in Example~\\ref{ex:deriv}, $f(d,v,x)$ denotes a joint density and $f(d\\mid v,x)$ the conditional density of $D$ given $(V,X)=(v,x)$.",
+    "evidence": "The framework paragraph explicitly calls $f(d\\mid x)$ a conditional density; the representer examples introduce $f(d,x)$ and $f(d,v,x)$ as densities and use the corresponding conditional densities."
+   },
+   "redefined_at": "Denote the density $f(d,x)$.",
+   "detail": "The recorded density type is correct. The arguments and conditioning distinguish its conditional and joint uses."
+  }
+ ],
+ "retry_violations": "=== CONTRACT VIOLATIONS IN YOUR PREVIOUS REPLY ===\n\nYour previous reply broke the output contract. Re-grade and emit a corrected JSON object; every point below must be fixed.\n\n- symbol \"\\zeta\": its reading names a result otherwise than the paper prints it in `reading` (\"the oracle-moment results\") — name a result by its environment word and \\ref{<its label>} (e.g. \"Lemma~\\ref{lemma:rp}\"), which typesets to the paper's own number; a result without a label by its printed heading text.",
+ "prior_symbols": [
+  {
+   "name": "\\zeta",
+   "meaning": "drift",
+   "fix": {
+    "type": null,
+    "def": "$\\zeta^4=E\\{\\psi_0(W)^4\\}$"
+   },
+   "ambiguity": "pinned",
+   "reading": {
+    "reading": "In oracle-moment results, $\\zeta^4=E\\{\\psi_0(W)^4\\}$ is a population quantity; in the Gateaux derivative definition, $\\zeta\\in\\mathbb{R}$ is an arbitrary scalar perturbation of $\\alpha$.",
+    "evidence": "The oracle moments are defined at line 253. The Gateaux derivative definition at line 1113 introduces $\\tau,\\zeta\\in\\mathbb{R}$ and evaluates the cross derivative at $\\zeta=0$."
+   },
+   "redefined_at": "Let $u(w),v(w)$ be functions and let $\\tau,\\zeta \\text{ in }  \\mathbb{R}$ be scalars.",
+   "detail": "The recorded scale is right but omits its displayed definition. Later, the same symbol denotes a scalar differentiation parameter.",
+   "shards": [
+    "A4",
+    "B3"
+   ],
+   "agreement": true,
+   "basis": "c3661ec8ad7efc3d728d1dcc1b710c35ef4631bf40a6c583517ea20357e9742d",
+   "source": "b548480688a537a466d8ceb032c91c6f3092462b0a8584c60bbcccc8f9097e42",
+   "graded": "fresh",
+   "introduced_at": {
+    "flat_line": 1113,
+    "file": "D_proofs.tex",
+    "line": 11
+   }
+  },
+  {
+   "name": "h",
+   "meaning": "ok",
+   "fix": null,
+   "ambiguity": "pinned",
+   "reading": {
+    "reading": "$h>0$ is the bandwidth indexing $\\ell_h$, $m_h$, and the local population quantities; local limits take $h\\to0$, with lemma bounds stated over their specified positive ranges. In the simulations, $h=c_h\\hat\\sigma_v n^{-0.2}$ is sample-dependent and $c_h$ is chosen by the analyst.",
+    "evidence": "The local-functional definition introduces bandwidth $h$ and its limit; the repaired approximation lemma states $0<h<h_1\\leq h_0$; the simulation tuning sentence specifies $h=c_h\\hat\\sigma_v n^{-0.2}$."
+   },
+   "redefined_at": "Finally, to tune the bandwidth, we use the heuristic $h=c_h\\hat{\\sigma}_vn^{-0.2}$ \\cite{colangelo2020double}, where $\\hat{\\sigma}^2_v$ is the sample variance of $(V_i)$ $(i=1,...,n)$.",
+   "detail": "The theoretical local quantities are indexed by a positive bandwidth. The simulation section gives a data-dependent choice of that bandwidth.",
+   "shards": [
+    "A1",
+    "B1"
+   ],
+   "agreement": true,
+   "basis": "9c2f5faed71548f1fc9ac596ac4b6aafc05f573d1f0b11617b3ffa50818888f0",
+   "source": "c2d1a430f707f9d6b1de4fe9084618c07f127dc6a282d9801464b405357ab44b",
+   "graded": "fresh",
+   "introduced_at": {
+    "flat_line": 142,
+    "file": "3_problem.tex",
+    "line": 14
+   }
+  }
+ ],
+ "prop_delta_rewrite_round2": {
+  "claim": "The proposition asserts $n^{1/2}|\\hat{\\theta}-\\bar{\\theta}|/\\sigma\\leq\\Delta$ with probability $1-\\epsilon$.",
+  "what_is_wrong": "Step: Therefore with probability $1-\\epsilon$, \\begin{align*} n^{1/2}|\\hat{\\theta}-\\bar{\\theta}|&\\leq L^{1/2}\\frac{1}{L} \\sum_{\\ell=1}^L \\sum_{j=1}^3 |\\Delta_{jk}| \\\\ It uses: the three-term fold decomposition in Proposition~\\ref{prop:Taylor} which the paper assumes only on: the printed sum $\\Delta_{1\\ell}+\\Delta_{2\\ell}+\\Delta_{3\\ell}$. But the step applies it at: the fold difference, whose mixed contribution is $2\\Delta_{3\\ell}$.",
+  "why": "With $m=0$, $\\gamma_0=\\alpha_0^{\\min}=Y=0$, and constant $u=v=1$, one has $\\hat{\\theta}_{\\ell}-\\bar{\\theta}_{\\ell}=-1$, while the printed sum $\\Delta_{1\\ell}+\\Delta_{2\\ell}+\\Delta_{3\\ell}=-1/2$.",
+  "fix": "Replace the fold decomposition by $n_{\\ell}^{1/2}(\\hat{\\theta}_{\\ell}-\\bar{\\theta}_{\\ell})=\\Delta_{1\\ell}+\\Delta_{2\\ell}+2\\Delta_{3\\ell}$ and carry the factor $2$ through the proof, retaining the displayed constant.",
+  "gives_up": null
+ },
+ "prop_delta_rewrite_round3": {
+  "claim": "The proposition asserts $n^{1/2}|\\hat{\\theta}-\\bar{\\theta}|/\\sigma\\leq\\Delta$ with probability $1-\\epsilon$.",
+  "what_is_wrong": "Step: $L^{1/2}\\frac{1}{L} \\sum_{\\ell=1}^L \\sum_{j=1}^3 \\Delta_{j\\ell}.$ It uses: the three-term fold decomposition in Proposition~\\ref{prop:Taylor} which the paper assumes only on: the printed sum $\\Delta_{1\\ell}+\\Delta_{2\\ell}+\\Delta_{3\\ell}$. But the step applies it at: the fold difference $n_{\\ell}^{1/2}(\\hat{\\theta}_{\\ell}-\\bar{\\theta}_{\\ell})$, whose mixed contribution is $2\\Delta_{3\\ell}$.",
+  "why": "With $m=0$, $\\gamma_0=\\alpha_0^{\\min}=Y=0$, and constant $u=v=1$, one has $\\hat{\\theta}_{\\ell}-\\bar{\\theta}_{\\ell}=-1$, while the printed sum $\\Delta_{1\\ell}+\\Delta_{2\\ell}+\\Delta_{3\\ell}=-1/2$.",
+  "fix": "Replace the fold decomposition by $n_{\\ell}^{1/2}(\\hat{\\theta}_{\\ell}-\\bar{\\theta}_{\\ell})=\\Delta_{1\\ell}+\\Delta_{2\\ell}+2\\Delta_{3\\ell}$ and carry the factor $2$ through the proof, retaining the displayed constant.",
+  "gives_up": null
+ },
+ "flat_prop_delta": "\\begin{proposition}[Oracle approximation]\\label{prop:Delta}\nSuppose the conditions of Proposition~\\ref{prop:resid} hold. Then with probability $1-\\epsilon$\n$$\n\\frac{n^{1/2}}{\\sigma}|\\hat{\\theta}-\\bar{\\theta}|\\leq \\Delta= \\frac{3L}{\\epsilon  \\sigma}\\left[(\\bar{Q}^{1/2}+\\bar{\\alpha})\\{\\mathcal{R}(\\hat{\\gamma}_{\\ell})\\}^{q/2}+\\bar{\\sigma}\\{\\mathcal{R}(\\hat{\\alpha}_{\\ell})\\}^{1/2}+ \\{n\\mathcal{R}(\\hat{\\gamma}_{\\ell})\\mathcal{R}(\\hat{\\alpha}_{\\ell})\\}^{1/2}\\right].\n$$\n\\end{proposition}\n\n\\begin{proof}\nWe proceed in steps.\n\\begin{enumerate}\n    \\item Decomposition.\n    \n    By Proposition~\\ref{prop:Taylor}, write\n    \\begin{align*}\n    n^{1/2}(\\hat{\\theta}-\\bar{\\theta})\n    &=\\frac{n^{1/2}}{n_{\\ell}^{1/2}}\\frac{1}{L} \\sum_{\\ell=1}^L n_{\\ell}^{1/2} (\\hat{\\theta}_{\\ell}-\\bar{\\theta}_{\\ell}) \\\\\n    &= L^{1/2}\\frac{1}{L} \\sum_{\\ell=1}^L \\sum_{j=1}^3 \\Delta_{j\\ell}.\n\\end{align*} \n\n    \\item Union bound.\n    \n    Define the events\n$$\n\\mathcal{E}_{\\ell}=\\{\\text{for all } j \\; (j=1,2,3),\\; |\\Delta_{j\\ell}|\\leq t_j\\},\\quad \\mathcal{E}=\\cap_{\\ell=1}^L \\mathcal{E}_{\\ell},\\quad \\mathcal{E}^c=\\cup_{\\ell=1}^L \\mathcal{E}^c_{\\ell}.\n$$\nHence by the union bound and Proposition~\\ref{prop:resid},\n$$\n\\text{pr}(\\mathcal{E}^c)\\leq \\sum_{\\ell=1}^L \\text{pr}(\\mathcal{E}^c_{\\ell}) \\leq L\\frac{\\epsilon}{L}=\\epsilon.\n$$\n    \\item Collecting results.\n\n    Therefore with probability $1-\\epsilon$,\n\\begin{align*}\n n^{1/2}|\\hat{\\theta}-\\bar{\\theta}|&\\leq L^{1/2}\\frac{1}{L} \\sum_{\\ell=1}^L \\sum_{j=1}^3 |\\Delta_{jk}| \\\\\n &\\leq L^{1/2}\\frac{1}{L} \\sum_{\\ell=1}^L \\sum_{j=1}^3 t_j \\\\\n &=L^{1/2}\\sum_{j=1}^3 t_j.\n\\end{align*}\nFinally, we simplify $(t_j)$. For $a,b>0$, $(a+b)^{1/2}\\leq a^{1/2}+b^{1/2}$. Moreover, $3>6^{1/2}>3^{1/2}>3/2$. Finally, for $\\epsilon\\leq 1$, $\\epsilon^{-1/2}\\leq \\epsilon^{-1}$. In summary\n\\begin{align*}\n    t_1&=\\left(\\frac{6L}{\\epsilon}\\right)^{1/2}(\\bar{Q}+\\bar{\\alpha}^2)^{1/2}\\{\\mathcal{R}(\\hat{\\gamma}_{\\ell})\\}^{q/2}\n   \\leq \\frac{3L^{1/2}}{\\epsilon}(\\bar{Q}^{1/2}+\\bar{\\alpha})\\{\\mathcal{R}(\\hat{\\gamma}_{\\ell})\\}^{q/2}; \\\\\n    t_2&=\\left(\\frac{3L}{\\epsilon}\\right)^{1/2}\\bar{\\sigma}\\{\\mathcal{R}(\\hat{\\alpha}_{\\ell})\\}^{1/2} \n   \\leq \\frac{3L^{1/2}}{\\epsilon}\\bar{\\sigma}\\{\\mathcal{R}(\\hat{\\alpha}_{\\ell})\\}^{1/2}; \\\\\n    t_3&=\\frac{3L^{1/2}}{2\\epsilon}\\{n\\mathcal{R}(\\hat{\\gamma}_{\\ell})\\mathcal{R}(\\hat{\\alpha}_{\\ell})\\}^{1/2}\n    \\leq \\frac{3L^{1/2}}{\\epsilon}\\{n\\mathcal{R}(\\hat{\\gamma}_{\\ell})\\mathcal{R}(\\hat{\\alpha}_{\\ell})\\}^{1/2}.\n\\end{align*}\n\\end{enumerate}\n\\end{proof}",
+ "referee_fragments": [
+  {
+   "kind": "note",
+   "text": "The displayed rates for local functionals that fail the cited lemmas’ conditions.",
+   "producer": "referee",
+   "error": "a non-ASCII character U+2019 (’) — the text is plain ASCII; every symbol is a TeX command"
+  },
+  {
+   "kind": "note",
+   "text": "the step “Since $\\alpha_0^{\\min,h}(w)=\\ell_h(w_j)\\alpha_0^{\\min}$” uses the Riesz identity for $m$ beyond $E\\{m(W,\\gamma)\\}$",
+   "producer": "referee",
+   "error": "a non-ASCII character U+201C (“), U+201D (”) — the text is plain ASCII; every symbol is a TeX command"
+  }
+ ],
+ "referee_ledger": {
+  "thm:local-local-clause": {
+   "detail": "weakens the contribution: K(u)=0 for |u|>1 excludes Gaussian localization allowed by the paper’s bounded, symmetric, unit-mass kernel convention, even when all the claimed local rates hold. The theorem defines Δ_h using σ_h, while the approximation subsection uses σ without explicitly reconciling them.",
+   "witness": null,
+   "owner_decision": "redo",
+   "guidance": "keep Gaussian kernels: control the kernel's distant mass via the kernel-order moment conditions (∫|u|^v|K|<∞) and a global bound on m·f_V (or global density/derivative bounds) instead of compact support",
+   "owner_explanation": {
+    "claim": "The printed local clause asserts the displayed moment, continuity, representer, and standardized-bias rates under its Supplement 2 conditions.",
+    "defects": [
+     {
+      "kind": "out_of_domain",
+      "step_unit": "thm:local/1/2",
+      "uses": "the Riesz identity for $E\\{m(W,\\gamma)\\}$",
+      "assumed_on": "the unweighted functional",
+      "applied_at": "$E\\{\\ell_h(V)m(W,\\gamma)\\}$",
+      "detail": null
+     }
+    ],
+    "why": {
+     "objects": [
+      "$W=V$ uniform on $[-1,1]$",
+      "$v=0$",
+      "$K(u)=\\tfrac12\\mathbf1\\{|u|\\leq1\\}$"
+     ],
+     "consequence": "the local rates of the clause fail"
+    },
+    "fix": "The corrected statement requires the conditions of the cited local lemmas, including the weighted Riesz, variance, kernel, and approximation conditions, and defines $\\Delta_h$ using $\\sigma_h$.",
+    "gives_up": "The displayed rates for local functionals that fail the cited lemmas’ conditions."
+   },
+   "explanation_patch": "49e1dea170c08913",
+   "explanation_clarity": {
+    "grade": "ok",
+    "reason": "The supplied explanation locates the kernel, variance, and representer steps and states why the printed premises do not justify them."
+   }
+  },
+  "lem:local": {
+   "detail": "The displayed definition of $N_{h_0}(v)$ uses radius $h$, while its subscript and the proof's use of $h<h_0$ determine radius $h_0$. Independently, $\\sigma_h^2=\\operatorname{Var}(\\ell_h)+E\\ell_h^2$ in the instance below. The proof bounds the full kernel integral using density bounds that hold only near $v$; its reference to Lemma \\ref{lemma:global} supplies a proof pattern, not additional hypotheses.",
+   "witness": "Let $v=0$, $h_0=1/8$, $W=V$, $\\Gamma=\\mathbb L_2$, $m(W,\\gamma)=\\gamma(V)$, $\\gamma_0=1$, and $Y=1+\\varepsilon$ for an independent Rademacher $\\varepsilon$. Thus $\\alpha_0=\\alpha_0^{\\min}=1$, $U_1=\\ell_h-1$, $U_2=\\varepsilon$, and every listed moment condition holds. Take $f_V$ proportional to $1_{|x|<1/4}+(1-x)^{-9/10}1_{1/2<x<1}$. Let $K$ be the normalized sum of $1_{|u|\\leq1}$ and symmetric indicator pulses centered at $\\pm u_n$, of half-width $e_n=u_n^{-4}$, where $u_n=2^{n^2+4}$. This kernel is bounded, symmetric, nonnegative, and has unit mass. At $h_n=1/u_n$, the pulse sampling the density singularity gives $\\omega_{h_n}\\gtrsim u_n^{9/10}e_n^{1/10}=u_n^{1/2}\\to\\infty$. Since $K^2\\leq\\|K\\|_\\infty K$, $h_n\\sigma_{h_n}^2\\leq2\\|K\\|_\\infty/\\omega_{h_n}\\to0$, contradicting $\\sigma_h\\asymp h^{-1/2}$.",
+   "owner_explanation": {
+    "claim": "The printed lemma asserts $\\sigma_h\\asymp\\bar M_h\\asymp h^{-1/2}$ and the stated higher-moment bounds for local functionals.",
+    "defects": [
+     {
+      "kind": "other",
+      "step_unit": "lemma:local/proof/1/1",
+      "uses": null,
+      "assumed_on": null,
+      "applied_at": null,
+      "detail": "the step “Since $\\alpha_0^{\\min,h}(w)=\\ell_h(w_j)\\alpha_0^{\\min}$” uses the Riesz identity for $m$ beyond $E\\{m(W,\\gamma)\\}$"
+     }
+    ],
+    "why": {
+     "objects": [
+      "$v=0$",
+      "$h_0=1/8$",
+      "$W=V$"
+     ],
+     "consequence": "$\\omega_{h_n}\\to\\infty$ along the pulse bandwidths"
+    },
+    "fix": "The corrected lemma specifies the neighborhood radius $h_0$ and assumes the weighted Riesz identity, a positive conditional variance, and uniform kernel-integral and normalizer bounds; the amended proof retains covariance and derives the stated rates.",
+    "gives_up": "Local functionals without the weighted Riesz identity, models with $\\operatorname{Var}(U_2\\mid W)=0$ even when the oracle variance has the stated rate, and kernels whose density-weighted moments or normalizer lack the stated bounds."
+   },
+   "weakens_contribution": true,
+   "auto_narrowed": true,
+   "suggested_repair": "corrected statement: \\label{lemma:local}\nSuppose $\\alpha_0^{\\min}$ exists and $\\Gamma=\\mathbb{L}_2$. Further suppose there exist $(\\tilde{\\alpha}, \\check{\\alpha}, \\tilde{c}, \\bar c, \\tilde{f}, \\bar f, \\bar f', h_0)$ bounded away from zero and above such that the following conditions hold.\n\\begin{enumerate}\n    \\item Control of representer absolute value:\n    $$\n0< \\tilde{\\alpha} \\leq \\alpha_0(w) \\leq \\check{\\alpha}.\n$$\n  \\item Valid neighborhood. There exists $N_{h_0}(v)=\\{v':|v'-v|\\leq h_0\\}\\subset \\mathcal{V}$.\n    \\item Bounded moments. For all $h\\leq h_0$ and for $q=2,3,4$,\n    $$\n    U_1=m_h(W,\\gamma_0)-E\\{m_h(W,\\gamma_0)\\},\\quad \\|U_1\\|_{\\text{\\normalfont pr},q}\\leq \\bar{c}\\|\\ell\\|_{\\text{\\normalfont pr},q}.\n    $$\n    \\item Bounded heteroscedasticity. For $q=2,3,4$,\n    $$\n    U_2=Y-\\gamma_0(W),\\quad \\tilde{c}\\leq \\|U_2 \\mid W\\|_{\\text{\\normalfont pr},q}\\leq \\bar{c}.\n    $$\n    \\item Bounded density. The density $f_V$ obeys, for all $v'$ in $N_{h_0}(v)$,\n    $$\n  0< \\tilde{f} \\leq f_V(v') \\leq \\bar f,\\quad |\\partial f_V(v')| \\leq \\bar f'.\n    $$\n\\end{enumerate}\nSuppose in addition that $\\operatorname{Var}(U_2\\mid W)\\geq c_0>0$ almost surely; that, for $q=2,3,4$ and all sufficiently small $h$, $\\int|K(u)|^qf_V(v-hu)\\,du\\leq C_K<\\infty$ and $|\\omega_h|\\leq C_\\omega<\\infty$; and that $\\inf_{0<h<h_0}|\\omega_h|>0$. Suppose also that, for every $\\gamma\\in\\mathbb{L}_2$ and all sufficiently small $h$,\n$$\nE\\{\\ell_h(V)m(W,\\gamma)\\}=E\\{\\ell_h(V)\\alpha_0(W)\\gamma(W)\\}.\n$$\nThen finite sample bounds in the proof hold. In summary,\n$$\n\\frac{\\kappa_h}{\\sigma_h} \\lesssim h^{-1/6} \\lesssim \\sigma_h \\asymp \\bar{M}_h \\asymp h^{-1/2} \\rightarrow \\infty,\\quad \\kappa_h\\lesssim h^{-2/3} \\rightarrow \\infty,\\quad \\zeta_h\\lesssim h^{-3/4} \\rightarrow \\infty.\n$$ · added hypotheses: ass:patch-local-conditional-variance: $\\operatorname{Var}(U_2\\mid W)\\geq c_0>0$ almost surely.; ass:patch-local-kernel-density: For $q=2,3,4$ and all sufficiently small $h$, $\\int|K(u)|^qf_V(v-hu)\\,du\\leq C_K<\\infty$ and $|\\omega_h|\\leq C_\\omega<\\infty$.; ass:patch-local-weighted-riesz: For every $\\gamma\\in\\mathbb{L}_2$ and all sufficiently small $h$, $E\\{\\ell_h(V)m(W,\\gamma)\\}=E\\{\\ell_h(V)\\alpha_0(W)\\gamma(W)\\}$. · gives up: patch hypothesis ass:patch-local-conditional-variance: weakens the contribution: conditioning on the pinned full vector $W$ excludes exactly identified instrumental-variable models with deterministic outcome residuals, even when the local oracle variance has the claimed rate. For example, an independent Rademacher error added to $Y$ in the model below satisfies this patch condition with $c_0=1$. A lower bound on the variance of the full oracle score would retain the excluded model.\npatch hypothesis ass:patch-local-weighted-riesz: weakens the contribution: the identity excludes local functionals whose representer has the claimed rates without equaling $\\ell_h\\alpha_0$. For example, $m(w,\\gamma)=\\gamma(w)+\\frac12\\int_{-1}^{1}\\gamma(t)\\,dt$ has this property. The words allow either a bandwidth threshold common to every $\\gamma$ or one depending on $\\gamma$; the amended proof requires the common threshold. The condition is satisfiable: $m(w,\\gamma)=\\gamma(w)$ with $\\alpha_0=1$ satisfies it.",
+   "explanation_patch": "ed7835cc39c2634e",
+   "explanation_clarity": {
+    "grade": "ok",
+    "reason": "The fixer's explanation identifies the representer, variance, and kernel steps and explains why each printed inference fails."
+   }
+  }
+ },
+ "_fields_note": "Notes as fields (2026-09-26): referee_ledger notes and referee_fragments[1] restated as fields from the same live words (lem:local's curly-quoted step kept as a defect's detail); prop_delta_note is the round-3 rewrite as fields.",
+ "prop_delta_note": {
+  "claim": "The proposition asserts $n^{1/2}|\\hat{\\theta}-\\bar{\\theta}|/\\sigma\\leq\\Delta$ with probability $1-\\epsilon$.",
+  "defects": [
+   {
+    "kind": "out_of_domain",
+    "step_unit": "prop:Delta/proof/1/2",
+    "uses": "the three-term fold decomposition in Proposition~\\ref{prop:Taylor}",
+    "assumed_on": "the printed sum $\\Delta_{1\\ell}+\\Delta_{2\\ell}+\\Delta_{3\\ell}$",
+    "applied_at": "the fold difference $n_{\\ell}^{1/2}(\\hat{\\theta}_{\\ell}-\\bar{\\theta}_{\\ell})$, whose mixed contribution is $2\\Delta_{3\\ell}$",
+    "detail": null
+   }
+  ],
+  "why": {
+   "objects": [
+    "$m=0$",
+    "$\\gamma_0=\\alpha_0^{\\min}=Y=0$",
+    "$u=v=1$"
+   ],
+   "consequence": "one has $\\hat{\\theta}_{\\ell}-\\bar{\\theta}_{\\ell}=-1$, while the printed sum $\\Delta_{1\\ell}+\\Delta_{2\\ell}+\\Delta_{3\\ell}=-1/2$"
+  },
+  "fix": "Replace the fold decomposition by $n_{\\ell}^{1/2}(\\hat{\\theta}_{\\ell}-\\bar{\\theta}_{\\ell})=\\Delta_{1\\ell}+\\Delta_{2\\ell}+2\\Delta_{3\\ell}$ and carry the factor $2$ through the proof, retaining the displayed constant.",
+  "gives_up": null
+ }
+}

@@ -1,0 +1,190 @@
+// Typed schema for the F1 "formalization plan" — the machine-checkable map from
+// every typed-core node to the Lean object that realizes it. F1 authors it, the
+// plan_gate validates one-to-one coverage, F2 implements it and syncs deviations
+// back.
+//
+// The plan binds to the core's node ids (assumptions ∪ definitions ∪ statements),
+// NOT the prose .tex — so F1/F2 never re-extract structure. Changing F1's
+// authoring never re-tests F2 as long as the file still validates against this.
+import { z } from "zod";
+
+/** Where a node's Lean realization comes from. */
+export const DispositionSchema = z.enum(["reuse", "define-local"]);
+
+/** The Lean form a core node maps to. `variable` never appears here — symbols
+ * are covered by `env` (S-blocks), not by `nodes`.
+ *
+ * Every assumption atom maps to ONE named `def … : Prop` (`assumption`). Whether
+ * it is used *inline* (a statement lists it in `hyps`) or *bundled* (a class lists
+ * it in `members`) — or both, e.g. a shared `ass:consistency` that is a field of
+ * two classes — is captured by those cross-references, not by the atom's kind. */
+export const LeanKindSchema = z.enum([
+  "assumption", // assumption atom → named `def … : Prop` (referenced by hyps/fields)
+  "structure", // class definition (by_member_properties) → structure / typeclass
+  "def", // construction definition, unresolved OEQ, or cited canonical text metadata carrier
+  "theorem", // statement (T-block)
+  "lemma", // statement (L-block)
+]);
+
+/** Delivery is orthogonal to mathematical provenance. An undelivered object remains
+ * in the typed core/plan for an honest audit trail, but is not emitted as a Lean
+ * declaration or claimed as a proved paper result. The plan gate restricts this
+ * escape hatch to secondary theorems and cited nodes. */
+export const DeliveryRoleSchema = z.enum(["headline", "headline-support", "secondary"]);
+export const DeliveryStatusSchema = z.enum(["deliver", "undelivered"]);
+export const ReuseClassSchema = z.enum(["standard", "general", "paper-specific"]);
+
+/** One environment binding (S-block): binds a subset of symbols + the sampling
+ * model to a chosen library world. Derived from `core.symbols` + `sampling_model`;
+ * has no dedicated core node. This is where substrate reuse concentrates. */
+export const EnvEntrySchema = z.object({
+  id: z.string().regex(/^S[0-9]+$/), // S-block local id
+  world: z.string(), // free-form: po-system | scm | panel-dgp | measure-space | ...
+  binds_symbols: z.array(z.string()).default([]),
+  binds_sampling_model: z.boolean().default(false),
+  disposition: DispositionSchema,
+  reuse: z.string().nullable().default(null), // decl/typeclass to instantiate, or null
+  modules: z.array(z.string()).default([]),
+  notes: z.string().optional(),
+});
+
+/** One node entry: the Lean decision for a single core node id. */
+export const NodeEntrySchema = z.object({
+  lean_kind: LeanKindSchema,
+  lean_name: z.string(),
+  disposition: DispositionSchema,
+  reuse: z.string().nullable().default(null),
+  modules: z.array(z.string()).default([]),
+  // Set true only when a `define-local` node needs Defer-tier substrate; drives
+  // the derived feasibility verdict (§4.3).
+  defer_tier: z.boolean().default(false),
+  // Set true ONLY for a Defer node tagged `substrate-gate` (a classical, named,
+  // off-the-shelf fact assumed visibly as debt). A gate is emitted like an
+  // assumption — `def … : Prop` threaded as a `_of_gate` hypothesis into its
+  // consumers (never a sorry-lemma / axiom) — classified `kind:"gate"` in the
+  // graph. Mutually exclusive with a crux Defer (which must be BUILT). Default
+  // false; opt-in. The discharge fate of a gate is refined by `gate_class`.
+  gate: z.boolean().default(false),
+  // For a gate node (`gate:true`), its discharge fate on the discharge-this-run axis:
+  //  - "gated" (default when absent): the gate WILL be discharged this run — it is
+  //    scaffolded as an assumed gate only to parallelize proof-fill, its own proof
+  //    is its verification, and the run's report discloses it until discharged.
+  //    This is the substrate-gate behavior of pre-split plans (no `gate_class`), which
+  //    keep working.
+  //  - "cited": the node is currently deferred — either a logical proposition
+  //    assumption or a bibliographic metadata def, always MATCHED against `source`
+  //    and disclosed in the run's report. A logical carrier may later take the
+  //    supported local citation-discharge path; metadata is never discharged or threaded.
+  gate_class: z.enum(["gated", "cited"]).optional(),
+  // The id of the `cite:` entry (in the plan's `citations`) this node is matched
+  // against. REQUIRED for `gate_class:"cited"` (a deferred logical assumption or
+  // metadata carrier needs something exact to check against). A proved lemma/theorem produced by the supported
+  // citation-discharge path retains this field as provenance after the gate keys are
+  // removed; P9 checks both representations and source resolution.
+  source: z.string().optional(),
+  // The proved form of a `status:"cited"` core statement: a `define-local` lemma/theorem
+  // scaffolded, proved and matched against its source. F1 may plan a cited result this way
+  // when a library gives it directly or by a short bridge; `bin/gate.ts --discharge` and a
+  // round-A rewrite (`discharge.ts`) stamp it when they clear a `gate_class:"cited"` gate. P9
+  // accepts a cited statement as a lemma/theorem only with this stamp and its `source` kept.
+  citation_discharged: z.boolean().optional(),
+  // structure only: the member-atom ids, in field order (== core by_member_properties).
+  members: z.array(z.string()).optional(),
+  // statement only: the file the decl is emitted to, and the node ids it takes as
+  // hypotheses (assumption atoms used inline, and/or class structures it bundles).
+  target_file: z.string().optional(),
+  hyps: z.array(z.string()).optional(),
+  // statement only: the local theorem id (t1, t2 …) this statement realizes, which
+  // names F2's `T<id>.lean` file.
+  local_id: z.string().optional(),
+  // statement only: how reusable the result is. `standard` = a standard, named or textbook
+  // result (even if the paper re-proves it); `general` = a lemma stated over base-library/toolkit
+  // vocabulary, reusable outside this paper; `paper-specific` = stated over this paper's own
+  // objects. A classification only: it changes nothing else in the plan.
+  reuse_class: ReuseClassSchema.optional(),
+  delivery_role: DeliveryRoleSchema.optional(),
+  delivery_status: DeliveryStatusSchema.default("deliver"),
+  delivery_reason: z.string().min(1).optional(),
+  // assumption only: the planner's class for the atom (modeling assumption / substrate fact / a
+  // pinned reading …) — its one-phrase answer to the template's CLASSIFY EVERY ASSUMPTION.
+  classification: z.string().optional(),
+  // The CURRENT plan of this node, in at most `PLAN_NOTES_MAX` characters (the gate's P11):
+  // search trace, the statement shape F2 realizes, the reference F3 adapts. Never a history.
+  notes: z.string().optional(),
+});
+
+/** What one `notes` (node entry or S-block) may hold, in characters. The notes of a plan that
+ *  records no history fit well inside it: on a 220-entry plan the 73 notes free of revision
+ *  history had median 198 and maximum 1,183 characters (a cited gate: the encoded statement, its
+ *  search trace and the discharge route), and a statement's note adds its shape and its
+ *  signature premises (about 1,100 + 700 there). Past it a note is an appended log — 462 KB of
+ *  that plan's 736, which no prompt could carry. */
+export const PLAN_NOTES_MAX = 2_000;
+
+/** Keys a plan may carry outside the schema: older disclosure channels `bin/gate.ts` still
+ *  retires on a discharge, and `infrastructure_needed`, which the F1 prompt asked for until
+ *  2026-10-07 (a plan written before is not bounced for it). Nothing else reads a key the schema
+ *  does not define. */
+export const LEGACY_PLAN_KEYS = { root: ["external_substrate_assumptions", "infrastructure_needed"], node: ["external_hyps"] } as const;
+
+/** One external citation a `cited` node is matched against — a first-class graph
+ * dependency, id `cite:<slug>`. A logical cited assumption must faithfully encode
+ * the source claim in unshadowable `Sort 0` syntax (semantically Prop); a cited metadata def must record its scope/provenance
+ * clauses in a direct literal root-qualified String/List String/Array String payload. F2.5 verifies either carrier against the fetched
+ * source (preferred), or against `verbatim_statement` when no fetchable handle
+ * (arxiv | doi | url) resolves. */
+export const CitationSchema = z.object({
+  id: z.string().regex(/^cite:/),
+  title: z.string(),
+  authors: z.string(),
+  year: z.number().int(),
+  arxiv: z.string().optional(),
+  doi: z.string().optional(),
+  url: z.string().optional(),
+  locator: z.string(), // e.g. "Theorem 3.1", "Lemma 4.2", "§5.2"
+  // REQUIRED when no fetchable handle (arxiv | doi | url) resolves; else advisory.
+  verbatim_statement: z.string().optional(),
+  // Provenance for an attested transcription, especially when main/user supplied
+  // a lawfully obtained page because automated retrieval was unavailable.
+  attestation: z.object({
+    by: z.enum(["d0-agent", "main", "user"]),
+    note: z.string().min(1),
+    at: z.string().datetime().optional(),
+  }).optional(),
+});
+
+export const FeasibilitySchema = z.enum(["formalizable-now", "needs-new-infrastructure"]);
+
+export const PlanSchema = z.object({
+  qid: z.string(),
+  /** Legacy topical tag; carried through, never used to gate behaviour. */
+  cluster: z.string().optional(),
+  /** Target Lean subdirectory for emitted files, e.g. `Papers/Foo`. */
+  lean_subdir: z.string().optional(),
+  env: z.array(EnvEntrySchema).default([]),
+  nodes: z.record(z.string(), NodeEntrySchema),
+  /** External citations (`cite:<slug>` entries) referenced by `cited` nodes via
+   * their `source` field. Empty on runs with no cited dependencies. */
+  citations: z.array(CitationSchema).default([]),
+  /** Derived from the plan (§4.3); stored for convenience and gate-checked. */
+  feasibility: FeasibilitySchema.optional(),
+});
+
+export type Citation = z.infer<typeof CitationSchema>;
+type ParsedNodeEntry = z.infer<typeof NodeEntrySchema>;
+type ParsedPlan = z.infer<typeof PlanSchema>;
+export type NodeEntry = Omit<ParsedNodeEntry, "gate" | "delivery_status"> & {
+  gate?: boolean;
+  /** Optional in hand-built/legacy Plan values; PlanSchema materializes `deliver`. */
+  delivery_status?: z.infer<typeof DeliveryStatusSchema>;
+};
+export type Plan = Omit<ParsedPlan, "nodes"> & { nodes: Record<string, NodeEntry> };
+
+/** Feasibility is a pure function of the plan: any `define-local` node flagged
+ * Defer-tier ⇒ needs-new-infrastructure; otherwise formalizable-now. */
+export function deriveFeasibility(plan: Plan): z.infer<typeof FeasibilitySchema> {
+  const needsInfra = Object.values(plan.nodes).some(
+    (n) => n.delivery_status !== "undelivered" && n.disposition === "define-local" && n.defer_tier,
+  );
+  return needsInfra ? "needs-new-infrastructure" : "formalizable-now";
+}

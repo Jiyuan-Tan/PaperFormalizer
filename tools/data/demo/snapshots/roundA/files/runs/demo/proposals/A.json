@@ -1,0 +1,43 @@
+{
+  "slug": "demo",
+  "round": "A",
+  "created": "2026-10-17T18:38:17.330Z",
+  "proposals": [
+    {
+      "id": "a-lem-schur",
+      "round": "A",
+      "source": {
+        "kind": "cited",
+        "ref": "lem:schur",
+        "citation": "G.~H. Hardy, J.~E. Littlewood and G.~P\\'olya, \\emph{Inequalities}, 2nd ed., Cambridge University Press, 1952., Theorem 1"
+      },
+      "verdict": "propose",
+      "title": "Schur's inequality (exponent 1)",
+      "reference": "Hardy, Littlewood and P\\'olya, \\emph{Inequalities}, Theorem 1",
+      "content": "For all real numbers $a, b, c \\ge 0$, $a(a-b)(a-c) + b(b-a)(b-c) + c(c-a)(c-b) \\ge 0$.",
+      "division": "Foundations",
+      "target_module": "Toolkit/Foundations/Algebra/Schur.lean",
+      "new_module_overview": "Classical polynomial inequalities for nonnegative reals.",
+      "proposed_name": "schur_inequality",
+      "nearest_existing": [
+        {
+          "name": "(none found)",
+          "library": "Mathlib",
+          "why_not_same": "Mathlib has no Schur inequality for real numbers."
+        }
+      ],
+      "reuse_evidence": "A standard inequality, cited by many papers on polynomial inequalities; not in Mathlib.",
+      "division_reason": "An elementary inequality on real numbers.",
+      "qualifies_by": "judgement",
+      "division_signal": "Foundations",
+      "recurrence": [],
+      "path": "generalize",
+      "checker": {
+        "agrees": true,
+        "note": "The statement is the classical Schur inequality with exponent 1.",
+        "content_matches": true,
+        "duplicate_of": null
+      }
+    }
+  ]
+}

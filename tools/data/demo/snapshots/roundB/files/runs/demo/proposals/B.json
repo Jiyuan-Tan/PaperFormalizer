@@ -1,0 +1,157 @@
+{
+  "slug": "demo",
+  "round": "B",
+  "created": "2026-10-17T18:38:23.699Z",
+  "proposals": [
+    {
+      "id": "b-lem-schur",
+      "round": "B",
+      "source": {
+        "kind": "paper_decl",
+        "ref": "Papers.Demo.lem_schur"
+      },
+      "verdict": "skip",
+      "title": "Schur's inequality",
+      "reference": "[dry-run] no curator was called",
+      "content": "[dry-run] \\label{lem:schur} For all real numbers $a, b, c \\ge 0$, \\[ a(a-b)(a-c) + b(b-a)(b-c) + c(c-a)(c-b) \\ge 0 . \\]",
+      "division": "Foundations",
+      "target_module": "Toolkit/Foundations/Algebra/LemSchur.lean",
+      "new_module_overview": "[dry-run] stub module",
+      "proposed_name": "lem_schur",
+      "nearest_existing": [
+        {
+          "name": "(none found)",
+          "library": "-",
+          "why_not_same": "[dry-run] the search returned nothing"
+        }
+      ],
+      "reuse_evidence": "Built into your toolkit in round A.",
+      "division_reason": "[dry-run] first division",
+      "qualifies_by": "judgement",
+      "division_signal": "Foundations",
+      "moves_with": [],
+      "lean_type": "\\label{lem:schur} For all real numbers $a, b, c \\ge 0$, \\[ a(a-b)(a-c) + b(b-a)(b-c) + c(c-a)(c-b) \\ge 0 . \\]",
+      "recurrence": [],
+      "path": "move",
+      "checker": {
+        "agrees": true,
+        "note": "[dry-run] no checker was called.",
+        "content_matches": true,
+        "duplicate_of": null
+      },
+      "duplicate_of": "Toolkit.Foundations.Algebra.schur_inequality"
+    },
+    {
+      "id": "b-lem-sq",
+      "round": "B",
+      "source": {
+        "kind": "paper_decl",
+        "ref": "Papers.Demo.lem_sq"
+      },
+      "verdict": "skip",
+      "title": "$x^2+y^2 \\ge 2xy$",
+      "reference": "[dry-run] no curator was called",
+      "content": "[dry-run] \\label{lem:sq} For all real numbers $x$ and $y$, $x^2 + y^2 \\ge 2xy$.",
+      "division": "Foundations",
+      "target_module": "Toolkit/Foundations/Algebra/LemSq.lean",
+      "new_module_overview": "[dry-run] stub module",
+      "proposed_name": "lem_sq",
+      "nearest_existing": [
+        {
+          "name": "(none found)",
+          "library": "-",
+          "why_not_same": "[dry-run] the search returned nothing"
+        }
+      ],
+      "reuse_evidence": "Mathlib has it: two_mul_le_add_sq.",
+      "division_reason": "[dry-run] first division",
+      "qualifies_by": "judgement",
+      "division_signal": "Foundations",
+      "moves_with": [],
+      "lean_type": "\\label{lem:sq} For all real numbers $x$ and $y$, $x^2 + y^2 \\ge 2xy$.",
+      "recurrence": [],
+      "path": "move",
+      "checker": {
+        "agrees": true,
+        "note": "[dry-run] no checker was called.",
+        "content_matches": true,
+        "duplicate_of": null
+      },
+      "duplicate_of": "two_mul_le_add_sq"
+    },
+    {
+      "id": "b-thm-amgm",
+      "round": "B",
+      "source": {
+        "kind": "paper_decl",
+        "ref": "Papers.Demo.thm_amgm"
+      },
+      "verdict": "propose",
+      "title": "AM-GM for two nonnegative reals",
+      "reference": "Theorem 3 of the paper (as corrected)",
+      "content": "For all real numbers $a, b \\ge 0$, $\\frac{a+b}{2} \\ge \\sqrt{ab}$.",
+      "division": "Foundations",
+      "target_module": "Toolkit/Foundations/Algebra/MeanInequalities.lean",
+      "new_module_overview": "Inequalities between means of nonnegative reals.",
+      "proposed_name": "add_div_two_ge_sqrt_mul",
+      "nearest_existing": [
+        {
+          "name": "Real.geom_mean_le_arith_mean2_weighted",
+          "library": "Mathlib",
+          "why_not_same": "The weighted AM-GM inequality; with weights 1/2 it gives this one."
+        }
+      ],
+      "reuse_evidence": "Close to Mathlib's weighted AM-GM.",
+      "division_reason": "An elementary inequality on real numbers.",
+      "qualifies_by": "judgement",
+      "division_signal": "Foundations",
+      "moves_with": [],
+      "lean_type": "For all real numbers $a, b \\ge 0$, \\[ \\frac{a + b}{2} \\ge \\sqrt{ab} . \\]",
+      "recurrence": [],
+      "path": "move",
+      "checker": {
+        "agrees": true,
+        "note": "The statement matches the paper's result.",
+        "content_matches": true,
+        "duplicate_of": null
+      }
+    },
+    {
+      "id": "b-thm-cubic",
+      "round": "B",
+      "source": {
+        "kind": "paper_decl",
+        "ref": "Papers.Demo.thm_cubic"
+      },
+      "verdict": "propose",
+      "title": "A cubic inequality from Schur's inequality",
+      "reference": "Theorem 4 of the paper",
+      "content": "For all real numbers $a, b, c \\ge 0$, $(a+b+c)^3 + 9abc \\ge 4(a+b+c)(ab+bc+ca)$.",
+      "division": "Foundations",
+      "target_module": "Toolkit/Foundations/Algebra/Schur.lean",
+      "new_module_overview": "",
+      "proposed_name": "cubic_ge_of_schur",
+      "nearest_existing": [
+        {
+          "name": "(none found)",
+          "library": "Mathlib",
+          "why_not_same": "Not in Mathlib or your toolkit."
+        }
+      ],
+      "reuse_evidence": "A known consequence of Schur's inequality, used in olympiad-style estimates.",
+      "division_reason": "Beside Schur's inequality, which it follows from.",
+      "qualifies_by": "judgement",
+      "division_signal": "Foundations",
+      "moves_with": [],
+      "lean_type": "\\label{thm:cubic} For all real numbers $a, b, c \\ge 0$, \\[ (a + b + c)^3 + 9abc \\ge 4(a + b + c)(ab + bc + ca) . \\]",
+      "recurrence": [],
+      "path": "move",
+      "checker": {
+        "agrees": true,
+        "note": "The statement matches the paper's result.",
+        "content_matches": true,
+        "duplicate_of": null
+      }
+    }
+  ]
+}

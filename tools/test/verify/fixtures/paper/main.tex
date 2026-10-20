@@ -1,0 +1,30 @@
+\documentclass{article}
+% Preamble. This whole line is a comment and must vanish from the flat text.
+\usepackage{amsthm}
+\usepackage{cleveref}
+\newtheorem{thm}{Theorem}[section]
+\newtheorem{lem}[thm]{Lemma}
+\newtheorem*{cor}{Corollary}
+\newtheorem{defn}{Definition}
+\declaretheorem[style=plain,name=Assumption]{assump}
+\newtheorem{rmk}{Remark}
+
+\begin{document}
+
+\section{Introduction}
+\input{sec/intro}
+
+\include{sec/results}
+
+\appendix
+\input{appendix}
+
+% Both bibliography mechanisms are present on purpose: the union of the .bib
+% entries and the printed \bibitem bodies is what the parser must return.
+\bibliography{refs}
+\begin{thebibliography}{9}
+\bibitem{knight2006} Knight, K. (2006). Asymptotic theory for M-estimators.
+\bibitem{vdv1998} van der Vaart, A. W. (1998). \emph{Asymptotic Statistics}. Cambridge.
+\end{thebibliography}
+
+\end{document}

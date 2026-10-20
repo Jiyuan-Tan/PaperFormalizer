@@ -1,0 +1,10 @@
+\documentclass{article}
+\newtheorem{thm}{Theorem}
+\begin{document}
+\begin{thm}\label{thm:outer}
+Outer.
+\begin{thm}\label{thm:inner}
+Inner, which the parser refuses.
+\end{thm}
+\end{thm}
+\end{document}

@@ -1,0 +1,8 @@
+{
+  "thm:amgm": {
+    "kind": "accept",
+    "why": "The printed inequality is false for negative numbers ($a=b=-1$), and the proof only works for $a,b\\ge 0$. Adding $a,b\\ge 0$ gives the standard AM-GM inequality, which is what the paper evidently means.",
+    "of": "624a8b8ba69e72fd",
+    "at": "2026-10-17T18:38:12.873Z"
+  }
+}

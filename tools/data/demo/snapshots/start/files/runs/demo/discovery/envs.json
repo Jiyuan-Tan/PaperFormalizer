@@ -1,0 +1,149 @@
+{
+  "main_file": "main.tex",
+  "files": [
+    "main.tex"
+  ],
+  "newtheorem": {
+    "theorem": "theorem",
+    "thm": "theorem",
+    "lemma": "lemma",
+    "lem": "lemma",
+    "proposition": "proposition",
+    "prop": "proposition",
+    "corollary": "corollary",
+    "cor": "corollary",
+    "definition": "definition",
+    "defn": "definition",
+    "def": "definition",
+    "assumption": "assumption",
+    "assum": "assumption",
+    "assump": "assumption",
+    "ass": "assumption",
+    "cond": "assumption",
+    "hyp": "assumption",
+    "remark": "remark",
+    "rem": "remark",
+    "example": "example",
+    "ex": "example",
+    "algorithm": "other",
+    "algorithmic": "other"
+  },
+  "envs": [
+    {
+      "id": "lem:schur",
+      "kind": "lemma",
+      "envName": "lemma",
+      "label": "lem:schur",
+      "title": "Schur's inequality {\\cite[Theorem~1]{hlp}}",
+      "body": "\\label{lem:schur}\nFor all real numbers $a, b, c \\ge 0$,\n\\[\n  a(a-b)(a-c) + b(b-a)(b-c) + c(c-a)(c-b) \\ge 0 .\n\\]",
+      "proof": null,
+      "proofLines": null,
+      "lines": {
+        "file": "main.tex",
+        "from": 22,
+        "to": 27,
+        "env": "lemma",
+        "label": "lem:schur"
+      },
+      "refs": []
+    },
+    {
+      "id": "lem:sq",
+      "kind": "lemma",
+      "envName": "lemma",
+      "label": "lem:sq",
+      "title": null,
+      "body": "\\label{lem:sq}\nFor all real numbers $x$ and $y$, $x^2 + y^2 \\ge 2xy$.",
+      "proof": "$x^2 + y^2 - 2xy = (x - y)^2 \\ge 0$.",
+      "proofLines": {
+        "file": "main.tex",
+        "from": 33,
+        "to": 35,
+        "env": "proof",
+        "label": null
+      },
+      "lines": {
+        "file": "main.tex",
+        "from": 29,
+        "to": 31,
+        "env": "lemma",
+        "label": "lem:sq"
+      },
+      "refs": []
+    },
+    {
+      "id": "thm:amgm",
+      "kind": "theorem",
+      "envName": "theorem",
+      "label": "thm:amgm",
+      "title": null,
+      "body": "\\label{thm:amgm}\nFor all real numbers $a$ and $b$,\n\\[\n  \\frac{a + b}{2} \\ge \\sqrt{ab} .\n\\]",
+      "proof": "Apply Lemma~\\ref{lem:sq} to $x = \\sqrt{a}$ and $y = \\sqrt{b}$: then $x^2 = a$, $y^2 = b$ and\n$xy = \\sqrt{ab}$, so $a + b \\ge 2\\sqrt{ab}$.",
+      "proofLines": {
+        "file": "main.tex",
+        "from": 46,
+        "to": 49,
+        "env": "proof",
+        "label": null
+      },
+      "lines": {
+        "file": "main.tex",
+        "from": 39,
+        "to": 44,
+        "env": "theorem",
+        "label": "thm:amgm"
+      },
+      "refs": [
+        "lem:sq"
+      ]
+    },
+    {
+      "id": "thm:cubic",
+      "kind": "theorem",
+      "envName": "theorem",
+      "label": "thm:cubic",
+      "title": null,
+      "body": "\\label{thm:cubic}\nFor all real numbers $a, b, c \\ge 0$,\n\\[\n  (a + b + c)^3 + 9abc \\ge 4(a + b + c)(ab + bc + ca) .\n\\]",
+      "proof": "Expanding both sides,\n\\[\n  (a+b+c)^3 + 9abc - 4(a+b+c)(ab+bc+ca)\n  = a^3 + b^3 + c^3 - \\sum_{\\mathrm{sym}} a^2 b + 3abc ,\n\\]\nwhere $\\sum_{\\mathrm{sym}} a^2 b$ is the sum of the six terms $a^2 b$, $a^2 c$, $b^2 a$, $b^2 c$,\n$c^2 a$, $c^2 b$. The right-hand side equals\n$a(a-b)(a-c) + b(b-a)(b-c) + c(c-a)(c-b)$, which is nonnegative by Lemma~\\ref{lem:schur}.",
+      "proofLines": {
+        "file": "main.tex",
+        "from": 58,
+        "to": 67,
+        "env": "proof",
+        "label": null
+      },
+      "lines": {
+        "file": "main.tex",
+        "from": 51,
+        "to": 56,
+        "env": "theorem",
+        "label": "thm:cubic"
+      },
+      "refs": [
+        "lem:schur"
+      ]
+    }
+  ],
+  "bibliography": [
+    {
+      "key": "hlp",
+      "text": "G.~H. Hardy, J.~E. Littlewood and G.~P\\'olya, \\emph{Inequalities}, 2nd ed., Cambridge University Press, 1952."
+    }
+  ],
+  "note_macros": {
+    "version": 3,
+    "macros": [
+      {
+        "name": "marginpar",
+        "class": "comment",
+        "args": [
+          "o",
+          "m"
+        ],
+        "content": 1,
+        "from": "package",
+        "why": "a margin note"
+      }
+    ]
+  }
+}

@@ -1,0 +1,69 @@
+{
+ "statements": [
+  {
+   "id": "lem:cont-alt1",
+   "statement": "\\label{lemma:cont}\nSuppose the weighting is bounded,  namely $\\ell_h \\leq C<\\infty$, and $\\Gamma\\subset \\mathbb{L}_2$. The following conditions are sufficient for $\\bar{Q}<\\infty$ with $q=1$ in Examples~\\ref{ex:CATE} and~\\ref{ex:RDD}, and for $\\bar{Q}<\\infty$ with $q=1/2$ in Examples~\\ref{ex:elasticity} and~\\ref{ex:deriv}.\n\\begin{enumerate}\n    \\item Example~\\ref{ex:CATE}. $\\pi_0(v,x)$ is bounded away from zero and one.\n    \\item Example~\\ref{ex:RDD}. The bandwidth is fixed.\n    \\item Example~\\ref{ex:elasticity}. $f(d\\mid x)$ vanishes for each $d$ in the boundary of the support of $D$ given $X=x$ almost everywhere. $-\\partial_d \\log f(d \\mid x)$ is a bounded above, and $\\Gamma$ consists of functions\n    $\\gamma$ that are twice continuously differentiable in the first argument and that satisfy $E[ \\{\\partial_d \\gamma(D,X)\\}^2]<\\infty$ and $E[ \\{\\partial^2_d \\gamma(D,X)\\}^2]<\\infty$.\n     \\item Example~\\ref{ex:deriv}. $f(d\\mid v,x)$ vanishes for each $d$ in the boundary of the support of $D$ given $(V,X)=(v,x)$ almost everywhere. $-\\partial_d \\log f(d \\mid v,x)$ is a bounded above, and $\\Gamma$ consists of functions\n    $\\gamma$ that are twice continuously differentiable in the first argument and that satisfy $E[ \\{\\partial_d \\gamma(D,V,X)\\}^2]<\\infty$ and $E[ \\{\\partial^2_d \\gamma(D,V,X)\\}^2]<\\infty$.\n\\end{enumerate} [Hypotheses: ass:cont-weighting-and-space, ass:cont-space, ass:cont-cate-propensity]",
+   "depends_on": [
+    "ass:cont-weighting-and-space",
+    "ass:cont-space",
+    "ass:cont-cate-propensity"
+   ]
+  },
+  {
+   "id": "lem:cont-alt2",
+   "statement": "\\label{lemma:cont}\nSuppose the weighting is bounded,  namely $\\ell_h \\leq C<\\infty$, and $\\Gamma\\subset \\mathbb{L}_2$. The following conditions are sufficient for $\\bar{Q}<\\infty$ with $q=1$ in Examples~\\ref{ex:CATE} and~\\ref{ex:RDD}, and for $\\bar{Q}<\\infty$ with $q=1/2$ in Examples~\\ref{ex:elasticity} and~\\ref{ex:deriv}.\n\\begin{enumerate}\n    \\item Example~\\ref{ex:CATE}. $\\pi_0(v,x)$ is bounded away from zero and one.\n    \\item Example~\\ref{ex:RDD}. The bandwidth is fixed.\n    \\item Example~\\ref{ex:elasticity}. $f(d\\mid x)$ vanishes for each $d$ in the boundary of the support of $D$ given $X=x$ almost everywhere. $-\\partial_d \\log f(d \\mid x)$ is a bounded above, and $\\Gamma$ consists of functions\n    $\\gamma$ that are twice continuously differentiable in the first argument and that satisfy $E[ \\{\\partial_d \\gamma(D,X)\\}^2]<\\infty$ and $E[ \\{\\partial^2_d \\gamma(D,X)\\}^2]<\\infty$.\n     \\item Example~\\ref{ex:deriv}. $f(d\\mid v,x)$ vanishes for each $d$ in the boundary of the support of $D$ given $(V,X)=(v,x)$ almost everywhere. $-\\partial_d \\log f(d \\mid v,x)$ is a bounded above, and $\\Gamma$ consists of functions\n    $\\gamma$ that are twice continuously differentiable in the first argument and that satisfy $E[ \\{\\partial_d \\gamma(D,V,X)\\}^2]<\\infty$ and $E[ \\{\\partial^2_d \\gamma(D,V,X)\\}^2]<\\infty$.\n\\end{enumerate} [Hypotheses: ass:cont-weighting-and-space, ass:cont-space, ass:cont-rdd-bandwidth]",
+   "depends_on": [
+    "ass:cont-weighting-and-space",
+    "ass:cont-space",
+    "ass:cont-rdd-bandwidth"
+   ]
+  },
+  {
+   "id": "lem:cont-alt3",
+   "statement": "\\label{lemma:cont}\nSuppose the weighting is bounded,  namely $\\ell_h \\leq C<\\infty$, and $\\Gamma\\subset \\mathbb{L}_2$. The following conditions are sufficient for $\\bar{Q}<\\infty$ with $q=1$ in Examples~\\ref{ex:CATE} and~\\ref{ex:RDD}, and for $\\bar{Q}<\\infty$ with $q=1/2$ in Examples~\\ref{ex:elasticity} and~\\ref{ex:deriv}.\n\\begin{enumerate}\n    \\item Example~\\ref{ex:CATE}. $\\pi_0(v,x)$ is bounded away from zero and one.\n    \\item Example~\\ref{ex:RDD}. The bandwidth is fixed.\n    \\item Example~\\ref{ex:elasticity}. $f(d\\mid x)$ vanishes for each $d$ in the boundary of the support of $D$ given $X=x$ almost everywhere. $-\\partial_d \\log f(d \\mid x)$ is a bounded above, and $\\Gamma$ consists of functions\n    $\\gamma$ that are twice continuously differentiable in the first argument and that satisfy $E[ \\{\\partial_d \\gamma(D,X)\\}^2]<\\infty$ and $E[ \\{\\partial^2_d \\gamma(D,X)\\}^2]<\\infty$.\n     \\item Example~\\ref{ex:deriv}. $f(d\\mid v,x)$ vanishes for each $d$ in the boundary of the support of $D$ given $(V,X)=(v,x)$ almost everywhere. $-\\partial_d \\log f(d \\mid v,x)$ is a bounded above, and $\\Gamma$ consists of functions\n    $\\gamma$ that are twice continuously differentiable in the first argument and that satisfy $E[ \\{\\partial_d \\gamma(D,V,X)\\}^2]<\\infty$ and $E[ \\{\\partial^2_d \\gamma(D,V,X)\\}^2]<\\infty$.\n\\end{enumerate} [Hypotheses: ass:cont-weighting-and-space, ass:cont-space, ass:cont-elasticity-boundary, ass:cont-elasticity-score-and-class]",
+   "depends_on": [
+    "ass:cont-weighting-and-space",
+    "ass:cont-space",
+    "ass:cont-elasticity-boundary",
+    "ass:cont-elasticity-score-and-class"
+   ]
+  },
+  {
+   "id": "lem:cont-alt4",
+   "statement": "\\label{lemma:cont}\nSuppose the weighting is bounded,  namely $\\ell_h \\leq C<\\infty$, and $\\Gamma\\subset \\mathbb{L}_2$. The following conditions are sufficient for $\\bar{Q}<\\infty$ with $q=1$ in Examples~\\ref{ex:CATE} and~\\ref{ex:RDD}, and for $\\bar{Q}<\\infty$ with $q=1/2$ in Examples~\\ref{ex:elasticity} and~\\ref{ex:deriv}.\n\\begin{enumerate}\n    \\item Example~\\ref{ex:CATE}. $\\pi_0(v,x)$ is bounded away from zero and one.\n    \\item Example~\\ref{ex:RDD}. The bandwidth is fixed.\n    \\item Example~\\ref{ex:elasticity}. $f(d\\mid x)$ vanishes for each $d$ in the boundary of the support of $D$ given $X=x$ almost everywhere. $-\\partial_d \\log f(d \\mid x)$ is a bounded above, and $\\Gamma$ consists of functions\n    $\\gamma$ that are twice continuously differentiable in the first argument and that satisfy $E[ \\{\\partial_d \\gamma(D,X)\\}^2]<\\infty$ and $E[ \\{\\partial^2_d \\gamma(D,X)\\}^2]<\\infty$.\n     \\item Example~\\ref{ex:deriv}. $f(d\\mid v,x)$ vanishes for each $d$ in the boundary of the support of $D$ given $(V,X)=(v,x)$ almost everywhere. $-\\partial_d \\log f(d \\mid v,x)$ is a bounded above, and $\\Gamma$ consists of functions\n    $\\gamma$ that are twice continuously differentiable in the first argument and that satisfy $E[ \\{\\partial_d \\gamma(D,V,X)\\}^2]<\\infty$ and $E[ \\{\\partial^2_d \\gamma(D,V,X)\\}^2]<\\infty$.\n\\end{enumerate} [Hypotheses: ass:cont-weighting-and-space, ass:cont-space, ass:cont-deriv-boundary, ass:cont-deriv-score-and-class]",
+   "depends_on": [
+    "ass:cont-weighting-and-space",
+    "ass:cont-space",
+    "ass:cont-deriv-boundary",
+    "ass:cont-deriv-score-and-class"
+   ]
+  }
+ ],
+ "assumptions": [
+  {
+   "id": "ass:cont-weighting-and-space"
+  },
+  {
+   "id": "ass:cont-space"
+  },
+  {
+   "id": "ass:cont-cate-propensity"
+  },
+  {
+   "id": "ass:cont-rdd-bandwidth"
+  },
+  {
+   "id": "ass:cont-elasticity-boundary"
+  },
+  {
+   "id": "ass:cont-elasticity-score-and-class"
+  },
+  {
+   "id": "ass:cont-deriv-boundary"
+  },
+  {
+   "id": "ass:cont-deriv-score-and-class"
+  }
+ ],
+ "definitions": []
+}
