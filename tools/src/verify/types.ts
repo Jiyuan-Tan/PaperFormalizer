@@ -1,5 +1,5 @@
 /**
- * `theoremchecker verify` — shared contracts.
+ * `leansmith verify` — shared contracts.
  *
  * Verify mode takes a user's LaTeX paper and produces (1) a typed core (V1), (2) a
  * faithfulness / ambiguity / correctness review of that core (V1.5), (3) the unchanged
@@ -774,13 +774,13 @@ export interface VerifyStageArgs {
   state: StateJson;
   deps: { runCodex: typeof runCodex; fetchBytes?: import("../formalization/citation_fetch.js").FetchBytes };
   dryRun: boolean;
-  /** `theoremchecker.json` `referee.max_concurrent`: parallel referee calls of the sharded referee
+  /** `leansmith.json` `referee.max_concurrent`: parallel referee calls of the sharded referee
    * (symbol and node shards). Default 6. */
   refereeMaxConcurrent?: number;
-  /** `theoremchecker.json` `referee.shard_bytes` / `shard_max_*`: node shard sizes (defaults in
+  /** `leansmith.json` `referee.shard_bytes` / `shard_max_*`: node shard sizes (defaults in
    * `referee_shards.ts` `DEFAULT_SHARD_LIMITS`). */
   refereeShardLimits?: { bytes?: number; hypotheses?: number; lemmas?: number; theorems?: number };
-  /** `theoremchecker.json` `referee.symbol_effort`: codex reasoning effort of every symbol-referee
+  /** `leansmith.json` `referee.symbol_effort`: codex reasoning effort of every symbol-referee
    * call (default "medium"); the statement referee stays at "high". */
   refereeSymbolEffort?: "low" | "medium" | "high";
   /** Fix as you go (sharded referee; default on): a level with an error pauses the upward grading

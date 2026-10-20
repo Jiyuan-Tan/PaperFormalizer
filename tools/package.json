@@ -1,10 +1,10 @@
 {
-  "name": "theoremchecker",
+  "name": "leansmith",
   "version": "0.1.0",
   "private": true,
   "type": "module",
   "bin": {
-    "theoremchecker": "./bin/theoremchecker.ts"
+    "leansmith": "./bin/leansmith.ts"
   },
   "scripts": {
     "check": "npm run typecheck && npm run lint:template && npm test",

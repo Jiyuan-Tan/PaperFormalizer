@@ -1,6 +1,6 @@
-# TheoremChecker user manual
+# LeanSmith user manual
 
-TheoremChecker checks the mathematics of a LaTeX paper in Lean. It transcribes the paper's results
+LeanSmith checks the mathematics of a LaTeX paper in Lean. It transcribes the paper's results
 (V1), has a referee check the transcription and the proofs (V1.5), formalizes and proves the
 results against your base libraries and your personal toolkit (F1–F5), and writes a per-result
 report (V6).
@@ -8,25 +8,25 @@ report (V6).
 ## Install
 
 The README's "Install" is the one place that lists the requirements and the steps (clone, `npm
-install`, `theoremchecker doctor` to check the prerequisites, `theoremchecker init` for your
+install`, `leansmith doctor` to check the prerequisites, `leansmith init` for your
 toolkit, a first `verify`). Every command below runs from `tools/` after `source scripts/node_env.sh`.
 
 ## The toolkit
 
-Every run needs a **toolkit**: your own Lake project with a `theoremchecker.json` at its root. It
+Every run needs a **toolkit**: your own Lake project with a `leansmith.json` at its root. It
 holds your curated library (`Toolkit/Foundations`, `Toolkit/Tricks`), the per-paper Lean output
 (`Papers/`), and the run records (`runs/`). The base libraries it builds on (Mathlib, and
 optionally others such as Causalean) are read-only Lake dependencies declared in
-`theoremchecker.json`.
+`leansmith.json`.
 
-Create one with `theoremchecker init <dir>` (README "Install"): it copies `templates/toolkit/`,
+Create one with `leansmith init <dir>` (README "Install"): it copies `templates/toolkit/`,
 installs the optional domain libraries you choose (`--domains`, `--libraries`; `init --list` shows
 them), makes the toolkit a git repository and builds it. The template has the lakefile (Mathlib
 pinned; the domain libraries between the `# BEGIN/END domain libraries` markers; the `Toolkit` and
-`Papers` libraries; the `paper_index` / `toolkit_index` executables TheoremChecker needs, built on
-the template's own index extractor `TheoremCheckerIndexCore.lean` — every `verify` refuses a
+`Papers` libraries; the `paper_index` / `toolkit_index` executables LeanSmith needs, built on
+the template's own index extractor `LeanSmithIndexCore.lean` — every `verify` refuses a
 toolkit whose lakefile lacks one), the barrels `Toolkit.lean` / `Toolkit/<Division>.lean` /
-`Papers.lean`, an empty `doc/ledger.json` and a `.gitignore`. The `theoremchecker.json` `init`
+`Papers.lean`, an empty `doc/ledger.json` and a `.gitignore`. The `leansmith.json` `init`
 writes for a Causalean toolkit:
 
     {
@@ -37,8 +37,8 @@ writes for a Causalean toolkit:
         { "name": "Mathlib", "kind": "transitive", "search": ["loogle", "leansearch"] },
         { "name": "Causalean", "kind": "path", "path": ".lake/packages/Causalean",
           "index": ".lake/packages/Causalean/doc/library_index.json",
-          "alias_file": "../TheoremChecker/tools/data/aliases/causalean.json",
-          "prompt_notes": "../TheoremChecker/tools/data/prompt_notes/causalean.md" }
+          "alias_file": "../LeanSmith/tools/data/aliases/causalean.json",
+          "prompt_notes": "../LeanSmith/tools/data/prompt_notes/causalean.md" }
       ],
       "lean": { "toolchain": "leanprover/lean4:v4.33.0" }
     }
@@ -47,19 +47,19 @@ Per base library, all optional: `index` (a `library_index.json`-shaped declarati
 by `npm run search`), `review_sidecars`, `alias_file` (concept synonyms that widen retrieval) and
 `prompt_notes` (a Markdown file of the library's tactics and conventions, appended to the F2
 scaffold and F4 filler prompts as `## Notes for <name>`). Relative paths resolve against the
-toolkit root. TheoremChecker ships the alias file and the notes for Causalean under `tools/data/`;
+toolkit root. LeanSmith ships the alias file and the notes for Causalean under `tools/data/`;
 `init` writes an index for a library that ships none under the toolkit's `doc/base_index/`.
 
-TheoremChecker finds the toolkit, in order, from `--toolkit <path>`, the `THEOREMCHECKER_TOOLKIT`
+LeanSmith finds the toolkit, in order, from `--toolkit <path>`, the `LEANSMITH_TOOLKIT`
 environment variable, or the nearest ancestor of the current directory that contains
-`theoremchecker.json`. If none applies it stops and says so; it never guesses a directory.
+`leansmith.json`. If none applies it stops and says so; it never guesses a directory.
 
 It holds three library tiers:
 
-- **base** — read-only Lake dependencies (Mathlib, and e.g. Causalean), listed in `theoremchecker.json`;
+- **base** — read-only Lake dependencies (Mathlib, and e.g. Causalean), listed in `leansmith.json`;
 - **toolkit** — `Toolkit/Foundations/…` (standard definitions and named results absent from the
   base) and `Toolkit/Tricks/…` (the user's own reusable lemmas). Everything in it is proved; it
-  grows only by the owner's decisions in the promotion rounds ("Promoting results into your toolkit"), by `theoremchecker study`,
+  grows only by the owner's decisions in the promotion rounds ("Promoting results into your toolkit"), by `leansmith study`,
   or by the owner's own hand;
 - **papers** — `Papers/<Slug>/`, one module tree per verified paper; may import base and toolkit,
   and only the root `Papers.lean` barrel imports it (added when the run's F5 completes).
@@ -70,13 +70,13 @@ not conventions.
 To lint a toolkit by hand: `npm run lint:layout -- --toolkit
 <path> [--scope toolkit|all]` (layering, module size, header contract, run tokens) and
 `npm run lint:module-headers -- --toolkit <path> --strict`, from `tools/`; instead of `--toolkit`,
-set `THEOREMCHECKER_TOOLKIT` or run from inside the toolkit. They lint a toolkit, not this
+set `LEANSMITH_TOOLKIT` or run from inside the toolkit. They lint a toolkit, not this
 repository, so `npm run check` runs neither (it header-lints the shipped template barrels,
 `npm run lint:template`).
 
 ## The local UI
 
-    npx tsx bin/theoremchecker.ts ui [--toolkit <path>] [--port N] [--open] [--new]
+    npx tsx bin/leansmith.ts ui [--toolkit <path>] [--port N] [--open] [--new]
 
 opens a web page for your toolkit on this computer (Windows, macOS or Linux; any current browser).
 It listens on 127.0.0.1 only and prints a link carrying this session's key — open that link (`--open`
@@ -87,7 +87,7 @@ on disk reaches an open page within about a second; nothing needs a reload):
 - **Library** — the toolkit's results read from the Lean sources: each declaration's docstring next
   to its statement, row by row, what it uses, what uses it, and which papers use it.
 - **Paper** — the paper as the run marks it (`annotated/`, else the source): the printed text that is
-  wrong in red, the correction in blue, TheoremChecker's notes in the margin, a proof map (an arrow
+  wrong in red, the correction in blue, LeanSmith's notes in the margin, a proof map (an arrow
   reads "used by"), and for each result its referee verdict, the conditions added, and its Lean
   statement linked to the paper's words: hypotheses one to a row, the conclusion as numbered
   clauses, a clause that carries hypotheses or parts of its own nested under it, and a predicate
@@ -101,7 +101,7 @@ on disk reaches an open page within about a second; nothing needs a reload):
   written into its checklist.
 
 **Who acts on a run.** You work with an agent in an interactive session (Claude Code or Codex) started
-in this repository: ask it, for example, "Use TheoremChecker to verify the paper at <path>". It
+in this repository: ask it, for example, "Use LeanSmith to verify the paper at <path>". It
 starts the run, brings up this page, gives you the link, and attaches itself to the run (the paper's
 page shows "<agent> attached"). From then on it acts at every halt and resumes. What is yours to decide, never the agent's:
 
@@ -157,10 +157,10 @@ then open the link (any local port works for the forward).
 
 ## The demo
 
-    npx tsx bin/theoremchecker.ts demo [--dir <path>] [--port N] [--open] [--restart]
+    npx tsx bin/leansmith.ts demo [--dir <path>] [--port N] [--open] [--restart]
 
 plays one recorded run of a made-up paper (`tools/data/demo/paper/`) on the real page, in a toolkit
-of its own (`--dir`, default `~/.theoremchecker/demo`; port 7342), with a tour in the corner of the
+of its own (`--dir`, default `~/.leansmith/demo`; port 7342), with a tour in the corner of the
 page. The tour moves on with its Next button, or with what you send where a run would wait for you:
 your decisions on a repair that would weaken a main result, the apply of a promotion round. A
 stand-in for the agent takes them (nothing is started) and answers a message with a note on what a
@@ -174,16 +174,16 @@ agent's recommendations) and keeps each state as a layered snapshot under
 change shape. `tools/data/demo/demo.json` is the tour: one step per state, with its view, its words,
 the element it points at, and how it ends.
 
-## `theoremchecker verify`
+## `leansmith verify`
 
-    npx tsx bin/theoremchecker.ts verify <paper.tex|dir|archive> [--toolkit <path>] [--slug s]
+    npx tsx bin/leansmith.ts verify <paper.tex|dir|archive> [--toolkit <path>] [--slug s]
         [--main relpath] [--targets label,label] [--resume] [--from-stage <stage>] [--fresh-review]
         [--from-transcript] [--stop-after <stage>] [--clear-gate <flag>]... [--defer-proposals] [--debug | --full-auto] [--dry-run]
         [--reject-rewind "<reason>"] [--clear-patch-cap] [--accept-cap]
         [--accept-repair [<node>,…]] [--decline-repair "[<node>,…: ]<reason>"] [--redo-repair "<node>: <guidance>"]...
         [--reject-finding "[<node>: [bookkeeping: ]]<reading>"]... [--add-condition "<node>: <condition>"]...
         [--edit-reading "<id>: <new text>"]... [--remove-reading <id>]... [--umbrella <node>]...
-    npx tsx bin/theoremchecker.ts verify --stop --slug s [--toolkit <path>]
+    npx tsx bin/leansmith.ts verify --stop --slug s [--toolkit <path>]
 
 Every flag from `--reject-rewind` on answers a halt and goes with `--resume`; the halt message
 lists the ones that answer it. The table at the end of this section says what each does and where
@@ -221,7 +221,7 @@ its full account is (the orchestrator guide's "Halt options" table says who rule
   (pid, kind, tag, start time). `--stop` sends the runner SIGTERM if it is still alive, then stops
   every recorded worker that is still the same process (its start time must match the record — a pid
   the system has since reused is reported and left alone) and any process still carrying the run's
-  tag in its environment (`THEOREMCHECKER_RUN_TAG`), then deletes the file. It combines only with
+  tag in its environment (`LEANSMITH_RUN_TAG`), then deletes the file. It combines only with
   `--toolkit` and `--slug`, and leaves alone a run recorded on another machine of a shared mount:
   stop that one there. A runner that receives SIGTERM, SIGINT (Ctrl-C) or SIGHUP starts no new
   worker, sends SIGTERM to each worker's process group, SIGKILLs what is left after 2 s, logs
@@ -229,7 +229,7 @@ its full account is (the orchestrator guide's "Halt options" table says who rule
   period. The workers (codex, claude, lake, lean-lsp) run in their own process groups: a kill of the
   runner's group alone does not reach them, and a runner killed with SIGKILL leaves them running —
   `--stop` is what cleans up. By hand, only as a fallback: signal the `node … tsx …
-  theoremchecker.ts verify` process itself, not the `npm exec` wrapper above it (which does not pass
+  leansmith.ts verify` process itself, not the `npm exec` wrapper above it (which does not pass
   the signal on), then check with `ps` that nothing with its working directory in the run's folder
   is left. `--resume` continues from the last completed step.
 - A live `--from-stage V1` or `V1.5` takes the paper out of `Papers.lean` until its F5 completes again.
@@ -312,7 +312,7 @@ A good first run: `--stop-after V1.5`, read the findings on the paper's page (or
     <toolkit>/runs/study_<slug>/          a study: its requirement, plan, rounds and agent transcripts
                                           (a promotion round's builds: `study_<paper>__<entry id>/`)
     <toolkit>/runs/_garden/verify/<stamp>/   the logs of a `garden --verify`
-    <toolkit>/runs/toolkit_docstrings/    the records of `theoremchecker docstrings`
+    <toolkit>/runs/toolkit_docstrings/    the records of `leansmith docstrings`
     <toolkit>/doc/ledger.json             every toolkit declaration's origin and every promotion decision
     <toolkit>/doc/statements.json         every scanned statement, for recurrence across your papers
     <toolkit>/doc/toolkit_graph.json      the toolkit dependency graph, derived from the Lean
@@ -377,7 +377,7 @@ V6 also writes `runs/<slug>/bundle/`, a self-contained directory:
 
 - `corrected_paper/` — your paper as it reads after the corrections: your own class, preamble, bibliography,
   figures and file layout, with each corrected statement, proof step and proof written in place of
-  the printed one. It is plain TeX you can keep editing: no TheoremChecker macro, colour or note. A
+  the printed one. It is plain TeX you can keep editing: no LeanSmith macro, colour or note. A
   reading a statement relies on appears as a remark at that statement. A condition added to a result
   beyond its printed text is the last paragraph of its statement ("Additional condition."), unless the
   statement already states it in the same words. A corollary or proposition a repair split off
@@ -414,11 +414,11 @@ V6 also writes `runs/<slug>/bundle/`, a self-contained directory:
   - what it was built against — you built against your local copy of each base library, which need
     not be the public repository. The files of it your paper reaches are recorded with their git
     blob hashes (`lean/built-against.json`). Offline nothing more is claimed (a note).
-    `theoremchecker report <slug> --verify-public` compares those hashes with the public revision
+    `leansmith report <slug> --verify-public` compares those hashes with the public revision
     over the GitHub API (nothing is cloned; `GITHUB_TOKEN` is used when set): a file that differs is
     an item to check (not blocking), since the third person's build could then differ from yours.
   - the pin — a library your toolkit requires from its public repository is pinned at the commit your
-    toolkit built on (its `lake-manifest.json`), not the catalogue's. When TheoremChecker pins a
+    toolkit built on (its `lake-manifest.json`), not the catalogue's. When LeanSmith pins a
     different one, the README and the V6 log say so and how to move to it; nothing is refused.
 - `page/page.json` — the paper's page as the local UI draws it, as data: each result as corrected
   with its verdict, notes, Lean declaration and the links between its phrases and the Lean rows, the
@@ -428,7 +428,7 @@ V6 also writes `runs/<slug>/bundle/`, a self-contained directory:
 - `REPORT.md` — the report.
 - `f4_seal.json` — when the run has Lean: the verdict of each of the two Lean reviewers on every
   statement, bound to the statement Lean elaborated, with the hash of your source, under one `code`.
-  `theoremchecker seal <bundle dir>` checks it anywhere (no toolkit, no model, no Lean): the code is
+  `leansmith seal <bundle dir>` checks it anywhere (no toolkit, no model, no Lean): the code is
   the hash of the file's contents, and both reviewers passed every statement. It is a checksum, not a
   signature — it shows the bundle is consistent with a finished review, not who ran it.
 - `f4_reviews.log` — what the two reviewers answered at each of those review passes, as the run
@@ -440,21 +440,21 @@ V6 also writes `runs/<slug>/bundle/`, a self-contained directory:
   the bundle was written; files added later, such as Lake's build outputs, are not its concern.
   (A bundle written before the corrected paper's folder was renamed holds it as `paper/`, and has
   no `page/`: its seal still checks.)
-  `theoremchecker report <slug> --arxiv <id>` records the paper's arXiv identifier in the run and
+  `leansmith report <slug> --arxiv <id>` records the paper's arXiv identifier in the run and
   under the seal — as you declare it: nothing compares it with your source.
 
 What the checks do and do not establish: every corrected statement and its proof was graded by the
-referee, and every result that depends on a corrected one was graded again. TheoremChecker checks
+referee, and every result that depends on a corrected one was graded again. LeanSmith checks
 the paper's results: the prose around them is yours, left as printed and not examined.
 
-`theoremchecker report <slug> [--out <dir>]` writes the report and the bundle again from the run's
+`leansmith report <slug> [--out <dir>]` writes the report and the bundle again from the run's
 records — no stage runs, no model is called, Lean is not rebuilt (the evidence is the one the report
 on file recorded). With `--out` both go to that directory and the run is left untouched.
 
 ### Sharing a finished paper
 
 A finished paper can be published on the public site of shared papers
-(<https://jiyuan-tan.github.io/TheoremCheckerPapers/>), at `papers/<slug>/` there. Sharing is your
+(<https://jiyuan-tan.github.io/LeanSmithPapers/>), at `papers/<slug>/` there. Sharing is your
 decision, and it is public:
 
 - **What it publishes**: the whole bundle — the corrected paper's TeX source and PDF, the findings
@@ -462,13 +462,13 @@ decision, and it is public:
   share. It cannot be fully undone once others have fetched it.
 - **Under your name**: you confirm in your browser, signing in to GitHub. The sign-in asks for no
   permission: the share service learns your GitHub name and account, nothing else, and keeps no
-  token. Nothing is installed or signed in on your machine; TheoremChecker never asks for a password
+  token. Nothing is installed or signed in on your machine; LeanSmith never asks for a password
   or a token.
 
-      theoremchecker share <slug> [--dry-run]
+      leansmith share <slug> [--dry-run]
 
 The command refuses a run that has not finished V6, a bundle of an older layout (write it again
-with `theoremchecker report <slug>`), a bundle with blocking TODO items, and a bundle the registry
+with `leansmith report <slug>`), a bundle with blocking TODO items, and a bundle the registry
 would refuse — it applies the registry's own rules first, one line per problem: a missing or broken
 seal, a file outside the bundle's layout or one the seal does not name, a dotfile, a symbolic link,
 an `.html`, `.xml`, `.js` or `.svg` file, a path over 255 bytes or whose last part is over 100
@@ -496,7 +496,7 @@ showed it. A new tab opens on the sign-in page (or use the "Open GitHub sign-in"
 browser blocked it); the paper's page shows the check code, then where the share stands, until it
 is published or refused.
 
-The share service is `THEOREMCHECKER_SHARE_URL`, else the default in `tools/src/verify/share.ts`
+The share service is `LEANSMITH_SHARE_URL`, else the default in `tools/src/verify/share.ts`
 (`DEFAULT_SHARE_URL`).
 
 ### The annotated paper
@@ -504,7 +504,7 @@ The share service is `THEOREMCHECKER_SHARE_URL`, else the default in `tools/src/
 V6 also writes `runs/<slug>/annotated/`: a copy of your source tree with each problem marked where
 the paper states it. The wrong or ambiguous sentence is red, the corrected text follows in blue (a
 corollary the repair splits off the result in a blue block of its own after it),
-and an orange note beginning "TheoremChecker:" states the mistake plainly and only the mistake, in
+and an orange note beginning "LeanSmith:" states the mistake plainly and only the mistake, in
 labelled lines: **Claim** (what the printed statement asserts), **What is wrong** (the step of your
 proof, quoted, what it silently uses and when that holds, closing with "Counterexample: …", one
 instance where it fails),
@@ -516,14 +516,14 @@ in `v1_5_review.json`: `ok` or `unclear`, with a reason). An unclear note goes b
 with the reason — the repair stays, only the note is rewritten — as a refinement round (it counts
 toward the refinement cap of "Patch caps", never as an error of your paper), and the rewritten note is graded
 again. A suggested weaker version of a main theorem is graded the same way before you see it. There
-is no separate clarity command or waiver: `theoremchecker annotate <slug>` only rewrites the
+is no separate clarity command or waiver: `leansmith annotate <slug>` only rewrites the
 annotated paper from the notes on record (no model call; `--compile-record <path>` names another
 compile record than `logs/annotated_compile.json`). The annotated paper is also checked for raw TeX: a block the
 checker could not typeset (text shown as escaped backslashes, a character shown as `[U+…]`, a formula
 with an unmatched `$`) or a LaTeX error stops the run at a "render checkpoint" before anything is put
 to you, listing each block. That is a defect of the checker, not of your paper, so there is nothing
 for you to decide: once the renderer is fixed, `--resume` typesets the paper again and the run goes on.
-`theoremchecker lint-annotated <slug>` runs the same check on the annotated paper as written and exits
+`leansmith lint-annotated <slug>` runs the same check on the annotated paper as written and exits
 with an error listing any such block. The note never mentions how the
 checker works (no internal names, no talk of dependencies or transcription). Each result is
 checked and marked as you print it — one result, one note — even when its parts or cases rest on
@@ -616,7 +616,7 @@ title, reference, content — `content` is refused on one of the paper's own sta
 keep what they prove), `generalize_first` (round B: build a general form even of an entry
 proposed to move as is), `decline` or `defer`, optionally with a `note:` — then run
 
-    npx tsx bin/theoremchecker.ts propose <slug> --round <A|B> --apply [--toolkit <path>] [--dry-run]
+    npx tsx bin/leansmith.ts propose <slug> --round <A|B> --apply [--toolkit <path>] [--dry-run]
 
 (`--round` defaults to the round awaiting decisions, else B; `--dry-run` is required for, and
 only for, a run started with `--dry-run`: its checklist and ledger records stay under
@@ -644,7 +644,7 @@ Probability › Conditioning, Statistics › Design, …). An entry needing a to
 with a separate `## topic · <path>` item you accept or decline first. A result whose proof never
 uses some of its hypotheses enters in general form without them.
 
-**Building a toolkit module yourself.** `npx tsx bin/theoremchecker.ts study <slug> [--toolkit
+**Building a toolkit module yourself.** `npx tsx bin/leansmith.ts study <slug> [--toolkit
 <path>]` writes a requirement template at `runs/study_<slug>/requirement.md` on its first run; fill
 it in (goal, the declarations to provide, the statement, a standard reference, the intended reuse,
 what may be assumed) and run it again: it scaffolds, proves and reviews the module, then places it
@@ -659,7 +659,7 @@ study without model calls or Lean builds.
 plain English, and each phrase links to the Lean hypothesis it states (`[phrase](hyp:name)`, the
 conclusion as `[phrase](goal)`), as in Causalean — the paper page and the library show the two side by
 side, row by row. F5 enforces it on a paper's modules and the study and promotion prompts state it;
-`npx tsx bin/theoremchecker.ts docstrings [--toolkit <path>] [--modules M1,M2]` brings the toolkit's
+`npx tsx bin/leansmith.ts docstrings [--toolkit <path>] [--modules M1,M2]` brings the toolkit's
 existing docstrings to it (docstring edits only, validated by a build; review the diff and commit).
 Run it when no verify run is building the toolkit: the edits rebuild every module importing them.
 F5 also links each paper result to its Lean theorem row by row (`runs/<slug>/nl_links.json`): for
@@ -668,14 +668,14 @@ Lean row carries. In a linked result's Lean statement on the page, the rows the 
 view and each run of three or more hypothesis rows it says nowhere (what Lean needs: types, instances,
 measurability, …) is one closed line, "N rows Lean adds", that opens in place; the conclusions are
 always shown. Links are kept only for the statement they were written for: a result whose Lean
-changed since is drawn unlinked, with a notice. `npx tsx bin/theoremchecker.ts relink <slug>
+changed since is drawn unlinked, with a notice. `npx tsx bin/leansmith.ts relink <slug>
 [--only <node>,…]` runs that link step alone on the run as it stands (it calls the F5 model; no stage,
 no Lean build) and writes `nl_links.json` again — `--only` for those results, the others kept.
 A result linked from the same statement, Lean and prompts, whose links the audit returned whole, keeps them without a call; one whose
 links still fit its statement and Lean is revised from them by the audit call alone; `--fresh`
 links every result from nothing, as `--only` does the results it names.
 
-**Toolkit health.** `npx tsx bin/theoremchecker.ts toolkit-health [--toolkit <path>] [--all] [--json]
+**Toolkit health.** `npx tsx bin/leansmith.ts toolkit-health [--toolkit <path>] [--all] [--json]
 [--no-rebuild]` re-derives `doc/toolkit_graph.json` from the Lean — declarations as nodes, "uses" as
 edges, the base libraries' declarations as leaves (`--no-rebuild` reads the graph on file) — and
 reports, on your main results (`--all`: helpers too): results nothing uses, results stated twice,
@@ -684,7 +684,7 @@ other heavily (merge?), the most reused results, results no paper has used for m
 reuse has grown paper by paper (`--json`: the same as JSON, with the reuse history).
 
 **Gardening.** When the toolkit's health has findings, round B ends by writing
-`doc/proposals/garden-<stamp>.md` — or run `npx tsx bin/theoremchecker.ts garden [--toolkit <path>]
+`doc/proposals/garden-<stamp>.md` — or run `npx tsx bin/leansmith.ts garden [--toolkit <path>]
 [--no-rebuild] [--dry-run]` any time (after a Mathlib update it also flags results the base
 libraries now state; `--dry-run` writes the list with no gardener call, every item recommended
 `decline`). Each item says
@@ -700,26 +700,26 @@ the one kind put to you.
 
 | variable | effect |
 |---|---|
-| `THEOREMCHECKER_TOOLKIT` | toolkit root when `--toolkit` is not given |
-| `THEOREMCHECKER_SHARE_URL` | the share service `theoremchecker share` (and the UI's Share button) uploads to |
-| `THEOREMCHECKER_LEANLSP_WARMUP_MS` | cap on the pre-run `lake build` warm-up (default 10 min; `0` disables) |
-| `THEOREMCHECKER_NOTE_MACROS` | `off`: a new run reads the paper as written, authors' note macros and all ("Authors' note macros") |
-| `THEOREMCHECKER_STOP_AFTER` | `--stop-after`, for a run started without the flag (the flag wins; F2.5/F3/F3.5 refused) |
-| `THEOREMCHECKER_LEAN_PROJECT_PATH` | legacy Lean project override; must be unset or equal the toolkit root |
-| `THEOREMCHECKER_LEAN_LSP_MCP` | `lean-lsp-mcp` binary |
-| `THEOREMCHECKER_VERIFY_MAX_MS` | cap on one build check of a toolkit promotion or a study build (default 1 h; `0` disables) |
-| `THEOREMCHECKER_SHARED_LEAN_LSP_URL` | set by the runner for its workers (one shared lean-lsp server) |
-| `THEOREMCHECKER_CODEX_SANDBOX` | `workspace-write` (default) or `danger-full-access` |
-| `THEOREMCHECKER_CODEX_EFFORT_OVERRIDE`, `THEOREMCHECKER_CODEX_MULTI_AGENT` | codex tuning |
-| `THEOREMCHECKER_AUTH_MODE`, `THEOREMCHECKER_ANTHROPIC_AUTH`, `THEOREMCHECKER_OPENAI_AUTH` | billing (below) |
-| `THEOREMCHECKER_CODEX_HOME_API`, `THEOREMCHECKER_CLAUDE_CONFIG_DIR` | api-mode codex home; claude account dir |
-| `THEOREMCHECKER_CLAUDE_ROLES` | `claude` or `codex`: the CLI that runs the claude roles (F1 plan, second F4 reviewer, curator, gardener, study coordinator; also `claudeRoles` of the local config). Unset: `claude` when it is installed and usable, else `codex` |
-| `THEOREMCHECKER_PYTHON` | interpreter for the retrieval helpers |
-| `THEOREMCHECKER_TRACE` | print the stack of an unexpected error |
-| `THEOREMCHECKER_ORCH_TICK_MS` | how often `tools/scripts/orch.mjs watch` looks at the run (default 10 s) |
-| `THEOREMCHECKER_ORCH_LOOP_PAUSE_MS` | how long `tools/scripts/orch_watch_loop.mjs` waits before re-arming a watch that failed (default 60 s) |
-| `THEOREMCHECKER_NODE_BIN`, `THEOREMCHECKER_NODE_ENV_VERBOSE` | `scripts/node_env.sh` |
-| `THEOREMCHECKER_MODEL_CODEX_KERNEL`, `THEOREMCHECKER_MODEL_CODEX_MECH`, `THEOREMCHECKER_MODEL_CODEX_VERIFY`, `THEOREMCHECKER_MODEL_CLAUDE_MAIN` | model ids per role (`tools/src/models.ts` says which calls each serves) |
+| `LEANSMITH_TOOLKIT` | toolkit root when `--toolkit` is not given |
+| `LEANSMITH_SHARE_URL` | the share service `leansmith share` (and the UI's Share button) uploads to |
+| `LEANSMITH_LEANLSP_WARMUP_MS` | cap on the pre-run `lake build` warm-up (default 10 min; `0` disables) |
+| `LEANSMITH_NOTE_MACROS` | `off`: a new run reads the paper as written, authors' note macros and all ("Authors' note macros") |
+| `LEANSMITH_STOP_AFTER` | `--stop-after`, for a run started without the flag (the flag wins; F2.5/F3/F3.5 refused) |
+| `LEANSMITH_LEAN_PROJECT_PATH` | legacy Lean project override; must be unset or equal the toolkit root |
+| `LEANSMITH_LEAN_LSP_MCP` | `lean-lsp-mcp` binary |
+| `LEANSMITH_VERIFY_MAX_MS` | cap on one build check of a toolkit promotion or a study build (default 1 h; `0` disables) |
+| `LEANSMITH_SHARED_LEAN_LSP_URL` | set by the runner for its workers (one shared lean-lsp server) |
+| `LEANSMITH_CODEX_SANDBOX` | `workspace-write` (default) or `danger-full-access` |
+| `LEANSMITH_CODEX_EFFORT_OVERRIDE`, `LEANSMITH_CODEX_MULTI_AGENT` | codex tuning |
+| `LEANSMITH_AUTH_MODE`, `LEANSMITH_ANTHROPIC_AUTH`, `LEANSMITH_OPENAI_AUTH` | billing (below) |
+| `LEANSMITH_CODEX_HOME_API`, `LEANSMITH_CLAUDE_CONFIG_DIR` | api-mode codex home; claude account dir |
+| `LEANSMITH_CLAUDE_ROLES` | `claude` or `codex`: the CLI that runs the claude roles (F1 plan, second F4 reviewer, curator, gardener, study coordinator; also `claudeRoles` of the local config). Unset: `claude` when it is installed and usable, else `codex` |
+| `LEANSMITH_PYTHON` | interpreter for the retrieval helpers |
+| `LEANSMITH_TRACE` | print the stack of an unexpected error |
+| `LEANSMITH_ORCH_TICK_MS` | how often `tools/scripts/orch.mjs watch` looks at the run (default 10 s) |
+| `LEANSMITH_ORCH_LOOP_PAUSE_MS` | how long `tools/scripts/orch_watch_loop.mjs` waits before re-arming a watch that failed (default 60 s) |
+| `LEANSMITH_NODE_BIN`, `LEANSMITH_NODE_ENV_VERBOSE` | `scripts/node_env.sh` |
+| `LEANSMITH_MODEL_CODEX_KERNEL`, `LEANSMITH_MODEL_CODEX_MECH`, `LEANSMITH_MODEL_CODEX_VERIFY`, `LEANSMITH_MODEL_CLAUDE_MAIN` | model ids per role (`tools/src/models.ts` says which calls each serves) |
 | `MCP_TIMEOUT` | time allowed for the lean-lsp server to start (default 10 min; also `mcpTimeoutMs` of the local config) |
 | `CLAUDE_CODE_GIT_BASH_PATH` | Windows: the Git Bash the `claude` CLI uses (also `gitBashPath` of the local config) |
 
@@ -727,8 +727,8 @@ the one kind put to you.
 
 By default the workers use the machine's interactive `claude` / `codex` logins. To bill API keys
 instead set `authMode` (or `anthropicAuth` / `openaiAuth`) and a key in `tools/config/local.json`,
-or `THEOREMCHECKER_AUTH_MODE` with `ANTHROPIC_API_KEY` / `OPENAI_API_KEY`. API-mode codex runs in its
-own `CODEX_HOME` (default `~/.codex-theoremchecker-api`) so the subscription login is never evicted.
+or `LEANSMITH_AUTH_MODE` with `ANTHROPIC_API_KEY` / `OPENAI_API_KEY`. API-mode codex runs in its
+own `CODEX_HOME` (default `~/.codex-leansmith-api`) so the subscription login is never evicted.
 On a machine with `codex` alone (no usable `claude`: absent, logged out, or API mode with no
 Anthropic key) the claude roles run on `codex`, on the kernel model at high effort; `claudeRoles`
 pins the choice, and the run's first log lines and its usage records name the CLI and model that ran them.
@@ -736,7 +736,7 @@ pins the choice, and the run's first log lines and its usage records name the CL
 ## Orchestrator reference
 
 How a run works, stage by stage, and the detail behind the orchestrating agent's guide
-(`.claude/skills/theoremchecker/SKILL.md`), which says what to run and what to do at each stop and
+(`.claude/skills/leansmith/SKILL.md`), which says what to run and what to do at each stop and
 points here by heading. Each section opens with what happens; the rest is what the agent reads and
 does. In this part "you" is the agent, and "the user" or "the owner" is the person whose paper and
 toolkit it is. Nothing here repeats an earlier part: a section names the heading that says the rest.
@@ -749,7 +749,7 @@ toolkit it is. Nothing here repeats an earlier part: a section names the heading
 | V1.5 | per node: faithfulness ok/drift · ambiguity ok/pinned/unresolvable · correctness ok/bookkeeping/unclear/error(+witness; `minimality` when a patch part is only non-minimal; `weakens_contribution` when a repair holds but weakens the claim) | REVISE on drift (capped, then final); an error or unresolvable ambiguity on a faithful core → V1 patch mode; a round due at its cap halts for you (see "Patch caps") |
 | V1 patch | the FIXER: the smallest repair of every finding that keeps the claim (`discovery/patches.json`); a fresh V1.5 pass confirms it | only a weaker version holds → `unfixable` + `suggested_repair`, halt for the owner; nothing true left on a key result's path → FAIL; patch file not clean after 2 rounds (a third runs when the violations fell between the two) → checkpoint; a consequential patch following only a suggested repair of a main theorem is held (`patches.json` `set_aside`) and applied with the suggestion the owner accepts, dropped with one declined or redone |
 | F1–F5 | Lean plan, plan audit, scaffold, proofs, convergence review, docstrings | the F1.5 checkpoint is yours to review (plan fidelity, reuse, cited leaves) and resume; an F1.5 review F1 cannot act on halts for you with the reviewer's findings (see "F stages: the plan review"); an F2.5–F4 escalation on a paper statement (`fix-source` `[statement-wrong]`; `unclear` on the statement's wording), halts as a PROPOSED rewind on the statement it names — yours to approve or reject (see "Re-entries and proposed rewinds") |
-| V6 | report: what was wrong and what was done, clarifications, what Lean proves (plain language), then the technical appendix (per-result buckets, errors by root cause, pinned readings as suggestions); `bundle/` = the corrected paper ready to submit (clean TeX + PDF, `TODO.md`, `MATCH.md`, `lean/`); `annotated/` = the source with each finding marked (red original, blue correction, "TheoremChecker:" note), compiled when a TeX compiler is on PATH | — |
+| V6 | report: what was wrong and what was done, clarifications, what Lean proves (plain language), then the technical appendix (per-result buckets, errors by root cause, pinned readings as suggestions); `bundle/` = the corrected paper ready to submit (clean TeX + PDF, `TODO.md`, `MATCH.md`, `lean/`); `annotated/` = the source with each finding marked (red original, blue correction, "LeanSmith:" note), compiled when a TeX compiler is on PATH | — |
 | promotion A | after F1: which results the paper cites without proving are built in the toolkit (see "Promotion rounds: the orchestrator's procedure") | anything proposed → halts at `proposals_A` for the owner's decisions |
 | promotion B | after V6 of a full F run: which proved results of the paper join the toolkit (see "Promotion rounds: the orchestrator's procedure") | anything proposed → halts at `proposals_B` for the owner's decisions |
 
@@ -849,7 +849,7 @@ does with the watcher is in its guide ("Mechanics", "Who decides"). The rest:
 
 - **Attaching.** `orch.mjs watch` records your session in `runs/<slug>/orch.json`, so the page shows
   "<agent> attached"; the record lapses when your session ends. The watcher looks at the run every
-  10 s (`THEOREMCHECKER_ORCH_TICK_MS` changes that). The page resumes a run, and applies a promotion
+  10 s (`LEANSMITH_ORCH_TICK_MS` changes that). The page resumes a run, and applies a promotion
   round, only while a session is attached (an apply resumes the run when it ends); with none, it
   tells the user to start one in this repository and ask it to orchestrate the run.
 - **An apply of a promotion round the user started** has no heartbeat and writes no log line; when
@@ -899,7 +899,7 @@ attached to that run: the page writes `runs/<slug>/start_request.json` and start
 | `--hours <h>`, `--grace-min <m>` | a time budget: `--grace-min` (default 20) before it ends, stop the agents and runners, put the unfinished runs back at the head of the queue and exit 75, for a successor to take them |
 | `--max-agents <n>` | agent turns at once (default 2) |
 | `--brief <file>` | the owner's standing instructions, given to every agent |
-| `--model <m>`, `--effort <e>`, `--sandbox <mode>` | the Codex agent's model (default `THEOREMCHECKER_MODEL_CODEX_VERIFY`), reasoning effort (default `high`) and sandbox (default `codexSandbox`, else `workspace-write`) |
+| `--model <m>`, `--effort <e>`, `--sandbox <mode>` | the Codex agent's model (default `LEANSMITH_MODEL_CODEX_VERIFY`), reasoning effort (default `high`) and sandbox (default `codexSandbox`, else `workspace-write`) |
 
 It exits 0 when nothing is left, and 76 when the Codex login's usage limit is reached (the reason is
 appended to `<queue>.stopped`). Each agent and run bills the Codex login of the driver's `CODEX_HOME`.
@@ -984,7 +984,7 @@ sets `--` as a dash.
    Shards are sized by content (`referee.shard_bytes`, default 70 KB of statement + proof excerpts)
    and per-kind ceilings (10 hypotheses / 6 lemmas / 3 theorems), at most `referee.max_concurrent`
    calls at once (default 6); a result longer than the byte budget is graded alone. The `referee` keys of
-   `theoremchecker.json` (`max_concurrent`, `shard_bytes`, `shard_max_hypotheses`, `shard_max_lemmas`,
+   `leansmith.json` (`max_concurrent`, `shard_bytes`, `shard_max_hypotheses`, `shard_max_lemmas`,
    `shard_max_theorems`, `symbol_effort`) are the only referee settings; there is no switch for the
    sharding. A fresh node carries `shards: ["L<k>-<i>"]`. The log line
    `sharded referee: levels: L0 n0 (…) · L1 n1 · …; K shard(s) (6+6+5 nodes), 1 global pass; prompt
@@ -1196,7 +1196,7 @@ the checker on codex.
 **Applying.** `accept_with_edits` may change placement and presentation (division, target_module,
 proposed_name, title, reference) on any entry, the paper's own results included; a `content` edit is
 refused on one of the paper's own stated results. Write the user's decisions into the checklist, then
-`theoremchecker propose <slug> --round <A|B> --apply`. An apply refused before anything was applied
+`leansmith propose <slug> --round <A|B> --apply`. An apply refused before anything was applied
 shows the user why on the page: an entry still undecided or a checklist that does not parse is
 theirs to answer — tell them — and anything else (a lakefile, a batch that no longer matches the
 Lean) is yours to settle before the round is applied again. Moves and builds go
@@ -1249,7 +1249,7 @@ declaration outside its topic namespace, an umbrella import, a module building o
 topic — one finding per module) go to the gardener (one Claude call; none when nothing changed and
 nothing is found) together with the main view and the full SOURCE of every module a finding names
 or that changed since the last list; it also raises what it reads there (a result in the wrong
-topic, one fact stated in two forms). The end of round B — or `theoremchecker garden` on demand —
+topic, one fact stated in two forms). The end of round B — or `leansmith garden` on demand —
 writes `doc/proposals/garden-<stamp>.md`: per item what it shows, the change (relocate, merge,
 split, retire, remove, rename, trim_imports, cross_reference — a split or relocate extends an
 existing module of the target topic before it creates one) and a recommendation; findings left as
@@ -1267,7 +1267,7 @@ they are become one summary line. The procedure:
    `lake build` of the module and its users): move declarations with what they need, follow every
    rename in the toolkit and the papers, keep `omit … in` / attribute prefixes with their
    declaration, change no paper statement (only proofs and imports of papers may change).
-4. `theoremchecker garden --verify <file> [--items g-1,…]` checks the edits against the committed
+4. `leansmith garden --verify <file> [--items g-1,…]` checks the edits against the committed
    toolkit: only the toolkit's Lean, its barrels and `doc/` changed; toolkit and papers build;
    `#print axioms` standard; no sorry/admit/axiom; every paper theorem/lemma statement unchanged
    (renamed toolkit references followed); header and layout lints; the index regenerated; the graph's
@@ -1286,7 +1286,7 @@ Two checkpoints, never an owner waiver, both before any owner decision and F1:
   error. When the block comes from a text in the run's record (a transcription, a reading, a patch),
   correct it there; otherwise it is the renderer's — fix it with a test (`annotate_tex.ts` /
   `units.ts` / `annotated_paper.ts`) and record it.
-  Once fixed, check with `theoremchecker annotate <slug>` then `theoremchecker lint-annotated <slug>
+  Once fixed, check with `leansmith annotate <slug>` then `leansmith lint-annotated <slug>
   --toolkit …`; `--resume` renders again and the run continues where it stopped.
 - A model-written fragment that fails its compile check is the MODEL's, never the renderer's: the run
   routes it back to its producer (symbol referee or V1.5 referee: the verdict is graded afresh next
@@ -1684,7 +1684,7 @@ smallest neutral edit in the run's copy of the source (`runs/<slug>/source/`), r
 `pipeline_issues.md`, and run it from V1 (a changed source is extracted cold).
 
 The reading is recorded in `envs.json` (`note_macros`, with its version) and replayed from there: a
-run on file from before it existed, or one started with `THEOREMCHECKER_NOTE_MACROS=off`, stays
+run on file from before it existed, or one started with `LEANSMITH_NOTE_MACROS=off`, stays
 read as written on every `--resume` and `--from-stage` (they revise the transcription against the
 text it was cut from); a run whose replay would give another flat text keeps the text it has, with
 a note. The reading takes effect when a paper is read cold: a new run, or a run whose source changed.
@@ -1706,6 +1706,6 @@ note the rest as not checked.
 
 On a V1 checkpoint the remaining violations say what to settle: a verbatim rule prints the first
 differing character and the expected JSON spelling. Every stored statement, proof, condition and
-construction is whole TeX ("`theoremchecker verify`", Statements and proofs are whole TeX): a parse
+construction is whole TeX ("`leansmith verify`", Statements and proofs are whole TeX): a parse
 cut inside math is a parser gap, and lint rule (m) sends a node slice cut inside
 math back to the agent.

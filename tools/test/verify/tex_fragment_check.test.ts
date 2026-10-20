@@ -70,7 +70,7 @@ describe("checkTexFragment", () => {
     const doc = scratchDocument("\\documentclass{article}\n", false, "FRAG", "statement");
     expect(doc).toContain("\\begin{vsCheckStatement}\\vsCorrected{FRAG}\n\\end{vsCheckStatement}");
     expect(doc).toContain("\\@ifundefined{theorem}");
-    expect(doc).toContain("% TheoremChecker annotation macros");
+    expect(doc).toContain("% LeanSmith annotation macros");
     expect(scratchDocument("\\documentclass{article}\n", false, "FRAG", "note")).toContain("\\vsNote{FRAG}");
     expect(scratchDocument("\\documentclass{article}\n", false, "FRAG", "step")).toContain("\\begin{vsCheckProof}\\vsCorrectedStep{FRAG}");
     const log = "This is pdfTeX\n./frag.tex:31: Missing $ inserted.\n<inserted text> \n                $\nl.31 \\vsNote{It fails when e_\n                              n tends to zero.}\n";

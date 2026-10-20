@@ -30,7 +30,7 @@ import { maskLeanCommentsAndStrings } from "../shared/lean_mask.js";
 import { isLeanModuleFile } from "../shared/lean_syntax.js";
 import { insertImportSorted } from "../toolkit/barrels.js";
 import {
-  divisionBarrelPath, TOOLKIT_STAGING_SEGMENT, theoremCheckerToolsDir, type ToolkitConfig,
+  divisionBarrelPath, TOOLKIT_STAGING_SEGMENT, leanSmithToolsDir, type ToolkitConfig,
 } from "../toolkit/config.js";
 import { appendDeclarations, emptyLedger, parseLedger, serializeLedger, type LedgerDeclaration } from "../toolkit/ledger.js";
 import { formatLayoutFinding, lintImportLayering, lintModuleHeader, runTokenIn } from "../toolkit/layout_lint.js";
@@ -225,9 +225,9 @@ export const realApplyDeps: CoordinateApplyDeps = {
       // Nested tsx subcommands open an IPC pipe under TMPDIR and collide on a per-run TMPDIR.
       delete env.TMPDIR;
       // Inactivity bounds a SILENT hang; the wall-clock backstop bounds a step that spins
-      // while emitting output. `THEOREMCHECKER_VERIFY_MAX_MS=0` disables the backstop. Both kinds
+      // while emitting output. `LEANSMITH_VERIFY_MAX_MS=0` disables the backstop. Both kinds
       // surface as `timedOut` → escalate (preserve).
-      const maxTotalMs = Number(process.env.THEOREMCHECKER_VERIFY_MAX_MS ?? 60 * 60 * 1000);
+      const maxTotalMs = Number(process.env.LEANSMITH_VERIFY_MAX_MS ?? 60 * 60 * 1000);
       const r = await spawnWithInactivityTimeout(bashBinary(), ["-c", cmd], {
         cwd, env, inactivityTimeoutMs: 30 * 60 * 1000, maxTotalMs,
       });
@@ -396,7 +396,7 @@ function isoDate(now: Date): string {
 
 export interface ApplyManifestArgs {
   toolkit: ToolkitConfig;
-  /** TheoremChecker `tools/` directory (the lint bins run from here). */
+  /** LeanSmith `tools/` directory (the lint bins run from here). */
   toolsDir: string;
   /** Root the manifest's `from` paths resolve against (where the coordinator staged the bodies). */
   stagingDir: string;
@@ -804,7 +804,7 @@ export async function coordinate(
   args: CoordinateArgs,
   deps: CoordinateDeps = realCoordinateDeps,
 ): Promise<{ ok: boolean; log: string; timedOut?: boolean; conflict?: boolean }> {
-  const toolsDir = args.toolsDir ?? theoremCheckerToolsDir();
+  const toolsDir = args.toolsDir ?? leanSmithToolsDir();
   const stagingDir = coordinateStagingDir(args.runDir, args.round);
   // A crash mid-apply / mid-gate left its journal: restore the toolkit first, so re-applying a
   // fresh manifest can never merge the same content twice.
@@ -835,7 +835,7 @@ export async function coordinate(
 
 /** Dry-run stand-in for `coordinate`: describe what a real attempt would do, touching nothing. */
 export async function describeCoordinatePlan(args: CoordinateArgs): Promise<string> {
-  const toolsDir = args.toolsDir ?? theoremCheckerToolsDir();
+  const toolsDir = args.toolsDir ?? leanSmithToolsDir();
   const cfg = args.toolkit;
   const indexStep = await detectToolkitIndexStep(cfg, realApplyDeps);
   const axiomsStep = axiomsGateStep(cfg, axiomsProbePath(cfg, args.slug), []);

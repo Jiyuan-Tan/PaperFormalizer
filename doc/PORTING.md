@@ -1,6 +1,6 @@
-# Porting a library to TheoremChecker's pin
+# Porting a library to LeanSmith's pin
 
-Every optional library TheoremChecker offers builds against one Lean toolchain and one Mathlib
+Every optional library LeanSmith offers builds against one Lean toolchain and one Mathlib
 revision, the pin in `tools/data/libraries.json`. A library whose upstream is on another pin is
 offered as an **adapted copy** under `third_party/<Name>/`. A library is only usable from a
 toolkit when it is also a **module library** (step 3). This is how a copy is made (FoML, optlib
@@ -85,7 +85,7 @@ Check, both parts:
   <Lib> <Lib>.lean` (from `tools/`, `npx tsx …`) reports no error (its warning that `@[expose]` has
   no effect in a theorem-only file is expected with the blanket section).
 - A probe builds: in a scratch toolkit that requires the library together with every other
-  library on offer (`theoremchecker init <scratch> --libraries <the others>`, then add the new
+  library on offer (`leansmith init <scratch> --libraries <the others>`, then add the new
   `[[require]]` by hand, before mathlib), a file
 
       module
@@ -126,5 +126,5 @@ Add or update its entry in `tools/data/libraries.json` (`summary`, `require: {pa
 it. A copy that has not passed step 3 keeps `unavailable` (one line a user can read): `init`
 then lists it as not yet available and no domain installs it. `npm test` checks the
 copy is on the pin and a module library (`test/toolkit/init.test.ts`). Then check a real
-install: `theoremchecker init <scratch-dir> --libraries <Name>` builds it and writes its index; a
+install: `leansmith init <scratch-dir> --libraries <Name>` builds it and writes its index; a
 `npx tsx bin/search.ts --toolkit <scratch-dir> "<a topic of the library>"` should find its results.

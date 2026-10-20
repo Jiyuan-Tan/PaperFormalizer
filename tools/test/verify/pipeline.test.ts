@@ -196,17 +196,17 @@ describe("runVerifyPipeline", () => {
       expect((await loadState(repoRoot, QID)).claude_roles).toBe("codex");
       // a later process with no setting: the record, whatever the machine now has
       setClaudeRolesForTest(null);
-      vi.stubEnv("THEOREMCHECKER_CLAUDE_ROLES", "");
+      vi.stubEnv("LEANSMITH_CLAUDE_ROLES", "");
       await runVerifyPipeline({ ...baseArgs(repoRoot, newTrace()), dryRun: false, resume: true, stopAfter: "V1.5" });
       expect((await loadState(repoRoot, QID)).claude_roles).toBe("codex");
       expect(warn.mock.calls.flat().join("\n")).toMatch(/run on codex \(\S+\), as recorded for this run/);
       expect(warn.mock.calls.flat().join("\n")).not.toContain("WARN");
       // a later process with an explicit setting: it wins, warns once, and is the new record
       setClaudeRolesForTest(null);
-      vi.stubEnv("THEOREMCHECKER_CLAUDE_ROLES", "claude");
+      vi.stubEnv("LEANSMITH_CLAUDE_ROLES", "claude");
       await runVerifyPipeline({ ...baseArgs(repoRoot, newTrace()), dryRun: false, resume: true, stopAfter: "V1.5" });
       expect((await loadState(repoRoot, QID)).claude_roles).toBe("claude");
-      expect(warn.mock.calls.flat().filter((l) => String(l).includes("WARN"))).toEqual(["[theoremchecker] WARN this run's claude roles ran on codex so far: from now on they run on claude (set by THEOREMCHECKER_CLAUDE_ROLES)."]);
+      expect(warn.mock.calls.flat().filter((l) => String(l).includes("WARN"))).toEqual(["[leansmith] WARN this run's claude roles ran on codex so far: from now on they run on claude (set by LEANSMITH_CLAUDE_ROLES)."]);
     } finally {
       vi.unstubAllEnvs();
       setClaudeRolesForTest(null);
@@ -365,7 +365,7 @@ describe("runVerifyPipeline", () => {
     expect(done.phase).toBe("v6");
   });
 
-  it("--stop-after V6 halts once the report is written, before promotion round B; --resume holds the round. THEOREMCHECKER_STOP_AFTER=F5 is --stop-after F5", async () => {
+  it("--stop-after V6 halts once the report is written, before promotion round B; --resume holds the round. LEANSMITH_STOP_AFTER=F5 is --stop-after F5", async () => {
     const repoRoot = await tmpRepo();
     const trace = newTrace();
     let rounds = 0;
@@ -401,37 +401,37 @@ describe("runVerifyPipeline", () => {
 
     const other = await tmpRepo();
     const t2 = newTrace();
-    process.env.THEOREMCHECKER_STOP_AFTER = "F5";
+    process.env.LEANSMITH_STOP_AFTER = "F5";
     try {
       const v = await runVerifyPipeline(baseArgs(other, t2));
       expect(v.phase).toBe("v6");
       expect(t2.stages).not.toContain("V6@v6");
     } finally {
-      delete process.env.THEOREMCHECKER_STOP_AFTER;
+      delete process.env.LEANSMITH_STOP_AFTER;
     }
     // … for a V stage too (the F runner leaves it to the verify runner), and a value that is no stage is refused
     const third = await tmpRepo();
     const t3 = newTrace();
-    process.env.THEOREMCHECKER_STOP_AFTER = "V1.5";
+    process.env.LEANSMITH_STOP_AFTER = "V1.5";
     try {
       await runVerifyPipeline(baseArgs(third, t3));
       expect(t3.stages).toEqual(["V1@init", "V1.5@v1"]);
       expect(t3.formalization).toEqual([]);
-      process.env.THEOREMCHECKER_STOP_AFTER = "D0";
-      await expect(runVerifyPipeline(baseArgs(await tmpRepo(), newTrace()))).rejects.toThrow(/THEOREMCHECKER_STOP_AFTER=D0 is not a stage/);
+      process.env.LEANSMITH_STOP_AFTER = "D0";
+      await expect(runVerifyPipeline(baseArgs(await tmpRepo(), newTrace()))).rejects.toThrow(/LEANSMITH_STOP_AFTER=D0 is not a stage/);
       // … at once, under the flag too; and nothing is saved when the variable's stage precedes the entry
-      await expect(runVerifyPipeline({ ...baseArgs(await tmpRepo(), newTrace()), stopAfter: "F2" })).rejects.toThrow(/THEOREMCHECKER_STOP_AFTER=D0 is not a stage \(expected one of V1\|/);
-      process.env.THEOREMCHECKER_STOP_AFTER = "V1.5";
+      await expect(runVerifyPipeline({ ...baseArgs(await tmpRepo(), newTrace()), stopAfter: "F2" })).rejects.toThrow(/LEANSMITH_STOP_AFTER=D0 is not a stage \(expected one of V1\|/);
+      process.env.LEANSMITH_STOP_AFTER = "V1.5";
       const before = await readFile(statePath(third, QID), "utf8");
-      await expect(runVerifyPipeline({ ...baseArgs(third, newTrace()), resume: true, fromStage: "F2" })).rejects.toThrow(/THEOREMCHECKER_STOP_AFTER=V1.5 precedes --from-stage F2/);
+      await expect(runVerifyPipeline({ ...baseArgs(third, newTrace()), resume: true, fromStage: "F2" })).rejects.toThrow(/LEANSMITH_STOP_AFTER=V1.5 precedes --from-stage F2/);
       expect(await readFile(statePath(third, QID), "utf8")).toBe(before);
       // the flag wins over the variable, in the F runner too (it used to read the variable itself)
-      process.env.THEOREMCHECKER_STOP_AFTER = "F1";
+      process.env.LEANSMITH_STOP_AFTER = "F1";
       const t4 = newTrace();
       await runVerifyPipeline({ ...baseArgs(third, t4), resume: true, stopAfter: "F2", deferProposals: true });
       expect(t4.stopAfter).toEqual(["2"]);
     } finally {
-      delete process.env.THEOREMCHECKER_STOP_AFTER;
+      delete process.env.LEANSMITH_STOP_AFTER;
     }
   });
 
@@ -469,7 +469,7 @@ describe("runVerifyPipeline", () => {
     const out = lines.join("\n");
     expect(out).toContain("GENERAL_REVIEW_HALT BLOCKED: Review boundary stage_1.5_to_1 halted: budget spent");
     expect(out).toContain("--clear-gate general_review_halt");
-    expect(out).not.toContain("then continue with `theoremchecker verify <input> --resume`");
+    expect(out).not.toContain("then continue with `leansmith verify <input> --resume`");
   });
 
   it("--clear-gate is applied on entry, also when the re-entry halts before the F stages; --from-stage V1.5 starts the plan-review budget over", async () => {

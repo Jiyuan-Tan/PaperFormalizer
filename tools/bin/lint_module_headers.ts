@@ -112,7 +112,7 @@ function main(): void {
   // undo any edits, so the module-header contract does not apply to it. Including it accounted
   // for 1388 of 1425 reported errors and buried the ~37 real ones in our own source.
   // Default inputs: the toolkit library and the papers library (with their barrels) of the
-  // toolkit named by `--toolkit`, `THEOREMCHECKER_TOOLKIT`, or the cwd walk-up.
+  // toolkit named by `--toolkit`, `LEANSMITH_TOOLKIT`, or the cwd walk-up.
   const toolkitAt = args.indexOf("--toolkit");
   const inputs = pathsAt < 0
     ? (() => {

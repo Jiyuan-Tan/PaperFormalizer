@@ -1,5 +1,5 @@
 /**
- * `theoremchecker annotate <slug>` — rewrite a run's annotated paper (`runs/<slug>/annotated/`) for
+ * `leansmith annotate <slug>` — rewrite a run's annotated paper (`runs/<slug>/annotated/`) for
  * the run as it stands, without running any stage (`annotate_run.ts`): the pending decisions of a
  * halt render at their passages exactly as the halt wrote them. No model is called. A block that could
  * not be set as TeX, or a pdflatex error, makes it exit non-zero, listing them (`render_check.ts`; a
@@ -17,18 +17,18 @@ import { annotateRun, type AnnotatedOutcome } from "./annotate_run.js";
 import { lintAnnotated, renderBlock } from "./render_check.js";
 
 export const ANNOTATE_USAGE =
-  "Usage: theoremchecker annotate <slug> [--toolkit <path>] [--compile-record <path>]\n" +
+  "Usage: leansmith annotate <slug> [--toolkit <path>] [--compile-record <path>]\n" +
   "  rewrite runs/<slug>/annotated/ for the run as it stands (no stage runs, no model call; state.json is only read).\n" +
   "  A block that could not be set as TeX (escaped, a code point, a pdflatex error) makes the command exit non-zero\n" +
   "  listing them — the PDF is still written.";
 
 export const LINT_ANNOTATED_USAGE =
-  "Usage: theoremchecker lint-annotated <slug> [--toolkit <path>]\n" +
+  "Usage: leansmith lint-annotated <slug> [--toolkit <path>]\n" +
   "  check runs/<slug>/annotated/ as written: the blocks the renderer could not set as TeX, pdflatex errors, and\n" +
   "  every \\vs… block scanned for \\textbackslash, \\^{}, [U+XXXX] code points and an odd number of $;\n" +
   "  exits non-zero listing them. No model call, nothing written.";
 
-/** `theoremchecker lint-annotated <slug>`: the render check of the tree as written. */
+/** `leansmith lint-annotated <slug>`: the render check of the tree as written. */
 export async function runLintAnnotatedCli(argv: string[], deps: { log?: (m: string) => void } = {}): Promise<void> {
   let slug: string | null = null;
   let toolkitArg: string | null = null;
@@ -86,7 +86,7 @@ export function parseAnnotateArgs(argv: string[]): AnnotateArgs {
 export function annotateFailure(out: AnnotatedOutcome): Error | null {
   if (out.error) return new Error(`the annotated paper was not written: ${out.error}`);
   const render = renderBlock(out.render);
-  return render ? new Error(`render check: ${render}\n  The annotated paper (written anyway): ${out.line}\n  Correct a text from the run's record, else fix the renderer with a test; then re-run this command (\`theoremchecker lint-annotated\` re-checks the tree as written).`) : null;
+  return render ? new Error(`render check: ${render}\n  The annotated paper (written anyway): ${out.line}\n  Correct a text from the run's record, else fix the renderer with a test; then re-run this command (\`leansmith lint-annotated\` re-checks the tree as written).`) : null;
 }
 
 export async function runAnnotateCli(argv: string[], deps: { log?: (m: string) => void } = {}): Promise<void> {

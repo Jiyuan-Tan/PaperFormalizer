@@ -15,8 +15,8 @@ import { loadToolkitConfig } from "../src/toolkit/config.js";
  *   npx tsx bin/search.ts [sources] --scope module "<words>" # module/file-level orientation search
  *
  * Sources: `--index <path>` (repeatable; an index file at any path, library name taken from its
- * modules) OR `--toolkit <path>` (every index `theoremchecker.json` names, plus the toolkit's own).
- * With neither, the toolkit is resolved from THEOREMCHECKER_TOOLKIT or the cwd.
+ * modules) OR `--toolkit <path>` (every index `leansmith.json` names, plus the toolkit's own).
+ * With neither, the toolkit is resolved from LEANSMITH_TOOLKIT or the cwd.
  * Flags: --k <N>  --scope decl|module|file  --semantic (blend each source's embedding tier when
  * present)  --fusion rrf|weighted (lexical+semantic fusion; default rrf).
  */

@@ -12,9 +12,9 @@ const upstream = path.join(process.env.CAUSALEAN_ROOT ?? "/nonexistent", "Librar
 /** The module docstring's first sentence, which the copy words for itself. */
 const sansOpening = (lean: string): string => lean.replace(/\r\n/g, "\n").replace(/(\/-! # Library-index extractor core\n\n)[\s\S]*?(?=\(statement,)/, "$1");
 
-describe("TheoremCheckerIndexCore.lean", () => {
+describe("LeanSmithIndexCore.lean", () => {
   it.skipIf(!existsSync(upstream))("equals Causalean's LibraryIndexCore.lean below its header", () => {
-    const copy = readFileSync(path.join(toolkitTemplateDir(), "TheoremCheckerIndexCore.lean"), "utf8").replace(/\r\n/g, "\n");
+    const copy = readFileSync(path.join(toolkitTemplateDir(), "LeanSmithIndexCore.lean"), "utf8").replace(/\r\n/g, "\n");
     const body = copy.slice(copy.indexOf("-/\n\n") + 4);
     expect(sansOpening(body)).toBe(sansOpening(readFileSync(upstream, "utf8")));
   });
@@ -22,7 +22,7 @@ describe("TheoremCheckerIndexCore.lean", () => {
   it("is imported by both index executables, never Causalean's module", () => {
     for (const exe of ["PaperIndex.lean", "ToolkitIndex.lean"]) {
       const src = readFileSync(path.join(toolkitTemplateDir(), exe), "utf8").replace(/\r\n/g, "\n");
-      expect(src.startsWith("import TheoremCheckerIndexCore\n")).toBe(true);
+      expect(src.startsWith("import LeanSmithIndexCore\n")).toBe(true);
     }
   });
 });

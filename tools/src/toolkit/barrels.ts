@@ -60,7 +60,7 @@ function freshPapersBarrel(papersLib: string, importLine: string): string {
     `# ${papersLib}`,
     "",
     "Barrel of the per-paper Lean output. Each verified paper owns one module tree",
-    `\`${papersLib}.<Slug>.*\`, written by TheoremChecker's F stages; a paper joins this barrel when its`,
+    `\`${papersLib}.<Slug>.*\`, written by LeanSmith's F stages; a paper joins this barrel when its`,
     "F5 completes.",
     "-/",
     "",

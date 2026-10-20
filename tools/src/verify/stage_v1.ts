@@ -183,7 +183,7 @@ function environmentCheckpoint(worker: string, reply: string): VerifyStageResult
     status: "checkpoint",
     message:
       `ENVIRONMENT checkpoint: the ${worker} (a model worker) could not read or write the run's files — it said: ` +
-      `${said.split("\n")[0]!.slice(0, 300)}. This is the machine, not the paper: run \`theoremchecker doctor\` and settle what it ` +
+      `${said.split("\n")[0]!.slice(0, 300)}. This is the machine, not the paper: run \`leansmith doctor\` and settle what it ` +
       `reports (the workers' sandbox). Do not retry, and do not change the paper or --targets`,
   };
 }
@@ -861,10 +861,10 @@ export const runStageV1: VerifyStage = async (args: VerifyStageArgs): Promise<Ve
   const sourceDir = path.join(runDir, VERIFY_FILES.sourceDir);
   // The authors' note macros are read away when a paper is read for the first time (a cold extraction);
   // a transcription on file is revised against the text it was cut from, read as its `envs.json` records.
-  const noteMacros = entry.mode === "revise" ? await recordedNoteMacros(runDir) : process.env.THEOREMCHECKER_NOTE_MACROS !== "off";
+  const noteMacros = entry.mode === "revise" ? await recordedNoteMacros(runDir) : process.env.LEANSMITH_NOTE_MACROS !== "off";
   const parsed = await buildEnvsJson(sourceDir, verify.source.main_file, noteMacros, runDir);
   const { flat } = parsed;
-  if (entry.mode === "cold" && noteMacros === false) log("parser: authors' note macros are read as written (THEOREMCHECKER_NOTE_MACROS=off)");
+  if (entry.mode === "cold" && noteMacros === false) log("parser: authors' note macros are read as written (LEANSMITH_NOTE_MACROS=off)");
   for (const m of flat.notes?.log ?? []) log(`parser: ${m}`);
   for (const w of parsed.warnings) log(`parser: ${w}`);
   const scopeOf = (e: EnvsJson): { scope: string[]; theoremLike: string[] } => {
@@ -923,7 +923,7 @@ export const runStageV1: VerifyStage = async (args: VerifyStageArgs): Promise<Ve
           `V1 refused the transcription: ${cut.length} parsed statement/proof text(s) are not balanced TeX (cut inside math, ` +
           `a display or an environment):\n` +
           cut.map((c) => `  - ${c}`).join("\n") +
-          `\nThis is a parser gap, not a transcription defect: re-cut these texts in discovery/segments.json, or make the smallest neutral edit in a COPY of the source and run it from V1 (theoremchecker SKILL §'When the pipeline itself fails').`,
+          `\nThis is a parser gap, not a transcription defect: re-cut these texts in discovery/segments.json, or make the smallest neutral edit in a COPY of the source and run it from V1 (leansmith SKILL §'When the pipeline itself fails').`,
       };
     }
   }

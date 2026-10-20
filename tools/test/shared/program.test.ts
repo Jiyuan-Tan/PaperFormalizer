@@ -16,7 +16,7 @@ const envAt = (directory: string): NodeJS.ProcessEnv => {
 describe("program lookup", () => {
   it("finds an executable by its absolute path without PATH", () => {
     expect(findExecutable(process.execPath, { env: envAt("") })).toBe(process.execPath);
-    expect(findExecutable("no-such-theoremchecker-program", { env: envAt(tmp) })).toBeNull();
+    expect(findExecutable("no-such-leansmith-program", { env: envAt(tmp) })).toBeNull();
   });
 
   it.skipIf(!windows)("finds .exe files in quoted Windows Path entries with PATHEXT", () => {
@@ -51,7 +51,7 @@ describe("program lookup", () => {
 
 describe("program probes", () => {
   it("preserves the distinction between missing programs and programs that fail", () => {
-    const missing = probeProgram("no-such-theoremchecker-program", [], envAt(tmp));
+    const missing = probeProgram("no-such-leansmith-program", [], envAt(tmp));
     expect(probeResult(missing)).toBe("missing");
     const failed = probeProgram(process.execPath, ["-e", "process.exit(7)"]);
     expect(probeResult(failed)).toBe("exit");
@@ -65,7 +65,7 @@ describe("program probes", () => {
     writeFileSync(script, "console.log(JSON.stringify(process.argv.slice(2)));\n");
     writeFileSync(path.join(bin, "claude.cmd"), `@echo off\r\n"${process.execPath}" "${script}" %*\r\n`);
     const args = ["--version", "two words"];
-    const result = probeProgram("claude", args, { ...envAt(bin), THEOREMCHECKER_TEST_MODEL_SHIM: path.join(bin, "claude.cmd") });
+    const result = probeProgram("claude", args, { ...envAt(bin), LEANSMITH_TEST_MODEL_SHIM: path.join(bin, "claude.cmd") });
     expect(probeResult(result), result.stderr).toBe("ok");
     expect(JSON.parse(result.stdout)).toEqual(args);
     expect(result.stderr).toBe("");

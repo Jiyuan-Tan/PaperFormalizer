@@ -56,7 +56,7 @@ describe("lintAnnotated — the compile's exit status decides", () => {
     expect((await lintAnnotated(run("failed", "an earlier log", true))).map((d) => d.block)).toContain("pdflatex (main.log)");
   });
   it("a missing \\input of the paper is paper-side though the macro block follows it", () => {
-    const tex = ["\\documentclass{article}", "\\input{tcilatex}", "% TheoremChecker annotation macros", "\\newcommand{\\vsNote}[1]{#1}", "\\begin{document}"].join("\n");
+    const tex = ["\\documentclass{article}", "\\input{tcilatex}", "% LeanSmith annotation macros", "\\newcommand{\\vsNote}[1]{#1}", "\\begin{document}"].join("\n");
     const log = "! LaTeX Error: File `tcilatex.tex' not found.\n./main.tex:2: Emergency stop.\n";
     expect(paperSideFailure(log, { "main.tex": tex })).toBe(true);
     // an error just after our block is still ours
@@ -84,7 +84,7 @@ describe("a compile error the paper's unmodified source has too", () => {
     for (const d of ["source", "annotated", "logs"]) mkdirSync(path.join(runDir, d));
     const source = "\\documentclass{article}\n\\newcommand{\\theHalgorithm}{x}\n\\begin{document}\nText.\n\\end{document}\n";
     writeFileSync(path.join(runDir, "source/main.tex"), source);
-    writeFileSync(path.join(runDir, "annotated/main.tex"), source.replace("\\newcommand", "\\usepackage{xcolor}% added by TheoremChecker\n\\newcommand").replace("Text.", `Text.${extra}`));
+    writeFileSync(path.join(runDir, "annotated/main.tex"), source.replace("\\newcommand", "\\usepackage{xcolor}% added by LeanSmith\n\\newcommand").replace("Text.", `Text.${extra}`));
     const logs: string[] = [];
     return { runDir, logs, args: { recFile: path.join(runDir, "logs/annotated_compile.json"), dir: path.join(runDir, "annotated"), mainFile: "main.tex", sourceDir: path.join(runDir, "source"), log: (m) => logs.push(m) } };
   }
@@ -109,7 +109,7 @@ describe("a compile error the paper's unmodified source has too", () => {
     expect(sourceFailureNote(r, "annotated")).toBe("the paper's own source does not compile here (pdflatex: main.tex:2: LaTeX Error: Command \\theHalgorithm already defined.); the annotated PDF could not be built — the annotated TeX and the page are unaffected");
     expect(logs.join("\n")).toContain("the paper's own source does not compile here");
     expect(await lintAnnotated(runDir)).toEqual([]);
-    expect(readFileSync(path.join(runDir, "source/main.tex"), "utf8")).not.toContain("TheoremChecker");
+    expect(readFileSync(path.join(runDir, "source/main.tex"), "utf8")).not.toContain("LeanSmith");
     expect(calls).toHaveLength(2);
     expect(calls[1]).not.toContain(runDir);
     expect(existsSync(calls[1]!)).toBe(false);

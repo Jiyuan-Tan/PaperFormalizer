@@ -1,7 +1,7 @@
 // PORTED verbatim from the upstream project's `tools/src/presentation/lean_statement.ts` (itself the
 // structuring half of its site's `leanStatement.ts`; the site's linkify/library helpers are not in
-// it). Re-sync by re-copying that file, then re-apply the one TheoremChecker change, marked
-// `TheoremChecker`: `isBinderKeywordAt` knows `letI`/`haveI`.
+// it). Re-sync by re-copying that file, then re-apply the one LeanSmith change, marked
+// `LeanSmith`: `isBinderKeywordAt` knows `letI`/`haveI`.
 
 /**
  * Structures a theorem's authored Lean source (name-preserving surface syntax,
@@ -152,7 +152,7 @@ export function findProofStart(text: string): number {
 function isBinderKeywordAt(text: string, i: number): boolean {
   const isWordChar = (c: string | undefined) => c != null && /[A-Za-z0-9_'.]/.test(c);
   if (isWordChar(text[i - 1])) return false;
-  // TheoremChecker: `letI := inst` / `haveI := inst` in a conclusion own their `:=` as `let` does
+  // LeanSmith: `letI := inst` / `haveI := inst` in a conclusion own their `:=` as `let` does
   for (const kw of ["let", "have", "letI", "haveI"]) {
     if (text.startsWith(kw, i) && !isWordChar(text[i + kw.length])) return true;
   }
@@ -442,7 +442,7 @@ export function scanTheoremSignature(rawSource: string): SignatureScan | null {
   if (uniMatch) telescopeStart += uniMatch[0].length;
   const scan = scanSignature(cleaned, telescopeStart);
   if (!scan) return null;
-  // TheoremChecker: a theorem proved by pattern matching has no `:=`; its statement ends at the first arm
+  // LeanSmith: a theorem proved by pattern matching has no `:=`; its statement ends at the first arm
   const arms = armsStart(cleaned, scan.conclusionStart, scan.conclusionEnd < 0 ? cleaned.length : scan.conclusionEnd);
   if (arms >= 0) {
     scan.conclusionEnd = arms;
@@ -453,7 +453,7 @@ export function scanTheoremSignature(rawSource: string): SignatureScan | null {
 }
 
 /**
- * TheoremChecker: a declaration's name as written — `«quoted components»` whole, and not the dot
+ * LeanSmith: a declaration's name as written — `«quoted components»` whole, and not the dot
  * of the universe parameters after it (`t.{u, v}`). A regex source.
  */
 export const DECL_NAME = String.raw`(?:«[^»]*»|[^\s({[⦃:«.]|\.(?!\{))+`;
@@ -461,7 +461,7 @@ const THEOREM_HEAD = new RegExp(String.raw`\b(theorem|lemma)\s+(${DECL_NAME})`);
 const PROP_DEF_HEAD = new RegExp(String.raw`\bdef\s+(${DECL_NAME})`);
 
 /**
- * TheoremChecker: offset of the first equation-compiler arm of a theorem (`| 0 => rfl`) after
+ * LeanSmith: offset of the first equation-compiler arm of a theorem (`| 0 => rfl`) after
  * `from` and before `to`, or -1: the `|` that opens a line outside every bracket, with its `=>` after it — and no
  * `match`/`fun` before either, whose alternatives are the statement's own.
  */

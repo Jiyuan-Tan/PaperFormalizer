@@ -1,4 +1,4 @@
-// `theoremchecker study`: build a reusable, proved Lean module for the owner's toolkit from a
+// `leansmith study`: build a reusable, proved Lean module for the owner's toolkit from a
 // plain-English requirement (`runs/study_<slug>/requirement.md`, which the first run writes as a
 // template). The run record, the staging Lean (`<lib>/Staging/<Slug>/`) and the Lake project all
 // live in the toolkit resolved by `toolkit/config.ts`. A promotion round's accepted entries are
@@ -67,7 +67,7 @@ function parseStudyArgs(argv: string[]): StudyArgs {
   return { slug, toolkit, resume, dryRun, clearBuildCap, clearCoordinateCap, clearReviewCap };
 }
 
-/** Run the toolkit-module builder behind `theoremchecker study`. */
+/** Run the toolkit-module builder behind `leansmith study`. */
 export async function runStudyCli(argv: string[]): Promise<void> {
   applyWorkerEnv();
   applyAuthEnv();
@@ -108,7 +108,7 @@ export async function runStudyCli(argv: string[]): Promise<void> {
       clearCoordinateCap: parsed.clearCoordinateCap,
       clearReviewCap: parsed.clearReviewCap,
     });
-    console.log(`TheoremChecker study ${parsed.slug} finished in phase ${finalState.phase}.`);
+    console.log(`LeanSmith study ${parsed.slug} finished in phase ${finalState.phase}.`);
     if (finalState.phase !== "done") {
       if (finalState.terminalMessage) console.log(finalState.terminalMessage);
       console.log(studyExit(finalState, parsed.slug, repoRoot));

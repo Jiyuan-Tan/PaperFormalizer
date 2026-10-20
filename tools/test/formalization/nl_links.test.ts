@@ -106,7 +106,7 @@ where $C = \frac{a}{b}.$ More text here.`;
     }
   });
   it("on every statement F5 links in the toolkit's runs: the segments tile it, and no cut falls inside inline math", () => {
-    const toolkit = process.env.THEOREMCHECKER_TEST_TOOLKIT ?? "";
+    const toolkit = process.env.LEANSMITH_TEST_TOOLKIT ?? "";
     const runs = toolkit && existsSync(path.join(toolkit, "runs")) ? readdirSync(path.join(toolkit, "runs")) : [];
     let n = 0;
     for (const slug of runs) {

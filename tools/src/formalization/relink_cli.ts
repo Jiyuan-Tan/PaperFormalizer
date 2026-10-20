@@ -1,5 +1,5 @@
 /**
- * `theoremchecker relink <slug>` — run F5's paper ↔ Lean link step alone (`nl_links.ts`
+ * `leansmith relink <slug>` — run F5's paper ↔ Lean link step alone (`nl_links.ts`
  * `emitNlLinks`) on the run's Lean and paper as they now stand, and write `nl_links.json`: what
  * brings links back for a statement edited since F5 (the page shows such a statement unlinked),
  * written against a statement cut short, or one no call answered. `--only <node>,…` links those
@@ -18,7 +18,7 @@ import type { PipelineContext } from "../types.js";
 import { emitNlLinks } from "./nl_links.js";
 
 export const RELINK_USAGE =
-  "Usage: theoremchecker relink <slug> [--toolkit <path>] [--only <node>,<node>…] [--fresh]\n" +
+  "Usage: leansmith relink <slug> [--toolkit <path>] [--only <node>,<node>…] [--fresh]\n" +
   "  link the run's results to their Lean statements row by row again (F5's link step alone, on the Lean and\n" +
   "  paper as they now stand) and write runs/<slug>/nl_links.json; --only: those results, the others kept as stored.\n" +
   "  Links made from the same statement, Lean and prompts and returned whole by the audit are kept; links that still fit are revised, not redone; --fresh: link from nothing.\n" +

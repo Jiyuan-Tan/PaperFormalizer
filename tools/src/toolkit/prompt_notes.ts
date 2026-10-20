@@ -1,5 +1,5 @@
 // Per-base-library prompt notes: a base library may ship a Markdown file of usage notes
-// (its tactics, simp sets, conventions) named by `prompt_notes` in `theoremchecker.json`. The F2
+// (its tactics, simp sets, conventions) named by `prompt_notes` in `leansmith.json`. The F2
 // scaffold and F4 filler prompts append one `## Notes for <name>` section per base library that
 // has one; a library without notes contributes nothing.
 import { readFileSync } from "node:fs";

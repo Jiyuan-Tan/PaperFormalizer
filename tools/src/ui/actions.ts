@@ -30,7 +30,7 @@ export type Action =
  *  ends, and one that stops part-way is the agent's to settle. (A stop needs none.) */
 export const needsAgent = (a: Action): boolean => a.kind !== "stop";
 
-/** The CLI arguments of an action (after `theoremchecker`). Throws on an invalid action. Pure. */
+/** The CLI arguments of an action (after `leansmith`). Throws on an invalid action. Pure. */
 export function buildArgv(a: Action, ctx: { toolkitRoot: string; slug: string; source: string | null }): string[] {
   const need = (cond: boolean, msg: string) => { if (!cond) throw new Error(msg); };
   const base = (src: string) => ["verify", src, "--toolkit", ctx.toolkitRoot, "--slug", ctx.slug];
@@ -68,17 +68,17 @@ export function buildArgv(a: Action, ctx: { toolkitRoot: string; slug: string; s
 
 /** The argv as one display line (quoted where needed), for the page. Pure. */
 export function displayCommand(argv: string[]): string {
-  return ["theoremchecker", ...argv].map((a) => (/^[A-Za-z0-9_.,:/=@+\-]+$/.test(a) ? a : `"${a.replace(/(["\\$`])/g, "\\$1")}"`)).join(" ");
+  return ["leansmith", ...argv].map((a) => (/^[A-Za-z0-9_.,:/=@+\-]+$/.test(a) ? a : `"${a.replace(/(["\\$`])/g, "\\$1")}"`)).join(" ");
 }
 
-/** Start `theoremchecker <argv>` detached; its output goes to `log`. Returns the child's pid. */
+/** Start `leansmith <argv>` detached; its output goes to `log`. Returns the child's pid. */
 export function launch(argv: string[], log: string): number {
   const require = createRequire(import.meta.url);
   const tsxCli = require.resolve("tsx/cli");
   mkdirSync(path.dirname(log), { recursive: true });
   const fd = openSync(log, "a");
   try {
-    const child = spawn(process.execPath, [tsxCli, path.join(TOOLS_DIR, "bin", "theoremchecker.ts"), ...argv], {
+    const child = spawn(process.execPath, [tsxCli, path.join(TOOLS_DIR, "bin", "leansmith.ts"), ...argv], {
       cwd: TOOLS_DIR, detached: true, stdio: ["ignore", fd, fd], windowsHide: true, env: process.env,
     });
     child.on("error", () => {}); // a failed start is in no log, but must not end the UI

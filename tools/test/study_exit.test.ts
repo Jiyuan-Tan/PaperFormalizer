@@ -13,7 +13,7 @@ describe("a study's halts and their exits", () => {
       ["COORD_CAP", "--clear-coordinate-cap", "clearCoordinateCap", "coordinate"],
     ] as const) {
       const st = halted(`Reached ${cap} (3); …`);
-      expect(studyExit(st, "s", "/tk")).toContain(`theoremchecker study s --resume ${flag} --toolkit /tk`);
+      expect(studyExit(st, "s", "/tk")).toContain(`leansmith study s --resume ${flag} --toolkit /tk`);
       expect(clearStudyCap(st, { [opt]: true })).toBe(true);
       expect(st).toMatchObject({ phase, terminalMessage: null });
     }
@@ -33,9 +33,9 @@ describe("a study's halts and their exits", () => {
 
   it("an escalation never reads as resumable by a bare --resume unless that re-opens it", () => {
     const esc = (kind: string) => ({ ...createInitialSubstrateState("s"), phase: "escalated" as const, terminalMessage: "m", terminalEscalationKind: kind as never });
-    expect(studyExit(esc("scaffolder"), "s", "/tk")).toMatch(/requirement\.md as the escalation asks, then `theoremchecker study s --resume --toolkit \/tk`: it re-opens only when the requirement changed/);
+    expect(studyExit(esc("scaffolder"), "s", "/tk")).toMatch(/requirement\.md as the escalation asks, then `leansmith study s --resume --toolkit \/tk`: it re-opens only when the requirement changed/);
     expect(studyExit(esc("coordinate-timeout"), "s", "/tk")).toMatch(/No flag re-opens it/);
-    expect(studyExit({ ...createInitialSubstrateState("s"), phase: "review" }, "s", "/tk")).toContain("continue with `theoremchecker study s --resume --toolkit /tk`");
+    expect(studyExit({ ...createInitialSubstrateState("s"), phase: "review" }, "s", "/tk")).toContain("continue with `leansmith study s --resume --toolkit /tk`");
     expect(studyExit({ ...createInitialSubstrateState("s"), phase: "done" }, "s", "/tk")).toBe("");
   });
 });

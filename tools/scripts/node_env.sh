@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 # Put a Node satisfying tools/package.json `engines.node` on PATH. SOURCE me:
 #
-#     source <TheoremChecker>/tools/scripts/node_env.sh
+#     source <LeanSmith>/tools/scripts/node_env.sh
 #
 # Why this exists. Every launcher used to open with
 # `source ~/.nvm/nvm.sh && nvm use 20.20.2`, which is wrong twice over:
@@ -10,7 +10,7 @@
 #     $NVM_DIR commonly points outside $HOME, so `~/.nvm/nvm.sh` does not exist.
 #     Guarded call sites then silently no-op and the process inherits whatever
 #     node happens to be on PATH; UNGUARDED call sites are worse — `source` of a
-#     missing file returns nonzero, so the `&& npx ... theoremchecker.ts` chained
+#     missing file returns nonzero, so the `&& npx ... leansmith.ts` chained
 #     after it never runs at all.
 #  2. The pipeline needs *a Node at or above the engines floor*, not the exact
 #     patch release 20.20.2. Pinning an exact version breaks every launcher the
@@ -26,8 +26,8 @@
 # returns 1, so `source node_env.sh && <cmd>` still fails closed.
 #
 # Escape hatches:
-#   THEOREMCHECKER_NODE_BIN=/path/to/node/bin   force a specific install
-#   THEOREMCHECKER_NODE_ENV_VERBOSE=1           echo the resolved interpreter
+#   LEANSMITH_NODE_BIN=/path/to/node/bin   force a specific install
+#   LEANSMITH_NODE_ENV_VERBOSE=1           echo the resolved interpreter
 
 __cs_node_env() {
   local src tools_root floor cur cand cand_ver best best_ver dir
@@ -48,14 +48,14 @@ __cs_node_env() {
   # __cs_ge A B  <=>  min(A,B) == B
   __cs_ge() { [ "$(printf '%s\n%s\n' "$2" "$1" | sort -V | head -n1)" = "$2" ]; }
 
-  if [ -n "${THEOREMCHECKER_NODE_BIN:-}" ]; then
-    PATH="$THEOREMCHECKER_NODE_BIN:$PATH"
+  if [ -n "${LEANSMITH_NODE_BIN:-}" ]; then
+    PATH="$LEANSMITH_NODE_BIN:$PATH"
     export PATH
   fi
 
   cur="$(command -v node >/dev/null 2>&1 && node -v 2>/dev/null | sed 's/^v//')"
   if [ -n "$cur" ] && __cs_ge "$cur" "$floor"; then
-    [ -n "${THEOREMCHECKER_NODE_ENV_VERBOSE:-}" ] &&
+    [ -n "${LEANSMITH_NODE_ENV_VERBOSE:-}" ] &&
       echo "node_env: using $(command -v node) (v$cur, floor >=$floor)" >&2
     unset -f __cs_ge
     return 0
@@ -81,14 +81,14 @@ __cs_node_env() {
   if [ -n "$best" ]; then
     PATH="$best:$PATH"
     export PATH
-    [ -n "${THEOREMCHECKER_NODE_ENV_VERBOSE:-}" ] &&
+    [ -n "${LEANSMITH_NODE_ENV_VERBOSE:-}" ] &&
       echo "node_env: selected $best/node (v$best_ver, floor >=$floor)" >&2
     unset -f __cs_ge
     return 0
   fi
 
   echo "node_env: no Node >=$floor found (PATH node: ${cur:-none}; searched \$NVM_DIR=${NVM_DIR:-unset} and \$HOME/.nvm)." >&2
-  echo "node_env: install one (\`nvm install $floor\`) or set THEOREMCHECKER_NODE_BIN=/path/to/node/bin." >&2
+  echo "node_env: install one (\`nvm install $floor\`) or set LEANSMITH_NODE_BIN=/path/to/node/bin." >&2
   unset -f __cs_ge
   return 1
 }

@@ -262,7 +262,7 @@ function parsePlanForDirective(planText: string, directive: string): PlanShape |
   }
   const parsed = PlanSchema.safeParse(raw);
   if (!parsed.success) {
-    console.warn(`[theoremchecker] F2 ${directive}: plan.json is not schema-valid; directive omitted from the producer prompt.`);
+    console.warn(`[leansmith] F2 ${directive}: plan.json is not schema-valid; directive omitted from the producer prompt.`);
     return null;
   }
   return parsed.data;
@@ -390,7 +390,7 @@ function planBackToF1(state: StateJson, violations: PlanGateViolation[], when: s
   state.flags.plan_rewind_violations = signature;
   state.stage_completed = "1";
   const message = `F2 structural plan gate refused the plan ${when} — back to F1 through the F1.5 pre-lint:\n  ${listed}`;
-  console.warn(`[theoremchecker] ${message}`);
+  console.warn(`[leansmith] ${message}`);
   return { stage: "2", status: "rewound", advance: false, message };
 }
 
@@ -513,7 +513,7 @@ export async function runStage2(args: {
         prevCorePath: `${coreJsonPath(args.ctx)}.prev`,
       });
       if (!reconciliationIsEmpty(tagReconciliation)) {
-        console.warn(`[theoremchecker] F2 revise tag reconciliation: ${describeTagReconciliation(tagReconciliation)}`);
+        console.warn(`[leansmith] F2 revise tag reconciliation: ${describeTagReconciliation(tagReconciliation)}`);
       }
     }
   }
@@ -594,7 +594,7 @@ export async function runStage2(args: {
           // A flagged node whose record also moved is a changed one.
           revisionContext = buildF2RevisionContext(core, planNow, revisionTargets, { contextSymbols: moved.symbols, flagged: flagged.filter((t) => !changed.includes(t)), contextNodes: mentioned });
           if (revisionContext?.unresolved_targets.length) {
-            console.warn(`[theoremchecker] F2 revise: target(s) that name no core node, symbol or S-block are left out of the local context: ${revisionContext.unresolved_targets.join(", ")}`);
+            console.warn(`[leansmith] F2 revise: target(s) that name no core node, symbol or S-block are left out of the local context: ${revisionContext.unresolved_targets.join(", ")}`);
           }
           if (revisionContext) {
             // Each finding goes on the record of its node; the directive keeps them only when one has no record here.
@@ -615,7 +615,7 @@ export async function runStage2(args: {
       }
     } catch (err) {
       console.warn(
-        `[theoremchecker] F2 local revision context unavailable; retaining full context: ${err instanceof Error ? err.message : String(err)}`,
+        `[leansmith] F2 local revision context unavailable; retaining full context: ${err instanceof Error ? err.message : String(err)}`,
       );
     }
     if (!revisionContext) {
@@ -626,7 +626,7 @@ export async function runStage2(args: {
         : revisionTargets.length > 0
         ? `F2 local context is unavailable for revision target(s) (${revisionTargets.join(", ")}) (no target names a core node, symbol or S-block, or the change reaches every node); retaining full plan/core context.`
           : "F2 revise names no target and nothing moved since its scaffold was made; retaining full plan/core context.";
-      console.warn(`[theoremchecker] ${why}`);
+      console.warn(`[leansmith] ${why}`);
       await appendPipelineLog(args.ctx, { stage: "2", status: "revise-scope", duration_ms: 0, message: `WHOLE CONTEXT — ${why}` });
     }
   }
@@ -796,7 +796,7 @@ export async function runStage2(args: {
       priorSemanticDefs = await findStatementSemanticDefs(paths.leanDir);
     } catch (err) {
       console.warn(
-        `[theoremchecker] Stage 2 hidden-definition snapshot failed (continuing): ${err instanceof Error ? err.message : String(err)}`,
+        `[leansmith] Stage 2 hidden-definition snapshot failed (continuing): ${err instanceof Error ? err.message : String(err)}`,
       );
     }
   }
@@ -852,7 +852,7 @@ export async function runStage2(args: {
       duration_ms: 0,
       message: `F2 revise looked up ${beyond.length} node(s) beyond the affected set (${revisionContext!.affected.length}): ${beyond.join(", ")}`,
     });
-    console.warn(`[theoremchecker] F2 revise looked up ${beyond.length} node(s) beyond the affected set: ${beyond.join(", ")}`);
+    console.warn(`[leansmith] F2 revise looked up ${beyond.length} node(s) beyond the affected set: ${beyond.join(", ")}`);
   }
   if (parsed.status === "blocked-missing-architecture") {
     args.state.flags.missing_architecture = true;
@@ -876,7 +876,7 @@ export async function runStage2(args: {
         });
       }
     } catch (err) {
-      console.warn(`[theoremchecker] missing-architecture ledger write failed: ${err instanceof Error ? err.message : String(err)}`);
+      console.warn(`[leansmith] missing-architecture ledger write failed: ${err instanceof Error ? err.message : String(err)}`);
     }
     return {
       stage: "2",
@@ -908,19 +908,19 @@ export async function runStage2(args: {
         if (patchInPlace) {
           const restored = await restoreCarryoverProofs(paths.leanDir);
           console.warn(
-            `[theoremchecker] Stage 2 revise proof preservation: restored ${restored.count} active prior proof(s) ` +
+            `[leansmith] Stage 2 revise proof preservation: restored ${restored.count} active prior proof(s) ` +
               `for signature-unchanged decl(s) (${restored.names.join(", ")}); only changed/new obligations may remain sorry.`,
           );
         } else {
           console.warn(
-            `[theoremchecker] Stage 2 proof carry-over: re-attached ${carried.count} prior proof(s) as Stage-3 anchors ` +
+            `[leansmith] Stage 2 proof carry-over: re-attached ${carried.count} prior proof(s) as Stage-3 anchors ` +
               `for signature-unchanged decl(s) (${carried.names.join(", ")}) — rewind did not discard them.`,
           );
         }
       }
     } catch (err) {
       console.warn(
-        `[theoremchecker] Stage 2 proof carry-over failed (continuing): ${err instanceof Error ? err.message : String(err)}`,
+        `[leansmith] Stage 2 proof carry-over failed (continuing): ${err instanceof Error ? err.message : String(err)}`,
       );
     }
   }
@@ -959,7 +959,7 @@ export async function runStage2(args: {
         if (canonicalPlan.changed) {
           await writeFile(paths.plan, JSON.stringify(planObj, null, 2) + "\n", "utf8");
           console.warn(
-            "[theoremchecker] F2 post-sync canonicalized optional gate keys and restored cited provenance from the typed core.",
+            "[leansmith] F2 post-sync canonicalized optional gate keys and restored cited provenance from the typed core.",
           );
         }
         const leanTags = await parseLeanNodeTags(paths.leanDir);
@@ -971,7 +971,7 @@ export async function runStage2(args: {
         const knownDecls = knownDeclsForContext(args.ctx);
         if (!knownDecls) {
           console.warn(
-            "[theoremchecker] no library index loaded — the P5 reuse-existence check is SKIPPED this pass; hallucinated reuse decls will surface only at compile.",
+            "[leansmith] no library index loaded — the P5 reuse-existence check is SKIPPED this pass; hallucinated reuse decls will surface only at compile.",
           );
         }
         const gate = runPlanGate(planObj, core, {
@@ -1004,7 +1004,7 @@ export async function runStage2(args: {
             );
           }
           console.warn(
-            `[theoremchecker] F2 post-sync plan_gate: ${gate.violations.length} violation(s)\n  ` +
+            `[leansmith] F2 post-sync plan_gate: ${gate.violations.length} violation(s)\n  ` +
               gate.violations.slice(0, 12).map((v) => `${v.code} @ ${v.where}: ${v.message}`).join("\n  "),
           );
         }
@@ -1028,13 +1028,13 @@ export async function runStage2(args: {
       );
       if (hiddenChangedTargets.length > 0) {
         console.warn(
-          `[theoremchecker] Stage 2 revise semantic invalidation: reset cached F2.5 review for ` +
+          `[leansmith] Stage 2 revise semantic invalidation: reset cached F2.5 review for ` +
             `${hiddenChangedTargets.join(", ")} (meaning-bearing inline dependency changed).`,
         );
       }
     } catch (err) {
       console.warn(
-        `[theoremchecker] Stage 2 hidden-definition comparison failed (continuing): ${err instanceof Error ? err.message : String(err)}`,
+        `[leansmith] Stage 2 hidden-definition comparison failed (continuing): ${err instanceof Error ? err.message : String(err)}`,
       );
     }
   }
@@ -1059,7 +1059,7 @@ export async function runStage2(args: {
     if (!build.ok) {
       throw new Error(`F2 run compile gate failed; refusing to advance to F2.5:\n${build.errors}`);
     }
-    console.warn("[theoremchecker] F2 run compile gate passed");
+    console.warn("[leansmith] F2 run compile gate passed");
   }
   // The redirect is honoured only now, once the plan gate and the compile gate have passed:
   // cleared before them, a gate failure left no pending directive for the resume to re-apply,
@@ -1075,7 +1075,7 @@ export async function runStage2(args: {
       core: formalizationCoreContextValue(await readFormalizationCore(scaffoldCorePath)),
     });
   } catch (err) {
-    console.warn(`[theoremchecker] F2 scaffold basis not recorded (the next revise keeps full context): ${err instanceof Error ? err.message : String(err)}`);
+    console.warn(`[leansmith] F2 scaffold basis not recorded (the next revise keeps full context): ${err instanceof Error ? err.message : String(err)}`);
   }
   return {
     stage: "2",

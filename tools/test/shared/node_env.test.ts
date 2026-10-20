@@ -115,7 +115,7 @@ describe("scripts/node_env.sh", () => {
       // rather than launching the pipeline on an unusable interpreter.
       expect(res.code).toBe(1);
       expect(res.stderr).toMatch(/no Node >=/);
-      expect(res.stderr).toMatch(/THEOREMCHECKER_NODE_BIN/);
+      expect(res.stderr).toMatch(/LEANSMITH_NODE_BIN/);
     } finally {
       await rm(tmp, { recursive: true, force: true });
     }

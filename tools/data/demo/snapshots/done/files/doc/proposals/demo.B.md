@@ -15,7 +15,7 @@ Each is one main result; "If accepted" says how it enters the toolkit. Decide ea
 
 Then run:
 
-    theoremchecker propose demo --round B --apply --toolkit @@TOOLKIT@@ --dry-run
+    leansmith propose demo --round B --apply --toolkit @@TOOLKIT@@ --dry-run
 
 ## b-thm-amgm · AM-GM for two nonnegative reals
 

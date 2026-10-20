@@ -1,26 +1,26 @@
 name = "my-toolkit"
 version = "0.1.0"
-keywords = ["math", "theoremchecker"]
+keywords = ["math", "leansmith"]
 defaultTargets = ["Toolkit"]
 
-# A TheoremChecker personal toolkit. Two libraries:
+# A LeanSmith personal toolkit. Two libraries:
 #   Toolkit  — the user's curated reusable library (Foundations, Tricks); curated by hand, never
 #              written by a paper run.
 #   Papers   — one module tree per verified paper; may import Toolkit and the base libraries.
-# Layering (lint-enforced by TheoremChecker): Papers → Toolkit → base. Nothing imports Papers.
+# Layering (lint-enforced by LeanSmith): Papers → Toolkit → base. Nothing imports Papers.
 #
 # Base libraries are read-only Lake dependencies: Mathlib, pinned, and the optional domain
 # libraries between the markers below.
 #
-# The two executables are required by TheoremChecker (checked at the start of every `verify`
-# run). Both use `TheoremCheckerIndexCore` (this toolkit's copy of the declaration-index
+# The two executables are required by LeanSmith (checked at the start of every `verify`
+# run). Both use `LeanSmithIndexCore` (this toolkit's copy of the declaration-index
 # extractor); they need the toolkit to be a git repository (the index records the commit):
 #   paper_index    — F5 docstring coverage: indexes one paper's modules
 #                    (`lake exe paper_index -- --prefix Papers.<P> --src-root <root> --modules … --out …`).
 #   toolkit_index  — indexes `Toolkit.*` into `doc/toolkit_index.json`, the JSON shape retrieval
 #                    searches (`lake exe toolkit_index` from the toolkit root after `lake build Toolkit`).
 # A third, `candidate_scan`, reports every declaration's axioms and the constants it uses: the
-# promotion round after a paper's report and `theoremchecker toolkit-health` (the toolkit graph) run it.
+# promotion round after a paper's report and `leansmith toolkit-health` (the toolkit graph) run it.
 
 [leanOptions]
 pp.unicode.fun = true
@@ -28,8 +28,8 @@ relaxedAutoImplicit = false
 weak.linter.mathlibStandardSet = true
 maxSynthPendingDepth = 3
 
-# Domain libraries (Causalean, FoML, optlib, …): `theoremchecker init` writes them between the
-# markers from TheoremChecker's catalog (tools/data/libraries.json), each at a revision that builds
+# Domain libraries (Causalean, FoML, optlib, …): `leansmith init` writes them between the
+# markers from LeanSmith's catalog (tools/data/libraries.json), each at a revision that builds
 # against the mathlib `rev` below. Add one by hand the same way — always before mathlib.
 # BEGIN domain libraries
 # END domain libraries
@@ -49,7 +49,7 @@ name = "Papers"
 requiresModuleSystem = true
 
 [[lean_lib]]
-name = "TheoremCheckerIndexCore"
+name = "LeanSmithIndexCore"
 
 [[lean_exe]]
 name = "paper_index"

@@ -59,7 +59,7 @@ export interface LocalConfig {
   /** Path to a file whose first non-empty line is the OpenAI key. */
   openaiApiKeyFile?: string;
   /** CODEX_HOME used in codex api mode; kept separate from `~/.codex` so the
-   *  subscription login is never evicted. Default `~/.codex-theoremchecker-api`. */
+   *  subscription login is never evicted. Default `~/.codex-leansmith-api`. */
   codexApiHome?: string;
   /** CLAUDE_CONFIG_DIR for the spawned `claude` workers, so the pipeline can run
    *  on a DIFFERENT Anthropic subscription than the operator's interactive login.
@@ -122,9 +122,9 @@ export function localConfig(): LocalConfig {
     gitBashPath:
       process.env.CLAUDE_CODE_GIT_BASH_PATH ?? file.gitBashPath ?? undefined,
     leanLspMcpBinary:
-      process.env.THEOREMCHECKER_LEAN_LSP_MCP ?? file.leanLspMcpBinary ?? "lean-lsp-mcp",
+      process.env.LEANSMITH_LEAN_LSP_MCP ?? file.leanLspMcpBinary ?? "lean-lsp-mcp",
     leanProjectPath:
-      process.env.THEOREMCHECKER_LEAN_PROJECT_PATH ?? file.leanProjectPath ?? undefined,
+      process.env.LEANSMITH_LEAN_PROJECT_PATH ?? file.leanProjectPath ?? undefined,
     // 10 min default: heavy concrete scaffolds (measure-theoretic estimator /
     // model-class defs) elaborate well past the old 2-min limit, so a reviewer's
     // lean-lsp vacuity probe on the active file times out even after a successful
@@ -138,7 +138,7 @@ export function localConfig(): LocalConfig {
     // the only module that interprets it.
     pythonPath: file.pythonPath ?? undefined,
     codexSandbox: parseCodexSandbox(
-      process.env.THEOREMCHECKER_CODEX_SANDBOX ?? file.codexSandbox ?? "workspace-write",
+      process.env.LEANSMITH_CODEX_SANDBOX ?? file.codexSandbox ?? "workspace-write",
     ),
     // Auth fields pass through VERBATIM: `src/auth.ts` owns their precedence
     // (env beats file) and their validation, so duplicating either here would
@@ -182,7 +182,7 @@ export function leanProjectPathFor(repoRoot: string): string {
 
 /**
  * The one rule for the machine-level Lean project override (`leanProjectPath` in
- * `tools/config/local.json`, or `THEOREMCHECKER_LEAN_PROJECT_PATH`): it may be unset or name the
+ * `tools/config/local.json`, or `LEANSMITH_LEAN_PROJECT_PATH`): it may be unset or name the
  * toolkit's own Lean project, nothing else. A different project would point lean-lsp and the
  * agents' diagnostics at a tree the run does not write, so the run is refused.
  */
@@ -192,7 +192,7 @@ export function assertLeanProjectOverride(toolkit: { leanProjectPath: string }):
   if (path.resolve(override) === path.resolve(toolkit.leanProjectPath)) return;
   throw new Error(
     `The machine-level Lean project override (${override}, from tools/config/local.json ` +
-      `leanProjectPath or THEOREMCHECKER_LEAN_PROJECT_PATH) differs from the toolkit's Lean project ` +
+      `leanProjectPath or LEANSMITH_LEAN_PROJECT_PATH) differs from the toolkit's Lean project ` +
       `(${toolkit.leanProjectPath}). The toolkit is the Lean project; clear the override.`,
   );
 }

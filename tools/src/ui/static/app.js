@@ -1,4 +1,4 @@
-/* TheoremChecker local UI. Three views — toolkit (#/), library (#/library), paper (#/paper/<slug>) —
+/* LeanSmith local UI. Three views — toolkit (#/), library (#/library), paper (#/paper/<slug>) —
    kept current by server-sent events; every fetch carries an ETag, so an unchanged view costs a 304
    and no redraw. Decisions are collected on the page, shown as the exact CLI call, and run on OK. */
 (() => {
@@ -293,9 +293,9 @@ async function refreshInbox() {
   const c = $("#inbox-count"); c.textContent = items.length; c.classList.toggle("zero", !items.length);
   // the tab says how many papers wait; what is new since the last look is notified, when asked for —
   // never what stood there when the page loaded
-  document.title = `${items.length ? `(${items.length}) ` : ""}TheoremChecker`;
+  document.title = `${items.length ? `(${items.length}) ` : ""}LeanSmith`;
   // (a message of the agent's waits for no decision: announced as a message, counted nowhere here)
-  const now = new Map([...items.flatMap((r) => needsOf(r).map(([k, what]) => [`${r.slug}|${k}`, { r, title: r.title, what }])), ...data.runs.filter((r) => r.unread).map((r) => [`${r.slug}|message ${r.unread}`, { r, title: "TheoremChecker", what: `The agent replied on ${r.title}` }])]);
+  const now = new Map([...items.flatMap((r) => needsOf(r).map(([k, what]) => [`${r.slug}|${k}`, { r, title: r.title, what }])), ...data.runs.filter((r) => r.unread).map((r) => [`${r.slug}|message ${r.unread}`, { r, title: "LeanSmith", what: `The agent replied on ${r.title}` }])]);
   if (NOTE.seen && notifyOn()) {
     for (const [k, { r, title, what }] of now) {
       if (NOTE.seen.has(k)) continue;
@@ -392,7 +392,7 @@ async function showToolkit(first) {
     $("#runs-body").addEventListener("keydown", (e) => { const tr = e.target.closest("tr[data-slug]"); if (tr && e.key === "Enter" && !e.target.closest(".sh")) location.hash = `#/paper/${encodeURIComponent(tr.dataset.slug)}`; });
   }
   $("#tk-name").textContent = `Papers in ${data.toolkit.name}`;
-  $("#start-how").innerHTML = `<p class="meta">Open a terminal in <code>${esc(data.toolkit.repo)}</code>, start <code>claude</code> or <code>codex</code>, and ask it, for example:</p>${cmdBox(`Use TheoremChecker to verify the paper at <path to the .tex, folder or arXiv id> (toolkit ${data.toolkit.root}).`)}<p class="meta">The agent starts the run, attaches itself to it and acts at every halt; the run appears here and updates live. Decisions that are yours wait for you on the paper's page.</p>`;
+  $("#start-how").innerHTML = `<p class="meta">Open a terminal in <code>${esc(data.toolkit.repo)}</code>, start <code>claude</code> or <code>codex</code>, and ask it, for example:</p>${cmdBox(`Use LeanSmith to verify the paper at <path to the .tex, folder or arXiv id> (toolkit ${data.toolkit.root}).`)}<p class="meta">The agent starts the run, attaches itself to it and acts at every halt; the run appears here and updates live. Decisions that are yours wait for you on the paper's page.</p>`;
   $("#tk-meta").innerHTML = `<span>Owner ${esc(data.toolkit.owner)}</span><span>Lean <code>${esc(data.toolkit.lean.replace(/^.*:/, ""))}</code></span><span>Base: ${esc(data.toolkit.base.join(", ") || "Mathlib")}</span><span><code>${esc(data.toolkit.root)}</code></span>`;
   $("#tk-stats").innerHTML = [["papers", runs.length], ["need you", count("needs-you")], ["running", count("running")], ["done", count("done")]].map(([k, v]) => `<div class="stat"><b>${v}</b><span>${k}</span></div>`).join("");
   const waiting = runs.filter((r) => r.status === "needs-you");
@@ -790,7 +790,7 @@ function withDrawers(page, w) {
    kept when the reader leaves the paper, and put back as it stands when they return to it unchanged. */
 let KEPT = null; // { paper: the payload it was drawn from, el }
 function keepBody() { const el = $("#paper-body"); if (el && P.paper && P.drawn.body === P.paper) KEPT = { paper: P.paper, el }; }
-const KIND_TAG = { note: ["TheoremChecker", "t-note"], reading: ["Clarification", ""], "reading-owner": ["Author's reading", ""], "reading-symbol": ["Symbol", ""], condition: ["Bookkeeping condition", "t-cond"], rewind: ["Proposed correction", "t-note"], cap: ["Repair not settled", "t-note"] };
+const KIND_TAG = { note: ["LeanSmith", "t-note"], reading: ["Clarification", ""], "reading-owner": ["Author's reading", ""], "reading-symbol": ["Symbol", ""], condition: ["Bookkeeping condition", "t-cond"], rewind: ["Proposed correction", "t-note"], cap: ["Repair not settled", "t-note"] };
 const CHIP = { note: "Findings", reading: "Clarifications", "reading-owner": "Clarifications", "reading-symbol": "Clarifications", condition: "Bookkeeping", rewind: "Findings", cap: "Findings" };
 
 async function showPaper(slug, first) {
@@ -815,7 +815,7 @@ async function showPaper(slug, first) {
       <article class="paper" id="article"><div class="byline" id="byline"></div><h1 class="ptitle" id="ptitle"></h1><div class="authors" id="pauthors"></div><div id="status"></div>
         <div class="rtool" role="toolbar" aria-label="Review"><span class="lbl">Markup</span><span class="seg" id="markup" role="group"><button type="button" data-m="all" aria-pressed="true" title="Red: the printed text that is wrong. Blue: the correction.">All markup</button><button type="button" data-m="simple" aria-pressed="false" title="The corrected text; a bar in the margin marks each change.">Corrected</button><button type="button" data-m="original" aria-pressed="false">Original</button></span><span class="chips" id="chips"></span><span class="nav-changes"><button type="button" id="prev-c" aria-label="Previous">↑</button><span id="c-pos">—</span><button type="button" id="next-c" aria-label="Next">↓</button></span></div>
         <div class="render-check" id="render-check"></div><div id="paper-body"><p class="loading">Loading…</p></div><div id="promo"></div></article>
-      <aside class="pv-rail" aria-label="TheoremChecker comments"><div class="rail-head">TheoremChecker <span id="rail-count"></span></div><p class="rail-off">Comments are hidden in this view.</p><div class="rail-cards" id="rail-cards"></div></aside></div>`;
+      <aside class="pv-rail" aria-label="LeanSmith comments"><div class="rail-head">LeanSmith <span id="rail-count"></span></div><p class="rail-off">Comments are hidden in this view.</p><div class="rail-cards" id="rail-cards"></div></aside></div>`;
     wirePaper();
     P.page = d0.data; P.detail = withDrawers(P.page, P.drawers);
     drawHeader(); drawStages(); drawStatus();
@@ -913,7 +913,7 @@ const shortHeading = (h) => h.replace(/^Theorem/, "Thm").replace(/^Proposition/,
 
 function drawHeader() {
   const s = P.detail.summary;
-  $("#byline").innerHTML = `TheoremChecker · <b>${esc(s.slug)}</b>${P.detail.source.main ? ` — <code>${esc(P.detail.source.main)}</code>` : ""} · shown from <code>${esc(P.paper?.from ?? "—")}/</code>${P.paper?.pdf ? ` · <a href="${esc(P.paper.pdf)}" target="_blank" rel="noopener">PDF</a>` : ""}${s.tokens ? `<br><span class="tokens" title="Model tokens this run has used so far (runs/${esc(s.slug)}/token_usage.jsonl)">Tokens: ${esc(tokenLine(s.tokens))}</span>` : ""}`;
+  $("#byline").innerHTML = `LeanSmith · <b>${esc(s.slug)}</b>${P.detail.source.main ? ` — <code>${esc(P.detail.source.main)}</code>` : ""} · shown from <code>${esc(P.paper?.from ?? "—")}/</code>${P.paper?.pdf ? ` · <a href="${esc(P.paper.pdf)}" target="_blank" rel="noopener">PDF</a>` : ""}${s.tokens ? `<br><span class="tokens" title="Model tokens this run has used so far (runs/${esc(s.slug)}/token_usage.jsonl)">Tokens: ${esc(tokenLine(s.tokens))}</span>` : ""}`;
   const h = P.paper?.health;
   const rc = $("#render-check");
   if (rc && h) {
@@ -937,7 +937,7 @@ function drawSnapStatus() {
   const on = /^\d{4}-\d{2}-\d{2}/.test(sh?.shared_at ?? "") ? sh.shared_at.slice(0, 10) : null;
   const by = login ? `<p>Shared by <a href="https://github.com/${esc(login)}" target="_blank" rel="noopener">@${esc(login)}</a>${on ? ` on ${esc(on)}` : ""}.</p>` : "";
   const files = [...(P.paper?.pdf ? [[P.paper.pdf, "Corrected paper (PDF)"]] : []), ...(SNAP.leanDir ? [["lean/", "Lean code"]] : [])];
-  $("#status").innerHTML = `<div class="status"><div class="line"><span class="pill b-done">${esc(String(s.verdict ?? "report").replace(/_/g, " "))}</span><h2>Checked by TheoremChecker</h2></div>${b ? `<p>${esc(b)}</p>` : ""}${by}<div class="actions"><button class="btn" type="button" data-report>Full report</button>${files.map(([f, label]) => `<a class="btn" href="${esc(f)}" target="_blank" rel="noopener">${esc(label)}</a>`).join("")}</div></div>`;
+  $("#status").innerHTML = `<div class="status"><div class="line"><span class="pill b-done">${esc(String(s.verdict ?? "report").replace(/_/g, " "))}</span><h2>Checked by LeanSmith</h2></div>${b ? `<p>${esc(b)}</p>` : ""}${by}<div class="actions"><button class="btn" type="button" data-report>Full report</button>${files.map(([f, label]) => `<a class="btn" href="${esc(f)}" target="_blank" rel="noopener">${esc(label)}</a>`).join("")}</div></div>`;
 }
 /* The bundle's REPORT.md, typeset in the drawer (a shared paper's page): its headings, paragraphs and
    lists, **bold** and `code`, and its formulas by KaTeX under the paper's macros. A plain reader of
@@ -1288,7 +1288,7 @@ function cardHTML(c, r, o = { own: [], atRest: false, draft: null }) {
   const [tag, cls] = KIND_TAG[c.kind] ?? ["Note", ""];
   const editing = o.draft !== null && o.own.length > 0;
   return `<div class="card" data-card="${esc(c.id)}" data-kind="${esc(c.kind)}" data-chip="${CHIP[c.kind] ?? "Findings"}" ${r ? `data-node="${esc(r.id)}"` : ""} ${c.env ? `data-env="${esc(c.env)}"` : ""} tabindex="0">
-    <div class="cbyline"><span class="av">TC</span><span class="cname">${c.kind === "note" ? "TheoremChecker" : c.label}</span>${r ? `<span class="cwhen">${esc(envOf(r.id)?.heading ?? r.id)}</span>` : ""}<span class="ctag ${cls}">${esc(tag)}</span></div>
+    <div class="cbyline"><span class="av">TC</span><span class="cname">${c.kind === "note" ? "LeanSmith" : c.label}</span>${r ? `<span class="cwhen">${esc(envOf(r.id)?.heading ?? r.id)}</span>` : ""}<span class="ctag ${cls}">${esc(tag)}</span></div>
     ${editing ? "" : `<div class="cbody">${c.html}</div>`}${c.kind === "reading-owner" ? ownerReadingHTML(o) : ""}${editing || c.kind === "rewind" || c.kind === "cap" ? "" : issueHTML(o)}</div>`;
 }
 /* The foot of a comment that asks no decision: the owner may report an issue with it (optional — a
@@ -1736,7 +1736,7 @@ function openDrawer(id) {
       // its environment, or — a corollary a repair split off — its own block; a result stated in prose has no block
       const found = xlLocate(resEl(r.id), segs);
       // links on file that are not shown, and how they come back: F5 again, or `relink` for this result
-      const relink = `<code>theoremchecker relink ${esc(S.slug)} --toolkit &lt;toolkit&gt; --only ${esc(r.id)}</code>`;
+      const relink = `<code>leansmith relink ${esc(S.slug)} --toolkit &lt;toolkit&gt; --only ${esc(r.id)}</code>`;
       const nl = r.linksStale === "truncated" ? `<p class="stmt-note">The links on file were written against this statement cut short (an older reader stopped before its end), so none is shown. ${relink} links the whole statement again.</p>`
         : r.linksStale === "recut" ? `<p class="stmt-note">The links on file were written by an earlier link step for rows that are not this statement's rows now (it changed since, or that step cut it otherwise), so none is shown. They return when F5 runs again, or with ${relink}.</p>`
         : r.linksStale ? `<p class="stmt-note">The links on file were written for an earlier version of this statement, so none is shown. They return when F5 runs again, or with ${relink}.</p>`
@@ -1875,7 +1875,7 @@ function drawPromo() {
   const titleOf = (id) => pr.proposals.find((p) => p.id === id)?.title ?? id;
   const pm = P.paper?.macros;
   host.innerHTML = `<section class="promo-sec" id="promo-sec"><h2>Promote to toolkit <span class="pill ${pr.applied ? "b-done" : "b-pending"}">round ${pr.round}${pr.applied ? " · applied" : ""}</span></h2>
-    <p class="meta">TheoremChecker proposes the results proved in this paper's Lean that are general enough to reuse. Each one you accept is built into your toolkit. ${pr.skipped} more were set aside automatically.</p>
+    <p class="meta">LeanSmith proposes the results proved in this paper's Lean that are general enough to reuse. Each one you accept is built into your toolkit. ${pr.skipped} more were set aside automatically.</p>
     ${pr.error ? `<p class="empty-note">The checklist does not parse: ${esc(pr.error)}</p>` : ""}
     ${pr.refusal ? `<p class="empty-note"><b>The round was not applied.</b> <span style="white-space:pre-wrap">${esc(pr.refusal)}</span></p>` : ""}
     ${topics.map((t) => { const d = dec(t.key); return `<div class="pentry"><h3>New topic for your toolkit: <code>${esc(t.path.split("/").join(" › "))}</code></h3><p class="pstmt">${mixed(t.scope, pm)}</p>
@@ -2305,7 +2305,7 @@ function texEnum(s, macros) {
 /* A run moves only under an attached agent session (it acts at the next halt): how to start one. */
 function noOrchHTML(slug) {
   const tk = S.toolkit?.toolkit;
-  return `<p>No agent session is attached to <b>${esc(slug)}</b>, so nothing would act at its next halt.</p><p>Open a terminal in <code>${esc(tk?.repo ?? "the TheoremChecker folder")}</code>, start <code>claude</code> or <code>codex</code>, and ask it:</p>${cmdBox(`Orchestrate the TheoremChecker run ${slug}${tk ? ` (toolkit ${tk.root})` : ""}.`)}<p>It attaches itself and decides the run's halts; this page then shows the agent, and Resume works.</p>`;
+  return `<p>No agent session is attached to <b>${esc(slug)}</b>, so nothing would act at its next halt.</p><p>Open a terminal in <code>${esc(tk?.repo ?? "the LeanSmith folder")}</code>, start <code>claude</code> or <code>codex</code>, and ask it:</p>${cmdBox(`Orchestrate the LeanSmith run ${slug}${tk ? ` (toolkit ${tk.root})` : ""}.`)}<p>It attaches itself and decides the run's halts; this page then shows the agent, and Resume works.</p>`;
 }
 /* `before`: what the confirmed action needs done first (a round's decisions written). */
 async function runAction(action, title, what = "", ok = "Continue", before = null) {
@@ -2423,7 +2423,7 @@ async function shareRun(slug = S.slug) {
   shareRedraw(slug);
 }
 
-/* ── the demo's tour (`theoremchecker demo`): the step, what it points at, its Next ── */
+/* ── the demo's tour (`leansmith demo`): the step, what it points at, its Next ── */
 const TOUR = { on: false, v: null, folded: false, step: null };
 const tourHref = (v) => (v.current.view === "paper" ? `#/paper/${encodeURIComponent(v.slug)}` : v.current.view === "library" ? "#/library" : "#/");
 async function refreshTour() {

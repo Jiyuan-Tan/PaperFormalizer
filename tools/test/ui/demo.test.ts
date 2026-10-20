@@ -1,4 +1,4 @@
-// `theoremchecker demo`: the recorded run of the demo paper played back on the real page, the stand-in
+// `leansmith demo`: the recorded run of the demo paper played back on the real page, the stand-in
 // agent taking what the owner sends as the cue for the next step.
 import { mkdtempSync, readFileSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
@@ -11,8 +11,8 @@ import { startUiServer, type UiServer } from "../../src/ui/server.js";
 
 function demoToolkit() {
   const root = mkdtempSync(path.join(tmpdir(), "tc-demo-"));
-  const cfg = JSON.parse(readFileSync(path.join(TEMPLATE_TOOLKIT_DIR, "theoremchecker.json.example"), "utf8"));
-  writeFileSync(path.join(root, "theoremchecker.json"), JSON.stringify(cfg));
+  const cfg = JSON.parse(readFileSync(path.join(TEMPLATE_TOOLKIT_DIR, "leansmith.json.example"), "utf8"));
+  writeFileSync(path.join(root, "leansmith.json"), JSON.stringify(cfg));
   return root;
 }
 const until = async (cond: () => Promise<boolean>) => { for (let i = 0; i < 100 && !(await cond()); i++) await new Promise((r) => setTimeout(r, 30)); };

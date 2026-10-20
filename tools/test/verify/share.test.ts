@@ -1,4 +1,4 @@
-// `theoremchecker share`: a finished run's bundle sent to the share service — here an in-memory
+// `leansmith share`: a finished run's bundle sent to the share service — here an in-memory
 // stand-in for the registry's Worker; nothing leaves this machine.
 import { existsSync } from "node:fs";
 import { DIRECTORY_LINK, FILE_SYMLINKS } from "../platform.js";
@@ -90,7 +90,7 @@ describe("share: what is sent, and how", () => {
     await rm(path.join(bundle, "f4_seal.json"));
     expect(await refusal()).toBe("cannot share a_paper: f4_seal.json: missing");
     await rm(path.join(bundle, "page"), { recursive: true });
-    expect(await refusal()).toMatch(/no page\/page\.json \(an older layout.*`theoremchecker report a_paper`$/);
+    expect(await refusal()).toMatch(/no page\/page\.json \(an older layout.*`leansmith report a_paper`$/);
     expect(svc.calls).toEqual([]);
   });
 
@@ -118,7 +118,7 @@ describe("share: what is sent, and how", () => {
     // no link is read through: a file that is one, and the bundle folder itself
     await rm(path.join(bundle, "REPORT.md"));
     if (FILE_SYMLINKS) {
-      await symlink(path.join(root, "theoremchecker.json"), path.join(bundle, "REPORT.md"));
+      await symlink(path.join(root, "leansmith.json"), path.join(bundle, "REPORT.md"));
       expect(await refusal()).toMatch(/^cannot share a_paper: the registry would refuse the bundle:\n {2}- "REPORT\.md": a symbolic link \(a bundle holds regular files only\)\n {2}- REPORT\.md: missing$/);
       await rm(path.join(bundle, "REPORT.md"));
     }
@@ -190,9 +190,9 @@ describe("share: what is sent, and how", () => {
     r = await pollShare(run, r, deps);
     expect(r).toMatchObject({ status: "submitted", login: "alice" });
     expect(await readShare(run)).toEqual(r);
-    svc.finish(r.id, { kind: "review", pr_url: "https://github.com/Jiyuan-Tan/TheoremCheckerPapers/pull/3" });
+    svc.finish(r.id, { kind: "review", pr_url: "https://github.com/Jiyuan-Tan/LeanSmithPapers/pull/3" });
     r = await pollShare(run, r, deps);
-    expect(shareOutcome(r)).toBe("sent for review: the registry's owner reviews the paper before it is published — https://github.com/Jiyuan-Tan/TheoremCheckerPapers/pull/3");
+    expect(shareOutcome(r)).toBe("sent for review: the registry's owner reviews the paper before it is published — https://github.com/Jiyuan-Tan/LeanSmithPapers/pull/3");
     svc.calls.length = 0;
     expect(await pollShare(run, r, deps)).toBe(r);
     expect(svc.calls).toEqual([]);
@@ -248,7 +248,7 @@ describe("share: what is sent, and how", () => {
       "  slug       a_paper",
       "  files      11 files, N kB",
       "  parts      MATCH.md, REPORT.md, bundle.json, corrected_paper/ (3 files), f4_reviews.log, f4_seal.json, lean/ (2 files), page/ (1 file)",
-      "  public at  https://jiyuan-tan.github.io/TheoremCheckerPapers/papers/a_paper/",
+      "  public at  https://jiyuan-tan.github.io/LeanSmithPapers/papers/a_paper/",
       "",
       "You confirm in your browser: sign in to GitHub — the share service learns your name and account, nothing else, and asks for no permission — and press \"Share publicly\". The paper is attributed to that account. Unless you are one of the registry's trusted sharers, its owner reviews the paper before it is published.",
       "",
@@ -276,11 +276,11 @@ describe("share: what is sent, and how", () => {
     const out = lines.join("\n");
     expect(out).toContain(`Sent. To finish, open this page, sign in to GitHub and press "Share publicly":\n  ${SERVICE}/claim/${id}\nCheck code: K7PQ (the page you open shows the same code; continue only if it does).`);
     expect(out).toContain("confirmed by @alice: the registry is checking the paper …");
-    expect(lines.at(-1)).toBe("published: https://jiyuan-tan.github.io/TheoremCheckerPapers/papers/a_paper/");
+    expect(lines.at(-1)).toBe("published: https://jiyuan-tan.github.io/LeanSmithPapers/papers/a_paper/");
     expect(opened).toEqual([`${SERVICE}/claim/${id}`]);
     expect(await readShare(run)).toMatchObject({ status: "published", login: "alice", url: paperUrl(SLUG) });
     await expect(runShareCli([SLUG, "--force"])).rejects.toThrow(/unknown flag --force/);
-    await expect(runShareCli([])).rejects.toThrow(/Usage: theoremchecker share/);
+    await expect(runShareCli([])).rejects.toThrow(/Usage: leansmith share/);
   });
 
   it("a refused share ends the command with the registry's problems", async () => {

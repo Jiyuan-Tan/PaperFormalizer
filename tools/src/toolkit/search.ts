@@ -1,10 +1,10 @@
-// Search instructions for agents working in a toolkit, rendered from `theoremchecker.json`, never
+// Search instructions for agents working in a toolkit, rendered from `leansmith.json`, never
 // hard-coded to one library: one command over every indexed source (the base libraries with an
 // `index`, plus the toolkit's own index when built) through `npm run search -- --toolkit`, a
 // named-tool or grep hint for every base without an index, and a grep hint for the toolkit
 // while it has no index.
 import { existsSync } from "node:fs";
-import { loadToolkitConfig, theoremCheckerToolsDir, type ToolkitConfig } from "./config.js";
+import { loadToolkitConfig, leanSmithToolsDir, type ToolkitConfig } from "./config.js";
 
 export interface SearchSource {
   name: string;
@@ -85,7 +85,7 @@ export function librarySourceRootsLine(ctx: { repoRoot: string; toolkit?: Toolki
  */
 export function librarySearchPromptBlock(
   ctx: { repoRoot: string; toolkit?: ToolkitConfig },
-  toolsDir: string = theoremCheckerToolsDir(),
+  toolsDir: string = leanSmithToolsDir(),
 ): string {
   let cfg: ToolkitConfig | null = ctx.toolkit ?? null;
   if (!cfg) {

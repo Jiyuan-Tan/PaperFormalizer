@@ -1,9 +1,9 @@
 /**
- * `theoremchecker share <slug>` — publish a finished run's bundle on the public site of shared
+ * `leansmith share <slug>` — publish a finished run's bundle on the public site of shared
  * papers. The WHOLE bundle is sent, the corrected paper's TeX source and PDF included; nothing is
  * sent before the person sharing confirms.
  *
- * The bundle goes to the share service (a Cloudflare Worker of the registry, TheoremCheckerPapers):
+ * The bundle goes to the share service (a Cloudflare Worker of the registry, LeanSmithPapers):
  * the manifest first, then the bundle as one archive. The person then confirms in the browser, on
  * the service's page: they sign in to GitHub there (identity only — the sign-in app asks for no
  * permission, so the service learns their name and account and nothing else) and press "Share
@@ -29,17 +29,17 @@ import { checkF4Seal, F4_REVIEWS_FILE, F4_SEAL_FILE, sealedPaths, sha256 } from 
 import { isFinal, readShare, SHARE_FILE, STATUSES, type ShareRecord, type ShareStatus } from "./share_record.js";
 export { isFinal, readShare, SHARE_FILE, shareRecordView, type ShareRecord, type ShareStatus, type ShareView } from "./share_record.js";
 
-/** The share service, unless `THEOREMCHECKER_SHARE_URL` names another. */
-export const DEFAULT_SHARE_URL = "https://theoremchecker-share.comments-worker.workers.dev";
-export const SHARE_URL_ENV = "THEOREMCHECKER_SHARE_URL";
+/** The share service, unless `LEANSMITH_SHARE_URL` names another. */
+export const DEFAULT_SHARE_URL = "https://leansmith-share.comments-worker.workers.dev";
+export const SHARE_URL_ENV = "LEANSMITH_SHARE_URL";
 /** The public site of shared papers: a paper's page is `<site>papers/<slug>/`. */
-export const SITE_URL = "https://jiyuan-tan.github.io/TheoremCheckerPapers/";
+export const SITE_URL = "https://jiyuan-tan.github.io/LeanSmithPapers/";
 const PAGE_FILE = "page/page.json";
 /** A paper folder's name in the registry. */
 const REGISTRY_SLUG = /^[a-z0-9][a-z0-9_-]{0,79}$/u;
 
 /** What the registry takes. These MIRROR its check, `checks/check_paper.mjs` of the registry
- *  (TheoremCheckerPapers) — the limits, the layout, the types a browser would run — so that a
+ *  (LeanSmithPapers) — the limits, the layout, the types a browser would run — so that a
  *  bundle it would refuse is refused here, before anything is shown or sent. Keep the two in step. */
 const MAX_TOTAL_BYTES = 60 * 1024 * 1024;
 const MAX_FILE_BYTES = 24 * 1024 * 1024;
@@ -57,7 +57,7 @@ const MAX_AUTHORS = 1000;
 const WAIT_MS = 20 * 60_000;
 
 export const SHARE_USAGE =
-  "Usage: theoremchecker share <slug> [--toolkit <path>] [--dry-run]\n" +
+  "Usage: leansmith share <slug> [--toolkit <path>] [--dry-run]\n" +
   "  publish the finished run's bundle — the corrected paper's TeX source and PDF, the findings and the referee's\n" +
   `  notes, the Lean code and the report — on the public site of shared papers (${SITE_URL}). It prints what will\n` +
   "  be published and sends only after you type the slug at a terminal (or confirm on the paper's page); you then\n" +
@@ -174,7 +174,7 @@ function bundleProblems(slug: string, files: ReadonlyMap<string, Buffer>): strin
 
   const seal = files.has(F4_SEAL_FILE) ? json<{ slug?: unknown }>(F4_SEAL_FILE) : null;
   if (seal !== null) {
-    // the check of `theoremchecker seal`, on the bytes read here
+    // the check of `leansmith seal`, on the bytes read here
     const named = new Set(sealedPaths(seal));
     const held = checkF4Seal(seal, { reviews: files.get(F4_REVIEWS_FILE)?.toString("utf8") ?? null, files: new Map([...named].filter((p) => files.has(p)).map((p) => [p, sha256(files.get(p)!)])) });
     problems.push(...held.map((p) => `${F4_SEAL_FILE}: ${p}`));
@@ -209,7 +209,7 @@ export async function sharePlan(a: { toolkitRoot: string; slug: string; deps?: S
   if (!state) throw new Error(`cannot share ${slug}: no such run under ${a.toolkitRoot}`);
   if (state.stage_completed !== "V6") throw new Error(`cannot share ${slug}: the run is not finished (its last completed stage is ${state.stage_completed ?? "none"}, not V6)`);
   const bundleDir = path.join(runDir, BUNDLE_DIR);
-  const again = `write it again with \`theoremchecker report ${slug}\``;
+  const again = `write it again with \`leansmith report ${slug}\``;
   const top = await lstat(bundleDir).catch(() => null);
   if (top?.isSymbolicLink()) throw new Error(`cannot share ${slug}: runs/${slug}/${BUNDLE_DIR} is a symbolic link — a bundle is the folder the run wrote`);
   const { files: contents, problems } = top?.isDirectory() ? await readBundle(bundleDir) : { files: new Map<string, Buffer>(), problems: [] };
@@ -375,7 +375,7 @@ async function call<T>(deps: ShareDeps, service: string, method: string, url: st
 /** Text from the service with its control characters (terminal escapes among them) made spaces. */
 const plain = (t: string): string => t.replace(/\p{Cc}/gu, " ");
 /** A pull request of the registry: the only review link the page and the command show. */
-const REGISTRY_PULL = /^https:\/\/github\.com\/Jiyuan-Tan\/TheoremCheckerPapers\/pull\/\d+$/u;
+const REGISTRY_PULL = /^https:\/\/github\.com\/Jiyuan-Tan\/LeanSmithPapers\/pull\/\d+$/u;
 
 /** An address the service gave: on the service itself, else not followed. */
 function ownUrl(service: string, url: unknown, what: string): string {
@@ -459,7 +459,7 @@ const openBrowser = (url: string): void => {
   try { execFile(cmd, [url], { timeout: 10_000, windowsHide: true }, () => {}).unref(); } catch { /* no browser */ }
 };
 
-/** `theoremchecker share <slug>`: show what will be published, ask, send, then wait for the
+/** `leansmith share <slug>`: show what will be published, ask, send, then wait for the
  *  confirmation in the browser. It sends only when the person at the terminal types the slug: no
  *  flag answers for them, and without a terminal it refuses. */
 export async function runShareCli(argv: string[], deps: ShareDeps & { log?: (m: string) => void; ask?: (question: string) => Promise<string>; tty?: boolean } = {}): Promise<void> {

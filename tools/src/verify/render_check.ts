@@ -22,7 +22,7 @@
  * renderer recorded (`logs/annotated_render.json`, written by `annotate_run.ts` after each render),
  * the last compile (`logs/annotated_compile.json`), the pdflatex log's errors, and a scan of every
  * `\vs…` block in `annotated/*.tex` for escaped TeX (`\textbackslash`, `\^{}`), code points
- * (`[U+XXXX]`) and an odd number of `$` — and is what both `theoremchecker lint-annotated` and the
+ * (`[U+XXXX]`) and an odd number of `$` — and is what both `leansmith lint-annotated` and the
  * pipeline's checkpoints (after every annotated-paper render) block on. The scan skips `\texttt{…}`:
  * the renderer's only typewriter text is the verbatim print of a failing model fragment, which the
  * record already reports with its producer.

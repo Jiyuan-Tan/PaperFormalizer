@@ -1565,7 +1565,7 @@ export const runStageV1_5: VerifyStage = async (args) => {
   const { runDir, log } = args;
   const verify = args.state.verify;
   if (!verify) {
-    throw new Error("V1.5: state has no `verify` block — it was not seeded by `theoremchecker verify`.");
+    throw new Error("V1.5: state has no `verify` block — it was not seeded by `leansmith verify`.");
   }
   const corePath = path.join(runDir, VERIFY_FILES.coreJson);
   const flatPath = path.join(runDir, VERIFY_FILES.flatTex);

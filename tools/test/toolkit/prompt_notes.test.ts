@@ -1,4 +1,4 @@
-// Per-base-library prompt notes: `prompt_notes` in theoremchecker.json → `## Notes for <name>` in the
+// Per-base-library prompt notes: `prompt_notes` in leansmith.json → `## Notes for <name>` in the
 // F2 scaffold and F4 filler prompts; a library without notes contributes nothing.
 import { mkdtemp, rm, writeFile } from "node:fs/promises";
 import os from "node:os";

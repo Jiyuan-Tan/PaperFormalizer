@@ -14,7 +14,7 @@ afterEach(async () => { await rm(tmp, { recursive: true, force: true }); });
 async function makeToolkit(name: string, json: unknown = TOOLKIT_JSON): Promise<string> {
   const root = path.join(tmp, name);
   await mkdir(root, { recursive: true });
-  await writeFile(path.join(root, "theoremchecker.json"), JSON.stringify(json), "utf8");
+  await writeFile(path.join(root, "leansmith.json"), JSON.stringify(json), "utf8");
   return root;
 }
 
@@ -33,11 +33,11 @@ describe("toolkit root resolution", () => {
 
   it("fails closed, naming all three ways, when nothing resolves; a named path without config never falls back", async () => {
     expect(() => resolveToolkitRoot({ env: {}, cwd: tmp })).toThrow(
-      /--toolkit <path>.*THEOREMCHECKER_TOOLKIT=<path>.*theoremchecker\.json/,
+      /--toolkit <path>.*LEANSMITH_TOOLKIT=<path>.*leansmith\.json/,
     );
     const a = await makeToolkit("a");
-    expect(() => resolveToolkitRoot({ explicit: tmp, cwd: a })).toThrow(/--toolkit .*no theoremchecker\.json/);
-    expect(() => resolveToolkitRoot({ env: { [TOOLKIT_ENV_VAR]: tmp }, cwd: a })).toThrow(/THEOREMCHECKER_TOOLKIT=.*no theoremchecker\.json/);
+    expect(() => resolveToolkitRoot({ explicit: tmp, cwd: a })).toThrow(/--toolkit .*no leansmith\.json/);
+    expect(() => resolveToolkitRoot({ env: { [TOOLKIT_ENV_VAR]: tmp }, cwd: a })).toThrow(/LEANSMITH_TOOLKIT=.*no leansmith\.json/);
   });
 });
 
@@ -66,7 +66,7 @@ describe("toolkit config: configured base-library files are validated at load", 
   it("fails closed on a missing or malformed alias file and an unreadable notes file", async () => {
     const missing = await makeToolkit("missing", withBase({ alias_file: "nope.json" }));
     expect(() => loadToolkitConfig({ explicit: missing }))
-      .toThrow(/base library Base: alias_file: cannot read alias file .*nope\.json.*fix or remove it in .*theoremchecker\.json/);
+      .toThrow(/base library Base: alias_file: cannot read alias file .*nope\.json.*fix or remove it in .*leansmith\.json/);
     const bad = await makeToolkit("bad", withBase({ alias_file: "bad.json" }));
     await writeFile(path.join(bad, "bad.json"), "{ not json", "utf8");
     expect(() => loadToolkitConfig({ explicit: bad })).toThrow(/alias_file: alias file .*bad\.json is not JSON/);

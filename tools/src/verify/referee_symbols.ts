@@ -559,12 +559,12 @@ export interface SymbolPassInput {
   /** The statements the file's repairs correct, by node (`correctedSources`): a symbol read from one
    * is re-graded when a sentence naming it changes, shown those sentences. */
   corrected?: ReadonlyMap<string, CorrectedStatement>;
-  /** Parallel calls (`theoremchecker.json` `referee.max_concurrent`; default `SHARD_CONCURRENCY`). */
+  /** Parallel calls (`leansmith.json` `referee.max_concurrent`; default `SHARD_CONCURRENCY`). */
   concurrency?: number;
   /** The results with a pending suggestion (`pendingScopes`): a reading describes them as printed (the
    * prompt lists them). Absent: read from the run (`tex.runDir`), else none. */
   pending?: readonly PendingScope[];
-  /** Codex reasoning effort of every symbol shard (`theoremchecker.json` `referee.symbol_effort`;
+  /** Codex reasoning effort of every symbol shard (`leansmith.json` `referee.symbol_effort`;
    * default "medium"). */
   effort?: SymbolEffort;
   /** `symbols.txt` (its own conventions list; the referee brief's statement-level checklist is the

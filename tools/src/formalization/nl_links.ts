@@ -682,7 +682,7 @@ export async function linkItems(items: LinkItem[], tpl: { assign: string; verify
 }
 
 /** One result as `nl_links.json` stores it. `unanswered`: no call answered it (the rows were asked,
- *  none was linked); a re-link (`theoremchecker relink`) asks it again. */
+ *  none was linked); a re-link (`leansmith relink`) asks it again. */
 export interface StoredResult {
   obj_id: string; node: string; decl: string; key: string;
   segments: NlSegment[];
@@ -816,7 +816,7 @@ export async function emitNlLinks(args: { ctx: PipelineContext; state: StateJson
   for (const r of fresh) {
     if (kept.has(r.obj_id)) continue;
     const m = r.metrics;
-    console.log(`[theoremchecker] F5 nl-links ${r.obj_id}: rows asked ${m.asked}, linked ${m.linked}, unstated ${m.unstated}, unanswered ${m.unanswered}; lists of their own ${Math.round(m.unique * 100)}%, most segments on a row ${m.max_segments}${m.shared ? `, under a shared list ${m.shared}` : ""}`);
+    console.log(`[leansmith] F5 nl-links ${r.obj_id}: rows asked ${m.asked}, linked ${m.linked}, unstated ${m.unstated}, unanswered ${m.unanswered}; lists of their own ${Math.round(m.unique * 100)}%, most segments on a row ${m.max_segments}${m.shared ? `, under a shared list ${m.shared}` : ""}`);
   }
   const uncovered = answered.filter((r) => r.uncovered.length > 0).map((r) => r.obj_id);
   return `${answered.length}/${artifact.summary.of} result(s) linked row by row${kept.size || revised.length ? ` (${[kept.size ? `${kept.size} kept as linked` : "", revised.length ? `${revised.length} revised from the links on file` : ""].filter(Boolean).join(", ")})` : ""}; rows asked ${rows.asked}, linked ${rows.linked}, unstated ${rows.unstated}; lists of their own ${Math.round(unique * 100)}%` +

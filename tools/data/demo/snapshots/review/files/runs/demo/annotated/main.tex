@@ -1,15 +1,15 @@
 \documentclass{article}
-\usepackage{xcolor}% added by TheoremChecker
+\usepackage{xcolor}% added by LeanSmith
 
 \usepackage{amsmath,amssymb,amsthm}
 \newtheorem{theorem}{Theorem}
 \newtheorem{lemma}[theorem]{Lemma}
 
 \title{Two Elementary Inequalities}
-\author{A.~Demo\thanks{A made-up paper for the TheoremChecker demo.}}
+\author{A.~Demo\thanks{A made-up paper for the LeanSmith demo.}}
 \date{}
 
-% TheoremChecker annotation macros
+% LeanSmith annotation macros
 \RequirePackage{graphicx}
 \definecolor{vsRed}{rgb}{0.80,0.00,0.00}
 \definecolor{vsBlue}{rgb}{0.00,0.20,0.80}
@@ -36,7 +36,7 @@
 \newcommand{\vsOriginal}[1]{\vsBlock{vsRed}{}{Original:}{#1}}
 \newcommand{\vsCorrected}[1]{\vsBlock{vsBlue}{}{Corrected:}{#1}}
 \newcommand{\vsClarified}[1]{\vsBlock{vsBlue}{}{Clarified statement:}{#1}}
-\newcommand{\vsNote}[1]{\vsBlock{vsNote}{\normalfont\small}{TheoremChecker:}{#1}}
+\newcommand{\vsNote}[1]{\vsBlock{vsNote}{\normalfont\small}{LeanSmith:}{#1}}
 \newcommand{\vsReading}[1]{\vsBlock{vsNote}{\normalfont\small}{Clarification:}{#1}}
 \newcommand{\vsReadingOwner}[1]{\vsBlock{vsNote}{\normalfont\small}{Clarification (author):}{#1}}
 \newcommand{\vsReadingSymbol}[2]{\vsBlock{vsNote}{\normalfont\small}{Clarification (symbol #1):}{#2}}
@@ -59,7 +59,7 @@
 \newcommand{\vsStruckRed}[1]{{\color{vsRed}#1}}
 \AtBeginDocument{\providecommand{\eqref}[1]{(\ref{#1})}\providecommand{\cref}{\ref}\providecommand{\Cref}{\ref}\providecommand{\autoref}{\ref}\providecommand{\citet}{\cite}\providecommand{\citep}{\cite}\providecommand{\citeauthor}{\cite}\providecommand{\citeyear}{\cite}}
 \AtBeginDocument{\providecommand{\mathbb}{\mathbf}\providecommand{\mathfrak}{\mathrm}\providecommand{\lesssim}{\mathrel{\vcenter{\offinterlineskip\hbox{$<$}\hbox{$\sim$}}}}\providecommand{\gtrsim}{\mathrel{\vcenter{\offinterlineskip\hbox{$>$}\hbox{$\sim$}}}}}
-% end of TheoremChecker annotation macros
+% end of LeanSmith annotation macros
 \begin{document}
 \maketitle
 

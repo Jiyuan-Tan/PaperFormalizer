@@ -2,11 +2,11 @@
 // under `./prompts/`; these builders load a template once at module init and substitute
 // `{{TOKEN}}` placeholders with the per-call context, including the toolkit context (root,
 // library and division names, base libraries, search instructions) rendered from the
-// toolkit's `theoremchecker.json`.
+// toolkit's `leansmith.json`.
 import { readFileSync } from "node:fs";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
-import { theoremCheckerToolsDir, type ToolkitConfig } from "../toolkit/config.js";
+import { leanSmithToolsDir, type ToolkitConfig } from "../toolkit/config.js";
 import { renderSearchBlock, toolkitSearchSources } from "../toolkit/search.js";
 import type { CodexPrompt, RoundReport, ReviewVerdict } from "./types.js";
 import { docstringContract } from "../shared/docstring_contract.js";
@@ -30,7 +30,7 @@ export interface ToolkitPromptContext {
 
 export function toolkitPromptContext(
   cfg: ToolkitConfig,
-  toolsDir: string = theoremCheckerToolsDir(),
+  toolsDir: string = leanSmithToolsDir(),
   exists?: (p: string) => boolean,
 ): ToolkitPromptContext {
   return {

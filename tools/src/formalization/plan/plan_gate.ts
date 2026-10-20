@@ -119,7 +119,7 @@ export function planHygieneViolations(planInput: unknown): PlanGateViolation[] {
 /** Log the gate's non-blocking notes (one line each); silent when there are none. */
 export function logPlanGateNotes(notes: readonly PlanGateViolation[]): void {
   if (notes.length === 0) return;
-  console.warn(`[theoremchecker] plan_gate notes:\n  ${notes.map((n) => `${n.code} @ ${n.where}: ${n.message}`).join("\n  ")}`);
+  console.warn(`[leansmith] plan_gate notes:\n  ${notes.map((n) => `${n.code} @ ${n.where}: ${n.message}`).join("\n  ")}`);
 }
 
 const MODULE_RE = /^[A-Z][A-Za-z0-9_]*(\.[A-Za-z0-9_]+)*$/;

@@ -68,7 +68,7 @@ export interface StageV6Deps {
   /** The annotated paper's compile step (tests mock it; default: pdflatex / latexmk on PATH). */
   compileTex?: CompileTex;
   /** Write the report and the bundle HERE and leave the run as it is (no annotated paper, no cache,
-   * no state): `theoremchecker report --out`. Default: the run directory. */
+   * no state): `leansmith report --out`. Default: the run directory. */
   outDir?: string;
   /** Compare the bundle's base libraries with their public revisions (`report --verify-public`). */
   publicTree?: PublicTree;
@@ -112,7 +112,7 @@ export function makeStageV6(deps: StageV6Deps = {}): VerifyStage {
     const { repoRoot, qid, runDir, state, dryRun, log } = args;
     const verify = state.verify;
     if (!verify) {
-      throw new Error("V6: state.verify is missing — it was not seeded by `theoremchecker verify`.");
+      throw new Error("V6: state.verify is missing — it was not seeded by `leansmith verify`.");
     }
     const earlyStop = STAGE_ORDER.indexOf(state.stage_completed) < FINAL_F_STAGE_INDEX;
 
@@ -320,7 +320,7 @@ export function makeStageV6(deps: StageV6Deps = {}): VerifyStage {
       });
       json.names = b.names;
       json.bundle = b.bundle;
-      if (graph && !earlyStop && !dryRun && !deps.outDir && b.bundle.todo.blocking === 0) log(`Share your checked work to help other people: press Share on the paper's page, or run \`theoremchecker share ${qid}\`.`);
+      if (graph && !earlyStop && !dryRun && !deps.outDir && b.bundle.todo.blocking === 0) log(`Share your checked work to help other people: press Share on the paper's page, or run \`leansmith share ${qid}\`.`);
     } catch (err) {
       rethrowCodexAuthError(err);
       const msg = err instanceof Error ? err.message : String(err);

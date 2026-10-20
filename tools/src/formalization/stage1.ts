@@ -39,7 +39,7 @@ import { PlanSchema, type Plan } from "../formalization/plan/schema.js";
 import { coreReuseCandidateBlock } from "../formalization/reuse_render.js";
 import { indexSourcesForContext } from "../library/sources.js";
 import { librarySearchPromptBlock, toolkitSearchCommand } from "../toolkit/search.js";
-import { theoremCheckerToolsDir } from "../toolkit/config.js";
+import { leanSmithToolsDir } from "../toolkit/config.js";
 import { laterStageEverRan } from "../shared/resume_mode.js";
 import { parseJsonWithEscapeRepair, parseJsonWithEscapeRepairStatus } from "../shared/codex_json.js";
 import { planCorePath } from "../paths.js";
@@ -224,7 +224,7 @@ export async function runStage1(args: {
     wholeCore = !planCore;
     if (!planCore) {
       const why = `F1 revise has no readable record of the core its plan was written against (${planCorePath(args.ctx.repoRoot, args.ctx.qid)}): what moved since cannot be told; the plan is compared with the whole core.`;
-      console.warn(`[theoremchecker] ${why}`);
+      console.warn(`[leansmith] ${why}`);
       await appendPipelineLog(args.ctx, { stage: "1", status: "revise-scope", duration_ms: 0, message: `WHOLE CONTEXT — ${why}` });
     }
     affected = reviseAffectedNodeIds(core, planOnDisk, stage1ReviseSeeds(core, { planCore, prior: args.priorReview ?? null, directive: f1Directive }));
@@ -247,7 +247,7 @@ export async function runStage1(args: {
     ? ""
     : coreReuseCandidateBlock(indexSourcesForContext(args.ctx), core, {
         searchCommand: args.ctx.toolkit
-          ? toolkitSearchCommand(theoremCheckerToolsDir(), args.ctx.toolkit.toolkitRoot)
+          ? toolkitSearchCommand(leanSmithToolsDir(), args.ctx.toolkit.toolkitRoot)
           : undefined,
         // Semantic blend: pure-lexical ranking surfaced surface-token matches over
         // concept-correct declarations. Degrades to lexical-only if embeddings are stale.
@@ -346,7 +346,7 @@ export async function runStage1(args: {
       duration_ms: 0,
       message: `F1 revise looked up ${beyond.length} node(s) beyond the affected set (${affected.size}): ${beyond.join(", ")}`,
     });
-    console.warn(`[theoremchecker] F1 revise looked up ${beyond.length} node(s) beyond the affected set: ${beyond.join(", ")}`);
+    console.warn(`[leansmith] F1 revise looked up ${beyond.length} node(s) beyond the affected set: ${beyond.join(", ")}`);
   }
 
   // A blocked reply wrote no plan. On a re-plan the earlier plan is still on disk: advancing
@@ -376,16 +376,16 @@ export async function runStage1(args: {
       // Canonicalizing here keeps `plan.json` parseable for readers that do not repair.
       if (parsedPlanText.repaired) {
         await writeFile(paths.plan, JSON.stringify(planObj, null, 2), "utf8");
-        console.warn(`[theoremchecker] F1 repaired invalid string escapes in ${paths.plan} and rewrote it canonically.`);
+        console.warn(`[leansmith] F1 repaired invalid string escapes in ${paths.plan} and rewrote it canonically.`);
       }
     } catch (err) {
       const reason = err instanceof Error ? err.message : String(err);
-      console.warn(`[theoremchecker] F1 wrote an unparseable plan at ${paths.plan}: ${reason}`);
+      console.warn(`[leansmith] F1 wrote an unparseable plan at ${paths.plan}: ${reason}`);
       // A syntax slip is something the planner can fix in seconds; halting the run for it
       // is not. ONE bounded re-dispatch with the parser's message and a bracket diagnosis.
       if (!args.planSyntaxError) {
         const diagnosis = describeJsonSyntaxError(await readFile(paths.plan, "utf8"));
-        console.warn(`[theoremchecker] F1: re-dispatching once to repair the plan file (${diagnosis ?? "no bracket diagnosis"})`);
+        console.warn(`[leansmith] F1: re-dispatching once to repair the plan file (${diagnosis ?? "no bracket diagnosis"})`);
         return runStage1({
           ...args,
           attempt: (args.attempt ?? 1) + 1,
@@ -407,7 +407,7 @@ export async function runStage1(args: {
     const copied = copyVerifiedCitedSourcesToPlan(planObj, core);
     if (copied > 0) {
       await writeFile(paths.plan, JSON.stringify(planObj, null, 2), "utf8");
-      console.warn(`[theoremchecker] F1 copied ${copied} verified cited source-of-record entr${copied === 1 ? "y" : "ies"} into the plan.`);
+      console.warn(`[leansmith] F1 copied ${copied} verified cited source-of-record entr${copied === 1 ? "y" : "ies"} into the plan.`);
     }
   }
   let planGateOk = true;
@@ -420,7 +420,7 @@ export async function runStage1(args: {
     planGateOk = gate.ok;
     if (!gate.ok) {
       console.warn(
-        `[theoremchecker] F1 plan_gate: ${gate.violations.length} violation(s)\n  ` +
+        `[leansmith] F1 plan_gate: ${gate.violations.length} violation(s)\n  ` +
           gate.violations.slice(0, 12).map((v) => `${v.code} @ ${v.where}: ${v.message}`).join("\n  "),
       );
     }

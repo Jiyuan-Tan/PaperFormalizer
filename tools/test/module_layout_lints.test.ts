@@ -58,7 +58,7 @@ describe("lint_module_headers", () => {
 describe("lint_module_headers — default inputs", () => {
   it("lints the toolkit library and the papers library of the toolkit found from the cwd", async () => {
     const root = await tree({
-      "theoremchecker.json": JSON.stringify(TOOLKIT_JSON),
+      "leansmith.json": JSON.stringify(TOOLKIT_JSON),
       "Toolkit.lean": "module\n\n/-! # Toolkit -/\n\npublic section\n",
       "Toolkit/Foundations/Bad.lean": "module\nimport A\n\n/-! docs -/\n\npublic section\n",
       "Papers.lean": "module\n\n/-! # Papers -/\n\npublic section\n",

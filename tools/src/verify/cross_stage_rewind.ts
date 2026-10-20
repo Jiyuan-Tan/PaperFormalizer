@@ -422,9 +422,9 @@ export async function presentPendingRewind(args: { runDir: string; state: StateJ
     findingsBlock +
     leftBlock +
     `  Continue with one of:\n` +
-    `    theoremchecker verify ${args.input} --resume                              (approve${one ? "" : " all"}: V1 patch mode on ${nodes.join(", ")}, then V1.5, then F1 re-plans)\n` +
-    `    theoremchecker verify ${args.input} --resume --reject-rewind "<reason>"   (reject${one ? "" : " all"}: the paper is right as stated — say where it grants this; the F stages continue)\n` +
-    `    theoremchecker verify ${args.input} --resume --reject-finding "<reading>" (the finding${one ? "" : "s"} misread${one ? "s" : ""} the paper: withdrawn, the statement stands under the reading you give, pinned into the core and binding for the formalization; V1.5 re-grades, F1 re-plans)\n` +
+    `    leansmith verify ${args.input} --resume                              (approve${one ? "" : " all"}: V1 patch mode on ${nodes.join(", ")}, then V1.5, then F1 re-plans)\n` +
+    `    leansmith verify ${args.input} --resume --reject-rewind "<reason>"   (reject${one ? "" : " all"}: the paper is right as stated — say where it grants this; the F stages continue)\n` +
+    `    leansmith verify ${args.input} --resume --reject-finding "<reading>" (the finding${one ? "" : "s"} misread${one ? "s" : ""} the paper: withdrawn, the statement stands under the reading you give, pinned into the core and binding for the formalization; V1.5 re-grades, F1 re-plans)\n` +
     (one ? "" : `  To approve only some findings, delete the others from state.verify.cross_stage_rewind.targets, then --resume.\n`) +
     `  (with the --toolkit / --slug / --dry-run the run was started with)`;
   return { kind: "present", node: nodes[0]!, nodes, message };

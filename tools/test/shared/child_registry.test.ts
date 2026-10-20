@@ -154,7 +154,7 @@ describe("verify --stop", () => {
   function record(dir: string, child: { pid: number; startId: string | null }): string {
     const file = path.join(dir, "children.json");
     const body: ChildrenFile = {
-      runner: { pid: 0x3ffffffe, startId: null, cmd: "node theoremchecker.ts verify" },
+      runner: { pid: 0x3ffffffe, startId: null, cmd: "node leansmith.ts verify" },
       runTag: "",
       children: [{ ...child, kind: "codex", tag: "m", started: new Date().toISOString(), groupLeader: true, cmd: "sleep 300" }],
     };

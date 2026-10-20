@@ -6,7 +6,7 @@ import { describe, expect, it } from "vitest";
 
 describe("orch_watch_loop.mjs: one watch over several runs that re-arms itself", () => {
   const script = path.join(__dirname, "..", "..", "scripts", "orch_watch_loop.mjs");
-  const env = { ...process.env, THEOREMCHECKER_ORCH_TICK_MS: "100", THEOREMCHECKER_ORCH_LOOP_PAUSE_MS: "300", THEOREMCHECKER_ORCH_APPEAR_MS: "300" };
+  const env = { ...process.env, LEANSMITH_ORCH_TICK_MS: "100", LEANSMITH_ORCH_LOOP_PAUSE_MS: "300", LEANSMITH_ORCH_APPEAR_MS: "300" };
   const until = async (f: () => boolean, what: string) => {
     for (let k = 0; k < 200 && !f(); k++) await new Promise((r) => setTimeout(r, 50));
     if (!f()) throw new Error(`never: ${what}`);

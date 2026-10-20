@@ -78,7 +78,7 @@ export async function assertFStageEntryCoherence(
   if (stageIndex(state.stage_completed) < stageIndex("V1.5") || !verify.core_sha256) {
     throw new Error(
       `refusing ${formatStageLabel(targetStage)} entry: V1.5 has not accepted a core; ` +
-        "run `theoremchecker verify … --resume`",
+        "run `leansmith verify … --resume`",
     );
   }
   const corePath = coreJsonPath(ctx);
@@ -106,7 +106,7 @@ export interface RunPipelineOptions {
 function coldStartRefusal(ctx: PipelineContext): string {
   return (
     `refusing to cold-start the F runner for ${ctx.qid}: only the verify runner seeds a run ` +
-    "(it prepares the source and runs V1/V1.5 first). Start with `theoremchecker verify <paper>`; " +
+    "(it prepares the source and runs V1/V1.5 first). Start with `leansmith verify <paper>`; " +
     "the F stages are entered from there with --resume."
   );
 }
@@ -120,7 +120,7 @@ export async function initializeOrLoadState(ctx: PipelineContext): Promise<State
   if (!ctx.resume) throw new Error(coldStartRefusal(ctx));
   const file = statePath(ctx.repoRoot, ctx.qid);
   if (!existsSync(file)) {
-    throw new Error(`no run state at ${file}; start the run with \`theoremchecker verify <paper>\``);
+    throw new Error(`no run state at ${file}; start the run with \`leansmith verify <paper>\``);
   }
   return loadState(ctx.repoRoot, ctx.qid);
 }
@@ -190,7 +190,7 @@ async function runPipelineInner(
       duration_ms: 0,
       message: resumeGate.message,
     });
-    console.warn(`\n[theoremchecker] resume refused, nothing ran. ${resumeGate.message}\n`);
+    console.warn(`\n[leansmith] resume refused, nothing ran. ${resumeGate.message}\n`);
     await saveState(ctx.repoRoot, ctx.qid, state);
     return state;
   }
@@ -238,7 +238,7 @@ async function runPipelineInner(
       } catch (logError) {
         // Preserve the original stage failure; a secondary journal failure must not
         // replace the actionable exception that stopped the pipeline.
-        console.error(`[theoremchecker] failed to journal stage ${stage} exception: ${logError instanceof Error ? logError.message : String(logError)}`);
+        console.error(`[leansmith] failed to journal stage ${stage} exception: ${logError instanceof Error ? logError.message : String(logError)}`);
       }
       throw error;
     }
@@ -265,7 +265,7 @@ async function runPipelineInner(
     });
     if (guidance) {
       console.warn(
-        `\n[theoremchecker] halt at ${formatStageLabel(result.stage)} (${result.status}). NEXT STEPS:\n${guidance}\n`,
+        `\n[leansmith] halt at ${formatStageLabel(result.stage)} (${result.status}). NEXT STEPS:\n${guidance}\n`,
       );
     }
 
@@ -285,7 +285,7 @@ async function runPipelineInner(
       break;
     }
     const logicalCompletedStage = result.completedStage ?? stage;
-    // Stop-after (the verify runner resolves `--stop-after` over `THEOREMCHECKER_STOP_AFTER`, once)
+    // Stop-after (the verify runner resolves `--stop-after` over `LEANSMITH_STOP_AFTER`, once)
     // fires only when the stage actually completed. A rewound stage has not produced a settled
     // artifact at `stage`, so the pipeline keeps running until the rewound chain re-completes it
     // (or hits a real checkpoint).

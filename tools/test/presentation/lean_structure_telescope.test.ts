@@ -1,4 +1,4 @@
-// TheoremChecker's own additions to the ported structurer (`src/presentation/lean_structure.ts`):
+// LeanSmith's own additions to the ported structurer (`src/presentation/lean_structure.ts`):
 // a clause's lifted `∀ (…) […] (…),` telescope is cut like a signature's (`forallRows`); a premise
 // with parts of its own, a filter quantifier, a case split, `letI`/`haveI` and a record's field are
 // cut too — and the invariant a reader relies on: the rows of a view, in reading order, are the
@@ -187,9 +187,9 @@ describe("the rows of a view, in reading order, are the statement's source", () 
     }
   });
 
-  // Every linked statement of the toolkit's runs, when THEOREMCHECKER_TEST_TOOLKIT names one (the real
+  // Every linked statement of the toolkit's runs, when LEANSMITH_TEST_TOOLKIT names one (the real
   // statements are the toolkit's own, not fixtures of this repository).
-  const toolkit = process.env.THEOREMCHECKER_TEST_TOOLKIT ?? "";
+  const toolkit = process.env.LEANSMITH_TEST_TOOLKIT ?? "";
   const runs = toolkit && existsSync(path.join(toolkit, "runs")) ? readdirSync(path.join(toolkit, "runs")).filter((slug) => existsSync(path.join(toolkit, "runs", slug, "nl_links.json"))) : [];
   it.skipIf(runs.length === 0)("holds for every linked statement of the toolkit's runs", () => {
     const json = (file: string) => { try { return JSON.parse(readFileSync(file, "utf8")); } catch { return null; } };

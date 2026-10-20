@@ -9,7 +9,7 @@
 // re-judges it (a result the base libraries or the toolkit already state is declined), and the
 // round writes `runs/<slug>/proposals/A.json` and the owner's checklist
 // `<toolkit>/doc/proposals/<slug>.A.md`. Accepted entries are BUILT by the study pipeline
-// (`theoremchecker propose <slug> --round A --apply`, `apply_a.ts`).
+// (`leansmith propose <slug> --round A --apply`, `apply_a.ts`).
 import { existsSync } from "node:fs";
 import { mkdir, readFile, readdir } from "node:fs/promises";
 import path from "node:path";
@@ -211,5 +211,5 @@ export async function runRoundA(args: {
 /** The stop message of a pending round A. */
 export function roundAStopMessage(cfg: ToolkitConfig, qid: string, rec: ProposalRoundState, count: number, dryRun = false, fullAuto = false): string {
   return `promotion A: ${count} cited result(s) proposed for the toolkit — ${fullAuto ? ROUND_IS_DELEGATED : ROUND_IS_THE_OWNERS}; the checklist is ${rec.checklist_path}, applied by: ` +
-    `theoremchecker propose ${qid} --round A --apply --toolkit ${cfg.toolkitRoot}${dryRun ? " --dry-run" : ""}`;
+    `leansmith propose ${qid} --round A --apply --toolkit ${cfg.toolkitRoot}${dryRun ? " --dry-run" : ""}`;
 }

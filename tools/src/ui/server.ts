@@ -27,7 +27,7 @@ import { ChangeWatcher } from "./watch.js";
 import type { DemoDriver } from "../demo/driver.js";
 
 const STATIC_DIR = path.join(path.dirname(fileURLToPath(import.meta.url)), "static");
-/** The TheoremChecker checkout, where the owner starts an interactive agent session. */
+/** The LeanSmith checkout, where the owner starts an interactive agent session. */
 const REPO_DIR = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..", "..", "..");
 const KATEX_DIR = path.dirname(createRequire(import.meta.url).resolve("katex/dist/katex.min.css"));
 const PDFJS_DIR = path.dirname(path.dirname(createRequire(import.meta.url).resolve("pdfjs-dist/build/pdf.min.mjs")));
@@ -75,7 +75,7 @@ const assetsTag = (): string => ["index.html", "app.js", "app.css"].map((f) => s
 
 export interface UiServer { server: http.Server; url: string; token: string; close: () => Promise<void> }
 
-/** `demo`: the page of `theoremchecker demo` — its tour (`/api/demo`), and what the owner sends taken
+/** `demo`: the page of `leansmith demo` — its tour (`/api/demo`), and what the owner sends taken
  *  by the demo's stand-in agent instead of started (`DemoDriver`). */
 export async function startUiServer(cfg: ToolkitConfig, opts: { port: number; host?: string; token?: string; share?: ShareDeps; demo?: DemoDriver }): Promise<UiServer> {
   const token = opts.token ?? randomBytes(18).toString("base64url");
@@ -256,13 +256,13 @@ export async function startUiServer(cfg: ToolkitConfig, opts: { port: number; ho
         }
         if (!okToken(cookieToken(req))) {
           res.writeHead(403, { "Content-Type": "text/html; charset=utf-8" });
-          res.end(`<!doctype html><meta charset=utf-8><title>TheoremChecker</title><body style="font-family:Georgia,serif;padding:3rem;max-width:40rem">Open the link that <code>theoremchecker ui</code> printed in your terminal — it carries this session's key.</body>`);
+          res.end(`<!doctype html><meta charset=utf-8><title>LeanSmith</title><body style="font-family:Georgia,serif;padding:3rem;max-width:40rem">Open the link that <code>leansmith ui</code> printed in your terminal — it carries this session's key.</body>`);
           return;
         }
         serveFile(req, res, path.join(STATIC_DIR, "index.html"), false); return;
       }
       if (!p.startsWith("/api/")) { fail(res, 404, "not found"); return; }
-      if (!okToken(cookieToken(req))) { fail(res, 403, "open the link printed by `theoremchecker ui`"); return; }
+      if (!okToken(cookieToken(req))) { fail(res, 403, "open the link printed by `leansmith ui`"); return; }
       if (req.method === "POST" && req.headers["x-tc"] !== "1") { fail(res, 403, "missing request header"); return; }
 
       if (p === "/api/events") {
@@ -373,7 +373,7 @@ export async function startUiServer(cfg: ToolkitConfig, opts: { port: number; ho
         // the demo's paper is made up: never shared, and the demo keeps no files
         if (opts.demo && (sub === "share" || sub === "share-status" || sub === "upload")) { fail(res, 409, "not in the demo"); return; }
         if (sub === "share" && (req.method === "GET" || req.method === "POST")) {
-          // the owner shares a finished paper on the public site (`theoremchecker share`, in this
+          // the owner shares a finished paper on the public site (`leansmith share`, in this
           // process): GET is what would be published, or the refusal; POST sends it to the share
           // service, and only with the confirmation the page's dialog collects and the key that GET
           // gave — so what is sent was shown, to a page that asked, and is still what the bundle

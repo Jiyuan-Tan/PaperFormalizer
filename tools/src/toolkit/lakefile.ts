@@ -1,4 +1,4 @@
-// The toolkit's Lake targets, read from its lakefile (never guessed). TheoremChecker needs two
+// The toolkit's Lake targets, read from its lakefile (never guessed). LeanSmith needs two
 // executables and the two libraries in every toolkit:
 //   `paper_index`    F5 docstring coverage (`lake exe paper_index -- --prefix … --out …`),
 //   `toolkit_index`  indexes the toolkit library into `doc/toolkit_index.json`, the toolkit's
@@ -10,7 +10,7 @@
 // naming the template (`templates/toolkit/` in this repository) the missing targets come from.
 import { existsSync, readFileSync } from "node:fs";
 import path from "node:path";
-import { theoremCheckerToolsDir, type ToolkitConfig } from "./config.js";
+import { leanSmithToolsDir, type ToolkitConfig } from "./config.js";
 
 export const REQUIRED_TOOLKIT_EXES = ["paper_index", "toolkit_index"] as const;
 
@@ -69,7 +69,7 @@ export function readLakefileTargets(
 
 /** `templates/toolkit/` of this repository: the lakefile, exe roots and barrels a toolkit starts from. */
 export function toolkitTemplateDir(): string {
-  return path.resolve(theoremCheckerToolsDir(), "..", "templates", "toolkit");
+  return path.resolve(leanSmithToolsDir(), "..", "templates", "toolkit");
 }
 
 /** The targets a toolkit lakefile lacks (empty when complete). */
@@ -100,7 +100,7 @@ export function assertToolkitLakefile(
   const missing = missingToolkitTargets(cfg, t);
   if (missing.length === 0) return;
   throw new Error(
-    `toolkit lakefile ${t.file} is missing ${missing.join(", ")}. TheoremChecker needs them (F5 runs ` +
+    `toolkit lakefile ${t.file} is missing ${missing.join(", ")}. LeanSmith needs them (F5 runs ` +
       "`lake exe paper_index`; `lake exe toolkit_index` writes the toolkit's retrieval index). Copy the " +
       `\`[[lean_lib]]\` / \`[[lean_exe]]\` entries from ${path.join(template, "lakefile.toml")} and the exe roots ` +
       `${path.join(template, "PaperIndex.lean")} and ${path.join(template, "ToolkitIndex.lean")} into the toolkit root.`,

@@ -1,6 +1,6 @@
-# TheoremChecker
+# LeanSmith
 
-Verify a paper's mathematics in Lean. TheoremChecker transcribes a LaTeX paper's results (V1),
+Verify a paper's mathematics in Lean. LeanSmith transcribes a LaTeX paper's results (V1),
 referees them for faithfulness and correctness (V1.5), formalizes and proves them in Lean against
 Mathlib, the domain libraries you chose and your personal toolkit (F1–F5), and reports what held,
 what was wrong and how it was repaired (V6). Every run lives in your toolkit (`runs/<slug>/`, the
@@ -13,14 +13,14 @@ you read the paper as the run marks it and make the decisions that are yours.
 https://github.com/user-attachments/assets/1fa20ae4-cb9c-40d0-95f3-33fbb3904d35
 
 *Install with your agent, ask it to verify a paper, and review the run on the local page. The run
-shown is the built-in demo (`theoremchecker demo`, see "Try the demo" below).*
+shown is the built-in demo (`leansmith demo`, see "Try the demo" below).*
 
 ## Install
 
 > **If you are a coding agent installing this for someone**, these rules come first:
 >
 > 1. After step 1 (which needs only git and Node), run the prerequisite check (step 2,
->    `theoremchecker doctor`) before anything else, show the user its output, and install nothing
+>    `leansmith doctor`) before anything else, show the user its output, and install nothing
 >    it did not ask for.
 > 2. **Ask the user, never choose for them:** (i) where their toolkit should live, and (ii) which
 >    domain libraries they want. Ask first what kind of papers they will check, show them the
@@ -41,8 +41,8 @@ shown is the built-in demo (`theoremchecker demo`, see "Try the demo" below).*
 > 5. When the user wants a library that is not offered, or one marked `not yet available`, do not
 >    improvise a `[[require]]`: it will not build or will not import. Follow `doc/PORTING.md`,
 >    and tell the user first that a port is hours of work or more.
-> 6. Before running a paper, read `.claude/skills/theoremchecker/SKILL.md` (Claude Code loads it
->    as the `theoremchecker` skill; Codex reads the file, as `AGENTS.md` says).
+> 6. Before running a paper, read `.claude/skills/leansmith/SKILL.md` (Claude Code loads it
+>    as the `leansmith` skill; Codex reads the file, as `AGENTS.md` says).
 
 Installation has been exercised on Linux and Windows (Git Bash); the Windows check used an
 existing Lean installation and shared Mathlib cache. macOS and a clean Windows prerequisite
@@ -79,27 +79,27 @@ paper's page sums it).
 - **Which models** (`tools/src/models.ts`): on `codex`, `gpt-6.1-sol` for every role (V1 extraction and
   fixer, V1.5 referee, F1.5, F2 scaffold, proofs, F2.5–F4 reviews, F5); on `claude`,
   `opus` (F1 plan, curation). Your accounts must have access to them. To use other ids, set
-  `THEOREMCHECKER_MODEL_CODEX_KERNEL`, `THEOREMCHECKER_MODEL_CODEX_VERIFY`,
-  `THEOREMCHECKER_MODEL_CODEX_MECH`, `THEOREMCHECKER_MODEL_CLAUDE_MAIN`; the pipeline was tuned on
+  `LEANSMITH_MODEL_CODEX_KERNEL`, `LEANSMITH_MODEL_CODEX_VERIFY`,
+  `LEANSMITH_MODEL_CODEX_MECH`, `LEANSMITH_MODEL_CLAUDE_MAIN`; the pipeline was tuned on
   the defaults.
 - **Subscriptions (default).** The workers use the `codex` and `claude` logins already on the
   machine (a ChatGPT plan and a Claude plan that include the CLIs).
 - **API keys instead.** In `tools/config/local.json` set `"authMode": "api"` (or only
   `"openaiAuth"` / `"anthropicAuth"`), and `"openaiApiKey"` / `"anthropicApiKey"` (or
-  `…ApiKeyFile`); or set `THEOREMCHECKER_AUTH_MODE=api` with `OPENAI_API_KEY` /
+  `…ApiKeyFile`); or set `LEANSMITH_AUTH_MODE=api` with `OPENAI_API_KEY` /
   `ANTHROPIC_API_KEY`. API mode requires the OpenAI key: lacking it, the run stops at start (a subscription is used only in
   subscription mode). With no Anthropic key the claude roles run on `codex` (next item).
 - **With `codex` alone.** Two accounts are the default. When `claude` is absent, logged out, or in
   API mode with no key, its roles (F1 plan, second F4 reviewer, curator, gardener, study coordinator) run on `codex`, on the
-  kernel model at high effort; the run's first log lines and `theoremchecker doctor` say which CLI
+  kernel model at high effort; the run's first log lines and `leansmith doctor` say which CLI
   runs them. To choose yourself, set `"claudeRoles"` to `"claude"` or `"codex"` in `local.json` (or
-  `THEOREMCHECKER_CLAUDE_ROLES`); a run keeps the CLI it started with across resumes unless you
+  `LEANSMITH_CLAUDE_ROLES`); a run keeps the CLI it started with across resumes unless you
   set one. The pipeline was tuned with `claude` in these roles; the `codex`-only path is new and
   has yet to be run on a real paper, and its two F4 reviewers are the same model. Under
   `codexSandbox: "danger-full-access"` the read-only roles (second F4 reviewer, curator, gardener)
   run with write access, as the `codex` referees do.
 - **A second Claude account** for the workers: `claudeConfigDir` in `local.json` (or
-  `THEOREMCHECKER_CLAUDE_CONFIG_DIR`).
+  `LEANSMITH_CLAUDE_CONFIG_DIR`).
 
 ### Windows setup
 
@@ -156,13 +156,13 @@ can take longer; the five-minute estimate above is for a fast Linux setup.
 
 ### Steps
 
-Every command below runs in Bash (Git Bash on Windows), from `TheoremChecker/tools` after
+Every command below runs in Bash (Git Bash on Windows), from `LeanSmith/tools` after
 `source scripts/node_env.sh`.
 
 **1. Clone and install the tools** (about a minute).
 
-    git clone https://github.com/Jiyuan-Tan/TheoremChecker.git TheoremChecker
-    cd TheoremChecker/tools
+    git clone https://github.com/Jiyuan-Tan/LeanSmith.git LeanSmith
+    cd LeanSmith/tools
     source scripts/node_env.sh
     npm install
     cp config/local.example.json config/local.json
@@ -177,7 +177,7 @@ do not run `npm audit fix --force` as part of setup, since it can change depende
 
 **2. Check the prerequisites.**
 
-    npx tsx bin/theoremchecker.ts doctor
+    npx tsx bin/leansmith.ts doctor
 
 It prints one line per item — `ok`, `MISSING` (required) or `absent` (optional) — with the install
 command under each missing one, then the model ids your accounts need, and ends
@@ -187,7 +187,7 @@ and run it again. It reads versions and login states only, free of model calls. 
 
 **3. Choose your libraries.**
 
-    npx tsx bin/theoremchecker.ts init --list
+    npx tsx bin/leansmith.ts init --list
 
 Mathlib is always installed. **Every domain library is optional**: you choose.
 
@@ -208,10 +208,10 @@ inference, experimentation, panel and design-based work: Causalean; classical st
 other mathematics: Mathlib alone.
 
 **4. Create your toolkit** — a separate git repository of your own that holds your curated Lean
-library, every paper's Lean and every run record. Choose where it lives (outside the TheoremChecker
+library, every paper's Lean and every run record. Choose where it lives (outside the LeanSmith
 clone is simplest) and pass your choice from step 3:
 
-    npx tsx bin/theoremchecker.ts init ~/my-toolkit --domains general
+    npx tsx bin/leansmith.ts init ~/my-toolkit --domains general
 
 The build takes a while: meanwhile, take the tour of the page ("Try the demo" below; an agent
 setting this up starts it for you and gives you its link).
@@ -220,14 +220,14 @@ On a terminal, `init` without `--domains` / `--libraries` asks; without a termin
 prints the list. It
 
 - copies `templates/toolkit/`, writes its `lakefile.toml` (the domain libraries, then Mathlib at the
-  pinned revision) and `theoremchecker.json` (the base libraries retrieval searches);
+  pinned revision) and `leansmith.json` (the base libraries retrieval searches);
 - makes it a git repository with a first commit;
 - downloads Mathlib's prebuilt cache (`lake exe cache get`) and each chosen library's own (see
   "Prebuilt caches" below), builds the toolkit, checks each fetched library by building it (it
   should only replay), and indexes each domain library that comes without an index (`--no-build` skips
   these).
 
-`--owner "Name" --email you@example.org` set the owner recorded in `theoremchecker.json` and the
+`--owner "Name" --email you@example.org` set the owner recorded in `leansmith.json` and the
 author of the toolkit's first commit (default: your git configuration).
 
 Success ends with `[init] done. Use it with --toolkit <path> …`. The first `lake` call also makes
@@ -241,7 +241,7 @@ elan download the pinned Lean. Common failures:
 
 Then commit what the build added (`git add -A && git commit -m "lake manifest"` in the toolkit),
 and push the toolkit to a **private** repository of yours: it holds the run records of the papers
-you check. Do not move the toolkit or the TheoremChecker clone afterwards: the toolkit refers to
+you check. Do not move the toolkit or the LeanSmith clone afterwards: the toolkit refers to
 the clone by relative path (vendored libraries, retrieval notes).
 
 **Prebuilt caches.** `init` fetches Mathlib's prebuilt cache (`lake exe cache get`) and, for a
@@ -263,9 +263,9 @@ cores). To fetch afterwards instead, then build:
 
 **5. Smoke-test the wiring** (a dry run, free of model calls).
 
-    npx tsx bin/theoremchecker.ts verify test/verify/fixtures/paper/main.tex --toolkit ~/my-toolkit --slug smoke --stop-after V1.5 --dry-run
+    npx tsx bin/leansmith.ts verify test/verify/fixtures/paper/main.tex --toolkit ~/my-toolkit --slug smoke --stop-after V1.5 --dry-run
 
-It should end `TheoremChecker verify dry-run smoke finished in phase v1_5.`, then a line naming the
+It should end `LeanSmith verify dry-run smoke finished in phase v1_5.`, then a line naming the
 run directory it wrote (`~/my-toolkit/runs/smoke`): delete it afterwards.
 
 ### Library search
@@ -288,7 +288,7 @@ and you make the decisions a run asks of you (a repair that would weaken a main 
 promotion rounds). It is a recorded run: no model call, no Lean, no account, and nothing is written
 to your toolkit, so it runs as soon as step 1 above is done, while `init` is still building.
 
-    npx tsx bin/theoremchecker.ts demo
+    npx tsx bin/leansmith.ts demo
 
 Open the link it prints (`[demo] open: http://127.0.0.1:7342/?token=…`; from another computer,
 forward the port first, as for the page below) and follow the box in the corner.
@@ -300,8 +300,8 @@ must stop their demo process by its PID when the tour is finished.
 
 ## First paper
 
-Start your agent (Claude Code or Codex) in the TheoremChecker clone and ask it, for example:
-"Use TheoremChecker to verify arXiv 2401.01234 with my toolkit at ~/my-toolkit." What the agent
+Start your agent (Claude Code or Codex) in the LeanSmith clone and ask it, for example:
+"Use LeanSmith to verify arXiv 2401.01234 with my toolkit at ~/my-toolkit." What the agent
 then does, and what you can do yourself, from `tools/`:
 
 **1. Get the LaTeX source** (never the PDF). For arXiv, the e-print:
@@ -314,14 +314,14 @@ Your own paper: its `.tex` file or its directory.
 **2. Bring up the page** and open the link it prints after a few seconds
 (`[ui] open: http://127.0.0.1:7341/?token=…`):
 
-    npx tsx bin/theoremchecker.ts ui --toolkit ~/my-toolkit
+    npx tsx bin/leansmith.ts ui --toolkit ~/my-toolkit
 
 It listens on this computer only. From another computer, forward the port first:
 `ssh -L 7341:127.0.0.1:7341 <host>`. Ctrl+C stops the page; runs keep going.
 
 **3. Run the first two stages**, then stop:
 
-    npx tsx bin/theoremchecker.ts verify ~/papers/mypaper --toolkit ~/my-toolkit --slug mypaper --stop-after V1.5
+    npx tsx bin/leansmith.ts verify ~/papers/mypaper --toolkit ~/my-toolkit --slug mypaper --stop-after V1.5
 
 (`--main <file>` when several files carry `\documentclass`.) The agent launches this detached and
 arms the run's watcher, which returns at every halt, finish or crash (also from `tools/`; from the
@@ -348,15 +348,15 @@ agent"), with files attached.
 **5. Continue** stage by stage — `--resume --stop-after F1.5`, then on — to the report
 (`runs/<slug>/report.md`) and the annotated paper.
 
-`doc/USER_MANUAL.md` covers every stage, halt, option and file; `theoremchecker` alone prints all
+`doc/USER_MANUAL.md` covers every stage, halt, option and file; `leansmith` alone prints all
 commands (`propose`, `study`, `toolkit-health`, `report`, …). Here and in the manual,
-`theoremchecker <command>` is short for `npx tsx bin/theoremchecker.ts <command>`, run from `tools/`
+`leansmith <command>` is short for `npx tsx bin/leansmith.ts <command>`, run from `tools/`
 after `source scripts/node_env.sh`.
 
 ### Sharing
 
-`theoremchecker share` (or Share on a finished paper's page) publishes a finished run on the public
-site of shared papers, <https://jiyuan-tan.github.io/TheoremCheckerPapers/>, after you sign in to
+`leansmith share` (or Share on a finished paper's page) publishes a finished run on the public
+site of shared papers, <https://jiyuan-tan.github.io/LeanSmithPapers/>, after you sign in to
 GitHub in your browser — identity only, no permission. It is optional; `doc/USER_MANUAL.md`
 ("Sharing a finished paper") says what is published and how.
 
@@ -384,7 +384,7 @@ When something goes wrong in the tool itself, the agent records it in the run's
 ## One Mathlib, compatible libraries
 
 Lean libraries only combine when they build against the same Mathlib, and a toolkit's files are
-Lean *modules*, which can only import libraries that are modules too. TheoremChecker pins one Lean
+Lean *modules*, which can only import libraries that are modules too. LeanSmith pins one Lean
 toolchain and one Mathlib revision (`tools/data/libraries.json`: Lean v4.33.0, Mathlib `db584cd`),
 and every optional library it offers builds against exactly that pin as a module library:
 
@@ -403,11 +403,11 @@ not offered: do not point a toolkit at an upstream repository directly.
 
 To add an offered library to an existing toolkit, add its `[[require]]` between the
 `# BEGIN/END domain libraries` markers of the toolkit's `lakefile.toml` (always before mathlib) and
-its entry to `base` in `theoremchecker.json`, as `init` writes them for a new toolkit.
+its entry to `base` in `leansmith.json`, as `init` writes them for a new toolkit.
 
 ## Acknowledgements
 
-TheoremChecker builds on, and in three cases ships adapted copies of, other people's Lean
+LeanSmith builds on, and in three cases ships adapted copies of, other people's Lean
 libraries. That code belongs to its authors.
 
 - **[Mathlib](https://github.com/leanprover-community/mathlib4)**, by the Lean prover community
@@ -434,7 +434,7 @@ converted, under the Lean module system; every statement stays as upstream wrote
 
 ## License
 
-TheoremChecker's own code and documents are under the MIT License (`LICENSE`). The adapted
+LeanSmith's own code and documents are under the MIT License (`LICENSE`). The adapted
 libraries under `third_party/` keep their own licenses, each in its directory; Mathlib and
 Causalean are fetched from their repositories under theirs (Acknowledgements above).
 
@@ -442,6 +442,6 @@ Causalean are fetched from their repositories under theirs (Acknowledgements abo
 
 - `doc/USER_MANUAL.md` — running and reading a verification.
 - `doc/PORTING.md` — porting a library that is not offered to the pin and the module system.
-- `.claude/skills/theoremchecker/SKILL.md` — the orchestrator guide (how to run the pipeline and
+- `.claude/skills/leansmith/SKILL.md` — the orchestrator guide (how to run the pipeline and
   what to do at each stop): what your agent reads before it runs a paper.
-- `AGENTS.md` — for the coding agent that installs and runs TheoremChecker for you.
+- `AGENTS.md` — for the coding agent that installs and runs LeanSmith for you.

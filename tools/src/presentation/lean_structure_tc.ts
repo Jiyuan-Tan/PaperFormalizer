@@ -1,6 +1,6 @@
-// TheoremChecker's additions to the statement structurer ported from the upstream project
+// LeanSmith's additions to the statement structurer ported from the upstream project
 // (`lean_structure.ts`). Kept out of the port so it re-syncs by re-copying: the port calls these at
-// the places marked `TheoremChecker` there, handing in its own `buildCard` (`Build`) where a piece is
+// the places marked `LeanSmith` there, handing in its own `buildCard` (`Build`) where a piece is
 // cut like a clause.
 //
 //   - a quantifier header that opens a binder of its own (`∃ h : ∀ t, …`) is not read as one

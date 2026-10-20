@@ -72,7 +72,7 @@ describe("the curator's Claude calls are recorded in the run's token ledger", ()
     const ok = async (o: ClaudeRunInput) => { seen.push(o.prompt); o.onUsage?.(usage); return "{\"items\":[]}"; };
     expect(await claudeAsker(cfg, ok, { runDir, stage: "promotion B" }).ask("p", {})).toBe("{\"items\":[]}");
     await expect(claudeAsker(cfg, async () => { throw new Error("quota"); }, { runDir, stage: "garden" }).ask("q", {})).rejects.toThrow("quota");
-    // no ledger given (the standalone `theoremchecker garden`): nothing is written
+    // no ledger given (the standalone `leansmith garden`): nothing is written
     await claudeAsker(cfg, ok).ask("r", {});
     const rows = readFileSync(path.join(runDir, TOKEN_USAGE_LEDGER), "utf8").trim().split("\n").map((l) => JSON.parse(l));
     expect(rows).toEqual([

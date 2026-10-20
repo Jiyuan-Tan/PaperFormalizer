@@ -1,5 +1,5 @@
 /**
- * `theoremchecker report <slug>` — write a run's report (`report.md`, `report.json`) and its
+ * `leansmith report <slug>` — write a run's report (`report.md`, `report.json`) and its
  * corrected-paper bundle (`bundle/`) again from the run's records, without running any stage: no model
  * call, no `lake`. The Lean evidence (build, source scan, axioms) is the one the report on file
  * recorded when V6 last ran; everything else is read as V6 reads it, under the same identity gates.
@@ -26,7 +26,7 @@ import { makeStageV6 } from "./stage_v6_report.js";
 import { VERIFY_FILES } from "./types.js";
 
 export const REPORT_USAGE =
-  "Usage: theoremchecker report <slug> [--toolkit <path>] [--out <dir>] [--verify-public] [--arxiv <id>]\n" +
+  "Usage: leansmith report <slug> [--toolkit <path>] [--out <dir>] [--verify-public] [--arxiv <id>]\n" +
   "  write the run's report and corrected-paper bundle again from its records (no stage runs, no model call, no lake:\n" +
   "  the Lean evidence is the one the report on file recorded). --out <dir>: write them there and leave the run untouched.\n" +
   "  --verify-public: compare, over the network, the base-library files the paper was built against with the public\n" +

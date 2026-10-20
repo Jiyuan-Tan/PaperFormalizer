@@ -155,7 +155,7 @@ const CONTINUATION_RE = /^(?:\||where\b|deriving\b|termination_by\b|decreasing_b
  * file and re-emitting it elsewhere. A span runs from the declaration's attached doc comment and
  * attribute lines (contiguous, no blank line in between) to the line before the next column-0
  * command; column-0 continuations (`| …` equations, `where`, `deriving`, `termination_by`,
- * `decreasing_by`) stay inside. Written for the layout TheoremChecker's F stages emit (commands at
+ * `decreasing_by`) stay inside. Written for the layout LeanSmith's F stages emit (commands at
  * column 0, bodies indented); anything else is caught by the build gate that follows every move.
  */
 export function declarationSpans(text: string): DeclSpan[] {

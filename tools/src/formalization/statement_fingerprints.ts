@@ -115,7 +115,7 @@ export async function takeStatementFingerprints(toolkitRoot: string, leanDir: st
     .map((f) => `${leanSubdir}/${f.replace(/\\/g, "/")}`.replace(/\.lean$/, "").split("/").join("."))
     .sort();
   if (modules.length === 0) return none(`no Lean modules under ${leanDir}`);
-  const out = path.join(toolkitRoot, ".lake", "build", "theoremchecker", `fingerprints_${leanSubdir.replace(/[^A-Za-z0-9_.-]+/g, "_")}.json`);
+  const out = path.join(toolkitRoot, ".lake", "build", "leansmith", `fingerprints_${leanSubdir.replace(/[^A-Za-z0-9_.-]+/g, "_")}.json`);
   const tail = (s: string) => s.split("\n").filter((l) => l.trim()).slice(-8).join("\n");
   try {
     await mkdir(path.dirname(out), { recursive: true });

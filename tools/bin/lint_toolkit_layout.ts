@@ -1,12 +1,12 @@
 #!/usr/bin/env -S npx tsx
 /**
- * Lint a TheoremChecker toolkit's layout (layering, module size, header contract, run tokens, and —
+ * Lint a LeanSmith toolkit's layout (layering, module size, header contract, run tokens, and —
  * once the toolkit has `doc/taxonomy.json` — the topic tree).
  *
  *   npx tsx bin/lint_toolkit_layout.ts [--toolkit <root>] [--scope toolkit|all] [--json]
  *
- * The root resolves like every TheoremChecker command (`--toolkit`, `THEOREMCHECKER_TOOLKIT`, or the
- * nearest ancestor holding `theoremchecker.json`). `--scope toolkit` lints the toolkit library
+ * The root resolves like every LeanSmith command (`--toolkit`, `LEANSMITH_TOOLKIT`, or the
+ * nearest ancestor holding `leansmith.json`). `--scope toolkit` lints the toolkit library
  * only; `all` (default) adds the papers library. Study staging is never linted (it is
  * temporary), but importing it from anywhere else is an error.
  * Exit 1 on any finding.

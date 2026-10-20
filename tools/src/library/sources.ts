@@ -1,5 +1,5 @@
 // Index sources: the per-declaration indices F-stage retrieval searches, derived from the
-// toolkit config (`theoremchecker.json`) — never from a fixed repository layout.
+// toolkit config (`leansmith.json`) — never from a fixed repository layout.
 //
 // A source is one `library_index.json`-shaped file at ANY path, tagged with the library it
 // indexes. Every base library with an `index` contributes one; the toolkit's own index

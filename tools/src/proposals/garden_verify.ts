@@ -1,4 +1,4 @@
-// `theoremchecker garden --verify <checklist>`: the mechanical check after the orchestrator has
+// `leansmith garden --verify <checklist>`: the mechanical check after the orchestrator has
 // carried out the accepted gardening items BY HAND (editing the Lean, lean-lsp + builds).
 // Nothing here edits Lean. The toolkit must have been committed before the edits: the check is the
 // working tree against `HEAD`, and an unfixable failure is reverted with git by the orchestrator.
@@ -18,7 +18,7 @@ import { mkdir, readFile, writeFile } from "node:fs/promises";
 import path from "node:path";
 import { statementText } from "../formalization/crosswalk_parse.js";
 import { maskLeanCommentsAndStrings } from "../shared/lean_mask.js";
-import { theoremCheckerToolsDir, type ToolkitConfig } from "../toolkit/config.js";
+import { leanSmithToolsDir, type ToolkitConfig } from "../toolkit/config.js";
 import { declarationSpans, forbiddenLeanTokens, identifierTokens } from "../toolkit/lean_source.js";
 import { loadLedger, serializeLedger } from "../toolkit/ledger.js";
 import { parseGardenChecklist, type GardenBatch } from "./garden.js";
@@ -203,7 +203,7 @@ export async function verifyGarden(args: {
   }
 
   // The commands: toolkit build, papers build, axioms, lints, index — each log kept in full.
-  const toolsDir = args.toolsDir ?? theoremCheckerToolsDir();
+  const toolsDir = args.toolsDir ?? leanSmithToolsDir();
   const indexStep = args.indexStep !== undefined ? args.indexStep : await detectToolkitIndexStep(cfg, realApplyDeps);
   const axiomDecls = [...after.keys(), ...paperDecls];
   const probe = path.join(logDir, "axioms.lean");

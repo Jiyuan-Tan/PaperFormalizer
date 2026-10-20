@@ -193,7 +193,7 @@ function unannotate(tex: string): string {
     }
     throw new Error("unbalanced");
   };
-  let out = tex.replace(/\n\\usepackage\{xcolor\}% added by TheoremChecker\n/, "").replace(/% TheoremChecker annotation macros[\s\S]*?% end of TheoremChecker annotation macros\n/, "");
+  let out = tex.replace(/\n\\usepackage\{xcolor\}% added by LeanSmith\n/, "").replace(/% LeanSmith annotation macros[\s\S]*?% end of LeanSmith annotation macros\n/, "");
   // a proof block inserted on its own line takes its newline with it
   for (const macro of ["\\vsProof", "\\vsProposedProof"]) {
     for (let at = out.indexOf(`${macro}{`); at >= 0; at = out.indexOf(`${macro}{`)) {
@@ -275,12 +275,12 @@ describe("annotated paper (V6)", () => {
     expect(md).toContain("## Unlocated (0)");
     expect(md).toContain("Compiled with pdflatex: `main.pdf`.");
     // the preamble: xcolor after \documentclass, the macros before \begin{document}
-    expect(main.startsWith("\\documentclass{article}\n\\usepackage{xcolor}% added by TheoremChecker\n")).toBe(true);
+    expect(main.startsWith("\\documentclass{article}\n\\usepackage{xcolor}% added by LeanSmith\n")).toBe(true);
     expect(main.indexOf(VS_BLOCK_MARKER)).toBeLessThan(main.indexOf("\\begin{document}"));
     expect(main.indexOf(VS_BLOCK_MARKER)).toBeGreaterThan(main.indexOf("\\newtheorem{prop}"));
     // each part is a block laid out for reading: its bold label on its own line, the content indented below
     const macro = (name: string): string => main.split("\n").find((l) => l.startsWith(`\\newcommand{\\${name}}`)) ?? "";
-    for (const [name, colour, font, label] of [["vsOriginal", "vsRed", "", "Original:"], ["vsCorrected", "vsBlue", "", "Corrected:"], ["vsClarified", "vsBlue", "", "Clarified statement:"], ["vsNote", "vsNote", "\\normalfont\\small", "TheoremChecker:"], ["vsReading", "vsNote", "\\normalfont\\small", "Clarification:"], ["vsReadingOwner", "vsNote", "\\normalfont\\small", "Clarification (author):"]] as const) {
+    for (const [name, colour, font, label] of [["vsOriginal", "vsRed", "", "Original:"], ["vsCorrected", "vsBlue", "", "Corrected:"], ["vsClarified", "vsBlue", "", "Clarified statement:"], ["vsNote", "vsNote", "\\normalfont\\small", "LeanSmith:"], ["vsReading", "vsNote", "\\normalfont\\small", "Clarification:"], ["vsReadingOwner", "vsNote", "\\normalfont\\small", "Clarification (author):"]] as const) {
       expect(macro(name)).toBe(`\\newcommand{\\${name}}[1]{\\vsBlock{${colour}}{${font}}{${label}}{#1}}`);
     }
     expect(macro("vsReadingSymbol")).toBe("\\newcommand{\\vsReadingSymbol}[2]{\\vsBlock{vsNote}{\\normalfont\\small}{Clarification (symbol #1):}{#2}}");
@@ -534,7 +534,7 @@ describe("annotate_tex helpers", () => {
       const bare = "\\documentclass[11pt]{article}\n\\usepackage{amsmath}\n\\begin{document}\nx\n\\end{document}\n";
       const once = injectPreamble(bare, loadsXcolor(bare));
       expect(once.addedXcolor && once.addedBlock).toBe(true);
-      expect(once.tex).toMatch(/^\\documentclass\[11pt\]\{article\}\n\\usepackage\{xcolor\}% added by TheoremChecker\n/);
+      expect(once.tex).toMatch(/^\\documentclass\[11pt\]\{article\}\n\\usepackage\{xcolor\}% added by LeanSmith\n/);
       expect(injectPreamble(once.tex, loadsXcolor(once.tex)).tex).toBe(once.tex);
 
       const withX = "\\documentclass{article}\n\\usepackage[dvipsnames]{xcolor}\n\\begin{document}\nx\n\\end{document}\n";
@@ -556,13 +556,13 @@ describe("annotate_tex helpers", () => {
       expect(loadsXcolor("", "% \\RequirePackage{xcolor}\n")).toBe(false);
       const once = injectPreamble(tpl, loadsXcolor(preambleOf(tpl)));
       expect(once.addedXcolor && once.addedBlock).toBe(true);
-      expect(once.tex).toContain("\\documentclass[nonblindrev]{informs4}\n\\usepackage{xcolor}% added by TheoremChecker\n % the default\n");
+      expect(once.tex).toContain("\\documentclass[nonblindrev]{informs4}\n\\usepackage{xcolor}% added by LeanSmith\n % the default\n");
       expect(once.tex.indexOf(VS_BLOCK_MARKER)).toBeGreaterThan(once.tex.indexOf("natbib"));
       expect(injectPreamble(once.tex, loadsXcolor(preambleOf(once.tex))).tex).toBe(once.tex);
       // no \\begin{document}: the block follows the real class line and the added xcolor line
       const frag = "%\\documentclass{a}\n\\documentclass{b}\nText.\n";
       const f = injectPreamble(frag, false);
-      expect(f.tex.startsWith(`%\\documentclass{a}\n\\documentclass{b}\n\\usepackage{xcolor}% added by TheoremChecker\n${VS_PREAMBLE_BLOCK}\n`)).toBe(true);
+      expect(f.tex.startsWith(`%\\documentclass{a}\n\\documentclass{b}\n\\usepackage{xcolor}% added by LeanSmith\n${VS_PREAMBLE_BLOCK}\n`)).toBe(true);
       expect(injectPreamble(f.tex, false).tex).toBe(f.tex);
     }],
     ["moves an insertion point out of math, math environments, brace groups, labels and comments", () => {

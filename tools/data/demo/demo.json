@@ -8,7 +8,7 @@
       "snapshot": "start",
       "view": "toolkit",
       "title": "Welcome: how a paper starts",
-      "body": "<p>This page shows your toolkit and follows every paper you verify. You start a paper from your agent, not from here: open a terminal in the TheoremChecker folder, start <code>claude</code> or <code>codex</code>, and ask it as in this box (<b>copy</b> gives you the words).</p><p>The agent starts the run, attaches itself to it and acts at every halt; the run then appears on this page and updates live.</p><p>For this demo a paper has already been started. Press Next.</p>",
+      "body": "<p>This page shows your toolkit and follows every paper you verify. You start a paper from your agent, not from here: open a terminal in the LeanSmith folder, start <code>claude</code> or <code>codex</code>, and ask it as in this box (<b>copy</b> gives you the words).</p><p>The agent starts the run, attaches itself to it and acts at every halt; the run then appears on this page and updates live.</p><p>For this demo a paper has already been started. Press Next.</p>",
       "target": "#start-how"
     },
     {
@@ -22,7 +22,7 @@
       "id": "paper",
       "view": "paper",
       "title": "The paper's page",
-      "body": "<p>This is where you follow one paper. On the left: the run's stages, and a proof map (an arrow reads \"used by\"). In the middle: the paper itself. On the right: TheoremChecker's comments.</p><p>An agent session (Claude Code or Codex) is attached to the run. It acts at every halt and talks with you here. In this demo a stand-in plays it.</p><p>Press Next to let the referee read the paper.</p>",
+      "body": "<p>This is where you follow one paper. On the left: the run's stages, and a proof map (an arrow reads \"used by\"). In the middle: the paper itself. On the right: LeanSmith's comments.</p><p>An agent session (Claude Code or Codex) is attached to the run. It acts at every halt and talks with you here. In this demo a stand-in plays it.</p><p>Press Next to let the referee read the paper.</p>",
       "target": "#vstages"
     },
     {
@@ -142,7 +142,7 @@
       "id": "end",
       "view": "toolkit",
       "title": "That is the tour",
-      "body": "<p>To verify a paper of your own, ask your agent, for example: \"Use TheoremChecker to verify arXiv 2401.01234 with my toolkit at ~/my-toolkit.\" It starts the run, brings up this page and gives you the link.</p><p>To let the agent take your decisions too (each listed for your review afterwards), have it start the run with <code>--full-auto</code>.</p><p>Press <b>Start over</b> to see the tour again.</p>"
+      "body": "<p>To verify a paper of your own, ask your agent, for example: \"Use LeanSmith to verify arXiv 2401.01234 with my toolkit at ~/my-toolkit.\" It starts the run, brings up this page and gives you the link.</p><p>To let the agent take your decisions too (each listed for your review afterwards), have it start the run with <code>--full-auto</code>.</p><p>Press <b>Start over</b> to see the tour again.</p>"
     }
   ]
 }

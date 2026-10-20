@@ -147,7 +147,7 @@ export async function runSubstratePipeline(
   // 1. Requirement gate.
   const req = await ensureRequirement(repoRoot, slug);
   if (req.status === "bootstrapped") {
-    const msg = `Wrote a blank requirement.md to ${liveRunDir}/requirement.md — fill it in and re-run \`theoremchecker study ${slug}\`.`;
+    const msg = `Wrote a blank requirement.md to ${liveRunDir}/requirement.md — fill it in and re-run \`leansmith study ${slug}\`.`;
     console.log(msg);
     return { ...createInitialSubstrateState(slug), phase: "halted", terminalMessage: msg };
   }

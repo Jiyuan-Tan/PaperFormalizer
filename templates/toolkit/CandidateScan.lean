@@ -1,8 +1,8 @@
-import TheoremCheckerIndexCore
+import LeanSmithIndexCore
 
 /-! # Candidate-scan exe (toolkit promotion and the toolkit graph)
 
-Reports, for every declaration in its scope, the facts TheoremChecker's promotion round and
+Reports, for every declaration in its scope, the facts LeanSmith's promotion round and
 toolkit graph need: name, kind, pretty-printed type, docstring, module, source lines, the axioms it
 depends on (`Lean.collectAxioms`, what `#print axioms` prints), whether it uses `sorry`, and every
 constant its type and its body mention, each classified as

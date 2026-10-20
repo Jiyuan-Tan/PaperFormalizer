@@ -47,10 +47,10 @@ describe("which CLI runs the claude roles", () => {
     const asked: string[] = [];
     expect(decideClaudeRoles(machine(true, true, asked), { env: {}, config: { claudeRoles: "codex" } }))
       .toEqual({ runner: "codex", explicit: true, reason: "set by local.json claudeRoles" });
-    expect(decideClaudeRoles(machine(false, false, asked), { env: { THEOREMCHECKER_CLAUDE_ROLES: "claude" }, config: { claudeRoles: "codex" } }))
-      .toEqual({ runner: "claude", explicit: true, reason: "set by THEOREMCHECKER_CLAUDE_ROLES" });
+    expect(decideClaudeRoles(machine(false, false, asked), { env: { LEANSMITH_CLAUDE_ROLES: "claude" }, config: { claudeRoles: "codex" } }))
+      .toEqual({ runner: "claude", explicit: true, reason: "set by LEANSMITH_CLAUDE_ROLES" });
     expect(asked).toEqual([]);
-    expect(() => claudeRolesSetting({ env: { THEOREMCHECKER_CLAUDE_ROLES: "gpt" }, config: {} })).toThrow(AuthConfigError);
+    expect(() => claudeRolesSetting({ env: { LEANSMITH_CLAUDE_ROLES: "gpt" }, config: {} })).toThrow(AuthConfigError);
     expect(claudeRolesSetting(NONE)).toBeUndefined();
   });
 
@@ -83,7 +83,7 @@ describe("which CLI runs the claude roles", () => {
     expect(decideClaudeRoles(machine(true, true, asked), NONE, "codex")).toEqual({ runner: "codex", explicit: false, recorded: true, reason: "as recorded for this run" });
     expect(decideClaudeRoles(machine(false, false, asked), NONE, "claude").runner).toBe("claude");
     expect(asked).toEqual([]);
-    expect(decideClaudeRoles(machine(true, true), { env: { THEOREMCHECKER_CLAUDE_ROLES: "claude" }, config: {} }, "codex")).toMatchObject({ runner: "claude", explicit: true });
+    expect(decideClaudeRoles(machine(true, true), { env: { LEANSMITH_CLAUDE_ROLES: "claude" }, config: {} }, "codex")).toMatchObject({ runner: "claude", explicit: true });
 
     const log = vi.spyOn(console, "log").mockImplementation(() => {});
     const warn = vi.spyOn(console, "warn").mockImplementation(() => {});
@@ -91,15 +91,15 @@ describe("which CLI runs the claude roles", () => {
     expect(claudeRoles("codex").runner).toBe("claude");
     claudeRoles("codex");
     expect(log.mock.calls).toHaveLength(1);
-    expect(warn.mock.calls).toEqual([["[theoremchecker] WARN this run's claude roles ran on codex so far: from now on they run on claude (set by THEOREMCHECKER_CLAUDE_ROLES)."]]);
+    expect(warn.mock.calls).toEqual([["[leansmith] WARN this run's claude roles ran on codex so far: from now on they run on claude (set by LEANSMITH_CLAUDE_ROLES)."]]);
     // with no setting the record is honoured; a codex no setting chose is said on stderr
     setClaudeRolesForTest(null);
     warn.mockClear();
     log.mockClear();
-    vi.stubEnv("THEOREMCHECKER_CLAUDE_ROLES", "");
+    vi.stubEnv("LEANSMITH_CLAUDE_ROLES", "");
     expect(claudeRoles("codex")).toMatchObject({ runner: "codex", recorded: true });
     expect(log.mock.calls).toEqual([]);
-    expect(warn.mock.calls).toEqual([[`[theoremchecker] the claude roles (F1 plan, second F4 reviewer, curator, gardener, study coordinator) run on codex (${MODELS.codexKernel}), as recorded for this run`]]);
+    expect(warn.mock.calls).toEqual([[`[leansmith] the claude roles (F1 plan, second F4 reviewer, curator, gardener, study coordinator) run on codex (${MODELS.codexKernel}), as recorded for this run`]]);
   });
 
   it("in api mode the Anthropic key decides, and the login is not asked", () => {
@@ -128,7 +128,7 @@ describe("which CLI runs the claude roles", () => {
     // The suite's environment pins the roles to claude (vitest.config.ts): no CLI is asked.
     expect(claudeRoles()).toMatchObject({ runner: "claude", explicit: true });
     claudeRoles();
-    expect(log.mock.calls).toEqual([[`[theoremchecker] the claude roles (F1 plan, second F4 reviewer, curator, gardener, study coordinator) run on claude (${MODELS.claudeMain}), set by THEOREMCHECKER_CLAUDE_ROLES`]]);
+    expect(log.mock.calls).toEqual([[`[leansmith] the claude roles (F1 plan, second F4 reviewer, curator, gardener, study coordinator) run on claude (${MODELS.claudeMain}), set by LEANSMITH_CLAUDE_ROLES`]]);
   });
 });
 
@@ -215,7 +215,7 @@ describe("the records of a claude role run on codex", () => {
     // every attempt the runner reports is summed
     await claudeAsker(cfg, async (o) => { o.onUsage?.(usage); o.onUsage?.(usage); return "{}"; }, { runDir, stage: "garden" }).ask("p", {});
     expect((await rows())[1]).toMatchObject({ stage: "garden", usage: { ...usage, input_tokens: 200, output_tokens: 20, total_tokens: 220 } });
-    setClaudeRolesForTest({ runner: "claude", explicit: true, reason: "set by THEOREMCHECKER_CLAUDE_ROLES" });
+    setClaudeRolesForTest({ runner: "claude", explicit: true, reason: "set by LEANSMITH_CLAUDE_ROLES" });
     await claudeAsker(cfg, async () => "{}", { runDir, stage: "promotion B" }).ask("p", {});
     expect((await rows())[2]).toMatchObject({ provider: "claude", model: MODELS.claudeMain });
   });

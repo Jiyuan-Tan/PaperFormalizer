@@ -10,10 +10,10 @@
 //     "haiku") or a pinned id ("claude-opus-4-8").
 //
 // Env overrides (all optional):
-//   THEOREMCHECKER_MODEL_CODEX_KERNEL   F2 scaffolder, proof filler, F2.5–F4 reviewers (default gpt-6.1-sol)
-//   THEOREMCHECKER_MODEL_CODEX_MECH     mechanical / clerical (V1 extraction, F1.5, F5) (default gpt-6.1-sol)
-//   THEOREMCHECKER_MODEL_CODEX_VERIFY   V1 fixer, V1.5 referee + clarity               (default gpt-6.1-sol)
-//   THEOREMCHECKER_MODEL_CLAUDE_MAIN    F1 planner, curator, gardener                  (default opus)
+//   LEANSMITH_MODEL_CODEX_KERNEL   F2 scaffolder, proof filler, F2.5–F4 reviewers (default gpt-6.1-sol)
+//   LEANSMITH_MODEL_CODEX_MECH     mechanical / clerical (V1 extraction, F1.5, F5) (default gpt-6.1-sol)
+//   LEANSMITH_MODEL_CODEX_VERIFY   V1 fixer, V1.5 referee + clarity               (default gpt-6.1-sol)
+//   LEANSMITH_MODEL_CLAUDE_MAIN    F1 planner, curator, gardener                  (default opus)
 //
 // On a machine with codex alone the claude roles run on the codex kernel model at high effort
 // (`claude_roles.ts`).
@@ -31,12 +31,12 @@ function envModel(key: string, def: string): string {
 export const MODELS = {
   /** codex, hard kernel-math / proof tier: the F2 scaffolder, the proof filler and the F2.5–F4 reviewers. */
   // Every gpt-6-sol tier moved to gpt-6.1-sol (user decision 2026-09-30).
-  codexKernel: envModel("THEOREMCHECKER_MODEL_CODEX_KERNEL", "gpt-6.1-sol"),
+  codexKernel: envModel("LEANSMITH_MODEL_CODEX_KERNEL", "gpt-6.1-sol"),
   /** codex, mechanical / clerical tier. */
-  codexMechanical: envModel("THEOREMCHECKER_MODEL_CODEX_MECH", "gpt-6.1-sol"),
+  codexMechanical: envModel("LEANSMITH_MODEL_CODEX_MECH", "gpt-6.1-sol"),
   /** codex, the verify tier: the V1 fixer and the V1.5 referee (nodes and symbols) (user decisions
    *  2026-09-26: gpt-5.6-sol; 2026-09-30: gpt-6.1-sol). */
-  codexVerify: envModel("THEOREMCHECKER_MODEL_CODEX_VERIFY", "gpt-6.1-sol"),
+  codexVerify: envModel("LEANSMITH_MODEL_CODEX_VERIFY", "gpt-6.1-sol"),
   /** claude, main reviewer / producer tier. */
-  claudeMain: envModel("THEOREMCHECKER_MODEL_CLAUDE_MAIN", "opus"),
+  claudeMain: envModel("LEANSMITH_MODEL_CLAUDE_MAIN", "opus"),
 } as const;

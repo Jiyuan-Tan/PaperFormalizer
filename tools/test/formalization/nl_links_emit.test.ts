@@ -147,7 +147,7 @@ describe("emitNlLinks", () => {
     // few rows with a list of their own: the run is told
     expect(nl.summary.warnings).toEqual([expect.stringMatching(/^only \d+% of the linked rows have a segment list of their own$/)]);
     expect(summary).toMatch(/^2\/2 result\(s\) linked row by row; rows asked 10, linked 9, unstated 1; lists of their own \d+%; WARNING: only/);
-    expect(lines).toContainEqual(expect.stringMatching(/^\[theoremchecker\] F5 nl-links thm:boot: rows asked 7, linked 6, unstated 1, unanswered 0; lists of their own 0%, most segments on a row 1$/));
+    expect(lines).toContainEqual(expect.stringMatching(/^\[leansmith\] F5 nl-links thm:boot: rows asked 7, linked 6, unstated 1, unanswered 0; lists of their own 0%, most segments on a row 1$/));
 
     // the page: the same rows, each with the link F5 gave it
     const source = declSource(await readFile(path.join(paths.leanDir, "Parts.lean"), "utf8"), "Papers.UserPaper.boot")!;

@@ -1,12 +1,12 @@
 // Condensed runtime echo of the orchestrator's playbook.
 //
-// WHY: over a long run the theoremchecker skill can drift out of the orchestrator's attention, so
+// WHY: over a long run the leansmith skill can drift out of the orchestrator's attention, so
 // on resume it can forget what to do at the checkpoint it just hit. This module re-surfaces, on
 // every F-stage halt, a SHORT operative reminder for the checkpoint just reached and the next
 // phase — carried in the `next_step_guidance` field of the pipeline.jsonl checkpoint line and
 // echoed to the console.
 //
-// SINGLE SOURCE OF TRUTH: `.claude/skills/theoremchecker/SKILL.md`. This file holds only the
+// SINGLE SOURCE OF TRUTH: `.claude/skills/leansmith/SKILL.md`. This file holds only the
 // STABLE invariants + a pointer to the relevant skill section — keep the pointers matched to the
 // current headings, and each entry to ~2 sentences. Point, don't paste.
 
@@ -62,7 +62,7 @@ export function checkpointGuidance(
 const F1_BLOCKED_GUIDANCE =
   "F1 BLOCKED: the planner wrote no usable plan — the message says what is missing, contradictory or out of reach; a plan on disk is the earlier one, or the file that did not parse. " +
   "A defect of the paper's statement or of the core → record it (`discovery/patches.json`; a transcription defect in `discovery/core_refs.json`) and `--resume --from-stage V1.5` (`V1` for the transcription). " +
-  "An obstacle you can settle for the planner → your directive in `flags.f1_revise_directive`, then `--resume`. A resume plans again before any review; never write the plan by hand. theoremchecker SKILL §'F stages'.";
+  "An obstacle you can settle for the planner → your directive in `flags.f1_revise_directive`, then `--resume`. A resume plans again before any review; never write the plan by hand. leansmith SKILL §'F stages'.";
 
 function perStageGuidance(
   stage: Stage,
@@ -73,18 +73,18 @@ function perStageGuidance(
     case "1.5":
       // The review bounced a plan F1 cannot (or could no longer) correct: not the audit checkpoint.
       if (flags.general_review_halt) {
-        return `F1.5 REVIEW HALT (the gate \`general_review_halt\` is set): ${GENERAL_REVIEW_HALT_EXITS}. Never edit the plan by hand. theoremchecker SKILL §'F stages'.`;
+        return `F1.5 REVIEW HALT (the gate \`general_review_halt\` is set): ${GENERAL_REVIEW_HALT_EXITS}. Never edit the plan by hand. leansmith SKILL §'F stages'.`;
       }
       return (
         "CONSOLIDATED CKPT 1: audit depth, reuse, fidelity, and contribution ownership. A genuinely published source-matched input may remain cited even when a headline invokes it; formalize every paper-owned/new step, including adaptations, embeddings, and splices. Never relabel difficult new work as cited or hand-patch the plan. " +
-        "Then F2–F4 follows its route; reject laundering, and never edit the paper — a paper error is a V1.5 finding or a minimal patch. theoremchecker SKILL §'F stages'."
+        "Then F2–F4 follows its route; reject laundering, and never edit the paper — a paper error is a V1.5 finding or a minimal patch. leansmith SKILL §'F stages'."
       );
 
     case "2":
       // The one F2 halt with a rule of its own; any other is the scaffolder not completing.
       return flags.missing_architecture
-        ? `F2 MISSING ARCHITECTURE (every resume is refused while an item is unbuilt): ${MISSING_ARCHITECTURE_EXIT}. theoremchecker SKILL §'F stages'.`
-        : "F2 DID NOT COMPLETE: the message is the scaffolder's reason; nothing advanced. `--resume` scaffolds again — put what it needs told in `flags.f2_scaffold_directive` first (it stays until you clear it); a defect of the plan is F1's (`--resume --from-stage F1`), one of the paper's statement a V1.5 finding. theoremchecker SKILL §'F stages'.";
+        ? `F2 MISSING ARCHITECTURE (every resume is refused while an item is unbuilt): ${MISSING_ARCHITECTURE_EXIT}. leansmith SKILL §'F stages'.`
+        : "F2 DID NOT COMPLETE: the message is the scaffolder's reason; nothing advanced. `--resume` scaffolds again — put what it needs told in `flags.f2_scaffold_directive` first (it stays until you clear it); a defect of the plan is F1's (`--resume --from-stage F1`), one of the paper's statement a V1.5 finding. leansmith SKILL §'F stages'.";
 
     // (the proof-review loop runs in the F2.5 slot; its halt carries the phase that escalated)
     case "2.5":
@@ -92,11 +92,11 @@ function perStageGuidance(
     case "3.5":
     case "4":
       if (flags.proof_loop_cap_hit) {
-        return `PROOF-LOOP CAP (the gate \`proof_loop_cap_hit\` is set: ${flags.proof_loop_cap_hit}): ${CAP_GATES.find((g) => g.flag === "proof_loop_cap_hit")!.guidance}. theoremchecker SKILL §'F stages'.`;
+        return `PROOF-LOOP CAP (the gate \`proof_loop_cap_hit\` is set: ${flags.proof_loop_cap_hit}): ${CAP_GATES.find((g) => g.flag === "proof_loop_cap_hit")!.guidance}. leansmith SKILL §'F stages'.`;
       }
       return (
         "F2–F4: follow the checkpoint route (hint / build-substrate / fix-source / unclear / bank-partial); keep running while revisions converge. A paper-statement finding comes back as a proposed rewind for you to approve or reject. " +
-        "Use fix-source only when the paper is wrong (a report finding, never an edit to the source); unclear is undetermined, so investigate. After hand de-laundering, re-run the loop (`--from-stage F2.5`) through F5 and record added_assumptions. theoremchecker SKILL §'F stages'."
+        "Use fix-source only when the paper is wrong (a report finding, never an edit to the source); unclear is undetermined, so investigate. After hand de-laundering, re-run the loop (`--from-stage F2.5`) through F5 and record added_assumptions. leansmith SKILL §'F stages'."
       );
 
     case "5":
@@ -112,7 +112,7 @@ function perStageGuidance(
  * halt), so the reminder names the gate the message is from and its exit.
  */
 function f5RefusalGuidance(message: string): string {
-  const exit = " V6 writes the report only once F5 completes. theoremchecker SKILL §'F stages'.";
+  const exit = " V6 writes the report only once F5 completes. leansmith SKILL §'F stages'.";
   if (/delivery audit REFUSED/.test(message)) {
     return (
       "F5 DELIVERY AUDIT REFUSED: the Lean is not the one the reviews cover — each finding names its node. A missing or stale convergence review, or a declaration changed since: run the loop again (`--from-stage F2.5`) so F4 reviews it. " +
@@ -148,7 +148,7 @@ export function rewindApprovalGuidance(autoMode: boolean): string {
     "PROPOSED REWIND: check the finding against the paper — the annotated paper named above marks it at its passage. It is right (a missing hypothesis, a wrong claim, a genuine second reading) → `--resume` (approve). " +
     "The paper already grants it (say where) or the reviewer misread the Lean → `--resume --reject-rewind \"<where the paper grants it>\"`. " +
     "The reviewer misread the PAPER → `--resume --reject-finding \"<the reading>\"` (yours; pinned into the core, binding for the formalization); when only the paper's author could say how it is meant, ask the user first (in the session and on the page: `orch.mjs ask`) and enter their answer. " +
-    "A batch is ruled on as one; to approve only some findings, delete the others from `state.verify.cross_stage_rewind.targets` first. theoremchecker SKILL §'Rewinds are proposed'."
+    "A batch is ruled on as one; to approve only some findings, delete the others from `state.verify.cross_stage_rewind.targets` first. leansmith SKILL §'Rewinds are proposed'."
   );
 }
 
@@ -157,7 +157,7 @@ export function patchCapGuidance(autoMode: boolean): string {
   return (
     (autoMode ? "⚙ AUTO MODE — rule on it yourself, then resume; do not ask the user. " : "") +
     "PATCH CAP: judge the last round (the annotated paper named above marks each finding at its passage). Converging (fewer or narrower findings each round) → `--resume --clear-patch-cap`. " +
-    "Oscillating, or the same weaker-condition dispute twice → `--resume --accept-cap`. theoremchecker SKILL §'Patch caps'."
+    "Oscillating, or the same weaker-condition dispute twice → `--resume --accept-cap`. leansmith SKILL §'Patch caps'."
   );
 }
 
@@ -174,7 +174,7 @@ export function weakeningRepairGuidance(autoMode: boolean, fullAuto = false): st
       "⚙ FULL AUTO — the owner delegated this decision: no one is asked. WEAKENED REPAIR: no repair keeps these main theorems at full strength. Read the annotated paper named above and re-derive each item against the paper's tex, then recommend on EVERY item: " +
       "`node tools/scripts/orch.mjs recommend <slug> --toolkit <toolkit> repair <node> <accept|decline|redo> \"<why>\" [--guidance \"<what to ask of the new repair>\"]` (a redo needs `--guidance`). " +
       "The last recommendation resumes the run with them (`verify --resume --accept-repair / --decline-repair / --redo-repair`, as recommended) and lists each for the owner's review on the page; keep your watcher armed. " +
-      "Only a finding that misreads the paper is yours to withdraw instead: `--resume --reject-finding \"<node>: <the reading>\"`. theoremchecker SKILL §'Who decides'."
+      "Only a finding that misreads the paper is yours to withdraw instead: `--resume --reject-finding \"<node>: <the reading>\"`. leansmith SKILL §'Who decides'."
     );
   }
   return (
@@ -183,7 +183,7 @@ export function weakeningRepairGuidance(autoMode: boolean, fullAuto = false): st
     "The USER decides each item on the paper's page (accept / decline / redo with guidance). Re-derive each against the paper's tex and put your recommendation beside it: " +
     "`node tools/scripts/orch.mjs recommend <slug> --toolkit <toolkit> repair <node> <accept|decline|redo> \"<why>\" [--guidance \"<what to ask of the new repair>\"]` (a redo needs `--guidance`). " +
     "Then tell the user it is waiting and keep your watcher armed: their \"Send my decisions\" resumes the run. A ruling they give you in the session you enter for them (`--resume --accept-repair [<node>,…]` · `--decline-repair \"[<node>,…: ]<reason>\"` · `--redo-repair \"<node>: <guidance>\"`; items no answer names are presented again). " +
-    "Only a finding that misreads the paper is yours to withdraw: `--resume --reject-finding \"<node>: <the reading>\"` (the printed statement stands under that reading, pinned into the core). theoremchecker SKILL §'Repairs never weaken the contribution'."
+    "Only a finding that misreads the paper is yours to withdraw: `--resume --reject-finding \"<node>: <the reading>\"` (the printed statement stands under that reading, pinned into the core). leansmith SKILL §'Repairs never weaken the contribution'."
   );
 }
 
@@ -195,7 +195,7 @@ export function renderCheckpointGuidance(autoMode: boolean): string {
     (autoMode ? "⚙ AUTO MODE — this is the tool's defect, not a paper judgement: never route it to the owner. " : "") +
     "RENDER CHECKPOINT: the listed blocks of the annotated paper print raw TeX (escaped text, a code point, an odd `$`, a pdflatex error). " +
     "A block that comes from a text in the run's record (transcription, reading, patch) is corrected there; a renderer defect is fixed with a test (`annotate_tex.ts` / `units.ts` / `annotated_paper.ts`) and recorded in `runs/<slug>/pipeline_issues.md`. " +
-    "Check the tree with `theoremchecker lint-annotated <slug>` after `theoremchecker annotate <slug>`; `--resume` renders again and continues where the run stopped. There is no owner waiver. theoremchecker SKILL §'Render checkpoint'."
+    "Check the tree with `leansmith lint-annotated <slug>` after `leansmith annotate <slug>`; `--resume` renders again and continues where the run stopped. There is no owner waiver. leansmith SKILL §'Render checkpoint'."
   );
 }
 
@@ -207,7 +207,7 @@ export function contractCheckpointGuidance(autoMode: boolean): string {
     (autoMode ? "⚙ AUTO MODE — this is a model-text defect, not a paper judgement and not the renderer's: never route it to the owner, never repair it in the renderer. " : "") +
     "CONTRACT CHECKPOINT: the listed model-written fragments still do not compile against the paper's preamble after their producer (named per group) wrote them again with the compiler's line. " +
     "Read the compiler lines: a prompt or contract gap is fixed in that producer's prompt / check; a text the run cannot re-ask (the owner's words, the transcription) is corrected in the run's record. " +
-    "Then `--resume` routes them back again and continues where the run stopped. theoremchecker SKILL §'Render checkpoint'."
+    "Then `--resume` routes them back again and continues where the run stopped. leansmith SKILL §'Render checkpoint'."
   );
 }
 

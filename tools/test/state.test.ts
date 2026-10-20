@@ -36,7 +36,7 @@ describe("state schema", () => {
   });
 
   it("round-trips a valid state and enforces qid/lean_subdir", async () => {
-    const repoRoot = await mkdtemp(path.join(os.tmpdir(), "theoremchecker-state-"));
+    const repoRoot = await mkdtemp(path.join(os.tmpdir(), "leansmith-state-"));
     await saveState(repoRoot, QID, fresh());
     const loaded = await loadState(repoRoot, QID);
     expect(loaded.lean_subdir).toBe(canonicalLeanSubdir(QID));
@@ -50,7 +50,7 @@ describe("state schema", () => {
   });
 
   it("loads and preserves retired state keys through a save", async () => {
-    const repoRoot = await mkdtemp(path.join(os.tmpdir(), "theoremchecker-legacy-state-"));
+    const repoRoot = await mkdtemp(path.join(os.tmpdir(), "leansmith-legacy-state-"));
     const legacy = {
       ...fresh(),
       pending_sorries: [{ file: "Papers/MinimalBasis/Basic.lean", line: 3, goal: "True" }],

@@ -1,10 +1,10 @@
-import TheoremCheckerIndexCore
+import LeanSmithIndexCore
 
 /-! # Paper-module index exe
 
 Indexes the Lean modules of one verified paper into a `library_index.json`-shaped file, with
-the toolkit's index extractor (`TheoremCheckerIndexCore.runIndex`, a copy of Causalean's).
-TheoremChecker's F5 docstring-coverage gate calls it as
+the toolkit's index extractor (`LeanSmithIndexCore.runIndex`, a copy of Causalean's).
+LeanSmith's F5 docstring-coverage gate calls it as
 
     lake -d <toolkit> exe paper_index -- --prefix Papers.<Pascal> --src-root <toolkit>
       --modules Papers.<Pascal>,Papers.<Pascal>.A,… --out <run>/formalization/docstring_coverage.json

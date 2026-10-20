@@ -27,7 +27,7 @@ export interface MissingArchEntry {
 
 const HEADER = `# Missing Architecture Ledger
 
-Auto-maintained by theoremchecker. Each block records infrastructure a run NEEDED but
+Auto-maintained by leansmith. Each block records infrastructure a run NEEDED but
 that does not yet exist in the base libraries or the toolkit. Pick an item, land it,
 then re-run. Blocks are keyed by \`qid:source\` and replaced in place on re-run.
 `;

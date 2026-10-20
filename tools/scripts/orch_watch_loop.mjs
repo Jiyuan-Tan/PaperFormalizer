@@ -25,9 +25,9 @@ const orch = path.join(path.dirname(fileURLToPath(import.meta.url)), "orch.mjs")
 
 // Stopped (a monitor's expiry, TaskStop), the loop stops its watches: one left behind would take a report the
 // next watch then never prints. (Killed outright, the loop cannot: each watch then sees it is gone and ends
-// without handing anything over — `THEOREMCHECKER_ORCH_PARENT`.)
+// without handing anything over — `LEANSMITH_ORCH_PARENT`.)
 const live = new Set();
-// where each watch names the owner's items it reported (`THEOREMCHECKER_ORCH_REPORTED`)
+// where each watch names the owner's items it reported (`LEANSMITH_ORCH_REPORTED`)
 const scratch = mkdtempSync(path.join(tmpdir(), "orch-loop-"));
 const stopAll = () => { for (const c of live) c.kill(); rmSync(scratch, { recursive: true, force: true }); };
 process.on("exit", stopAll);
@@ -36,7 +36,7 @@ process.stdout.on("error", () => process.exit(0));
 
 const watchOnce = (slug, known) => new Promise((resolve) => {
   const child = spawn(process.execPath, [orch, "watch", slug, "--toolkit", toolkit, ...(known.size ? ["--known", [...known].join(",")] : [])], {
-    stdio: ["ignore", "pipe", "pipe"], env: { ...process.env, THEOREMCHECKER_ORCH_PARENT: String(process.pid), THEOREMCHECKER_ORCH_REPORTED: path.join(scratch, `${slug}.json`) },
+    stdio: ["ignore", "pipe", "pipe"], env: { ...process.env, LEANSMITH_ORCH_PARENT: String(process.pid), LEANSMITH_ORCH_REPORTED: path.join(scratch, `${slug}.json`) },
   });
   live.add(child);
   let out = "";
@@ -46,7 +46,7 @@ const watchOnce = (slug, known) => new Promise((resolve) => {
   child.on("close", (code) => { live.delete(child); resolve({ code, out }); });
 });
 
-const PAUSE_MS = Number(process.env.THEOREMCHECKER_ORCH_LOOP_PAUSE_MS ?? 60_000);
+const PAUSE_MS = Number(process.env.LEANSMITH_ORCH_LOOP_PAUSE_MS ?? 60_000);
 const loop = async (slug) => {
   let known = new Set();
   let last = null;

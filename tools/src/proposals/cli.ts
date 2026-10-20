@@ -1,4 +1,4 @@
-// `theoremchecker propose <slug>`: the owner's side of a promotion round (`--round A|B`; default:
+// `leansmith propose <slug>`: the owner's side of a promotion round (`--round A|B`; default:
 // the round awaiting decisions, else B).
 //
 // Without `--apply`, (re)render the checklist from the batch JSON, keeping any decisions already
@@ -36,7 +36,7 @@ import {
 import { healthSummary, readToolkitGraph, toolkitHealth } from "./toolkit_graph.js";
 
 export const PROPOSE_USAGE =
-  "Usage: theoremchecker propose <slug> [--round A|B] [--apply [--recommended] | --reopen-deferred] [--toolkit <path>] [--dry-run]\n" +
+  "Usage: leansmith propose <slug> [--round A|B] [--apply [--recommended] | --reopen-deferred] [--toolkit <path>] [--dry-run]\n" +
   "  --reopen-deferred: propose again the round-B entries deferred for this run (with the current rules:\n" +
   "           a paper-shaped result in general form), as a new checklist for the owner\n" +
   "  --round: A = the cited results proposed after F1, B = the proved results proposed after the report\n" +
@@ -91,7 +91,7 @@ export function parseProposeArgs(argv: string[]): ProposeArgs {
 }
 
 export interface ProposeDeps {
-  /** Resume the verify run (default: the `theoremchecker verify` CLI with `--resume`). */
+  /** Resume the verify run (default: the `leansmith verify` CLI with `--resume`). */
   resumeVerify?: (argv: string[]) => Promise<void>;
   log?: (msg: string) => void;
   now?: () => Date;
@@ -128,7 +128,7 @@ export function applyFailurePath(cfg: ToolkitConfig, slug: string): string {
 }
 
 /**
- * `theoremchecker propose`. An `--apply`, however it ends — refused before anything is read,
+ * `leansmith propose`. An `--apply`, however it ends — refused before anything is read,
  * failed part-way, or done — leaves no `apply_<R>.pid` (the page writes one as it launches the
  * apply), and one that did not apply the round leaves why (`ApplyFailure`).
  */
@@ -212,7 +212,7 @@ async function propose(parsed: ReturnType<typeof parseProposeArgs>, deps: Propos
     if (rec.status === "pending_user") after.verify!.phase = "proposals_B";
     await saveState(cfg.toolkitRoot, slug, after);
     log(rec.status === "pending_user"
-      ? `re-proposed — decide each in ${rec.checklist_path}, then run: theoremchecker propose ${slug} --apply --toolkit ${cfg.toolkitRoot}${parsed.dryRun ? " --dry-run" : ""}`
+      ? `re-proposed — decide each in ${rec.checklist_path}, then run: leansmith propose ${slug} --apply --toolkit ${cfg.toolkitRoot}${parsed.dryRun ? " --dry-run" : ""}`
       : "the re-opened entries are no longer proposed (see the batch's \"Not proposed\" reasons).");
     return;
   }
@@ -223,7 +223,7 @@ async function propose(parsed: ReturnType<typeof parseProposeArgs>, deps: Propos
       round === "A"
         ? `run ${slug} has no round A (phase ${state.verify.phase}); it is held after F1.`
         : `run ${slug} has no promotion round B yet (phase ${state.verify.phase}); it starts after the V6 report of a full F run — ` +
-          `\`theoremchecker verify ${state.verify.source.input} --slug ${slug} --resume\` starts it on a finished run.`,
+          `\`leansmith verify ${state.verify.source.input} --slug ${slug} --resume\` starts it on a finished run.`,
     );
   }
   if (rec.status === "empty" || rec.status === "deferred") {
@@ -257,7 +257,7 @@ async function propose(parsed: ReturnType<typeof parseProposeArgs>, deps: Propos
 
   if (rec.status === "applied") {
     applyEnded(); // (no failed apply: the round is applied)
-    throw new Error(`promotion round ${round} of ${slug} was already applied at ${rec.applied_at}; continue the run with \`theoremchecker verify ${state.verify.source.input} --slug ${slug} --resume\`.`);
+    throw new Error(`promotion round ${round} of ${slug} was already applied at ${rec.applied_at}; continue the run with \`leansmith verify ${state.verify.source.input} --slug ${slug} --resume\`.`);
   }
   if (parsed.recommended) {
     // a full-auto run's apply: what is still pending takes the agent's recommendation, written into
@@ -308,17 +308,17 @@ async function propose(parsed: ReturnType<typeof parseProposeArgs>, deps: Propos
     fresh.verify!.source.input, "--slug", slug, "--toolkit", cfg.toolkitRoot, "--resume",
     ...(fresh.debug_mode ? ["--debug"] : []), ...(parsed.dryRun ? ["--dry-run"] : []),
   ];
-  log(`resuming the run: theoremchecker verify ${resumeArgv.join(" ")}`);
+  log(`resuming the run: leansmith verify ${resumeArgv.join(" ")}`);
   const resume = deps.resumeVerify ?? (async (a: string[]) => (await import("../verify/cli.js")).runVerifyCli(a));
   await resume(resumeArgv);
 }
 
 export const TOOLKIT_HEALTH_USAGE =
-  "Usage: theoremchecker toolkit-health [--toolkit <path>] [--all] [--json] [--no-rebuild]\n" +
+  "Usage: leansmith toolkit-health [--toolkit <path>] [--all] [--json] [--no-rebuild]\n" +
   "  re-derive <toolkit>/doc/toolkit_graph.json from the Lean (one `lake exe candidate_scan -- --graph` pass)\n" +
   "  and report the toolkit's health on its main results (--all: helpers too); --no-rebuild reads the graph on file";
 
-/** `theoremchecker toolkit-health`: the graph and its measures. Gardening findings are suggestions. */
+/** `leansmith toolkit-health`: the graph and its measures. Gardening findings are suggestions. */
 export async function runToolkitHealthCli(argv: string[], log: (m: string) => void = (m) => console.log(m)): Promise<void> {
   const i = argv.indexOf("--toolkit");
   const cfg = loadToolkitConfig({ explicit: i >= 0 ? argv[i + 1] ?? null : null });
@@ -334,15 +334,15 @@ export async function runToolkitHealthCli(argv: string[], log: (m: string) => vo
 }
 
 export const GARDEN_USAGE =
-  "Usage: theoremchecker garden [--toolkit <path>] [--no-rebuild] [--dry-run]\n" +
-  "       theoremchecker garden --verify <toolkit>/doc/proposals/garden-<stamp>.md [--items g-1,g-4] [--toolkit <path>]\n" +
+  "Usage: leansmith garden [--toolkit <path>] [--no-rebuild] [--dry-run]\n" +
+  "       leansmith garden --verify <toolkit>/doc/proposals/garden-<stamp>.md [--items g-1,g-4] [--toolkit <path>]\n" +
   "  without --verify: re-derive the toolkit graph (unless --no-rebuild) and write gardening suggestions\n" +
   "  (one Claude call) for the orchestrator to decide (an item that retires or removes a result goes to the\n" +
   "  owner). The orchestrator carries out each ACCEPTED item by editing the\n" +
   "  Lean (the toolkit committed first); --verify then checks the edits against the committed toolkit and\n" +
   "  records them in the ledger (--items: the accepted items carried out; default every accepted item)";
 
-/** `theoremchecker garden`: suggestions from the toolkit's graph, or the hand-applied items verified. */
+/** `leansmith garden`: suggestions from the toolkit's graph, or the hand-applied items verified. */
 export async function runGardenCli(argv: string[], log: (m: string) => void = (m) => console.log(`[garden] ${m}`)): Promise<void> {
   const value = (flag: string): string | null => {
     const i = argv.indexOf(flag);
@@ -376,5 +376,5 @@ export async function runGardenCli(argv: string[], log: (m: string) => void = (m
   const graph = argv.includes("--no-rebuild") ? await readToolkitGraph(cfg) : await refreshToolkitGraph({ toolkit: cfg, log });
   if (!graph) throw new Error(`no toolkit graph on file; run without --no-rebuild\n${GARDEN_USAGE}`);
   const out = await garden.runGardenRound({ toolkit: cfg, graph, log, dryRun: argv.includes("--dry-run") });
-  if (out) log(`decide each item in ${out.path} (retire/remove items go to the owner); carry out the accepted ones by hand, then: theoremchecker garden --verify ${out.path} --toolkit ${cfg.toolkitRoot}`);
+  if (out) log(`decide each item in ${out.path} (retire/remove items go to the owner); carry out the accepted ones by hand, then: leansmith garden --verify ${out.path} --toolkit ${cfg.toolkitRoot}`);
 }

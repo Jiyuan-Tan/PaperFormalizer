@@ -1,5 +1,5 @@
 #!/usr/bin/env node
-// Writes the states `theoremchecker demo` plays back (`tools/data/demo/snapshots/`): a dry run of the
+// Writes the states `leansmith demo` plays back (`tools/data/demo/snapshots/`): a dry run of the
 // demo paper (no model call, no Lean), its halts written in by hand — the referee's finding on Theorem 3
 // with the weakened repair the fixer suggests, Schur's inequality as a cited result for round A, the
 // rounds' entries in plain words, the agent's recommendations, the finished report and the toolkit's
@@ -30,7 +30,7 @@ const sh = (args, what) => {
   return r.stdout;
 };
 const tsx = path.join(TOOLS, "node_modules", "tsx", "dist", "cli.mjs");
-const cli = (...a) => sh([tsx, path.join(TOOLS, "bin", "theoremchecker.ts"), ...a], `theoremchecker ${a.join(" ")}`);
+const cli = (...a) => sh([tsx, path.join(TOOLS, "bin", "leansmith.ts"), ...a], `leansmith ${a.join(" ")}`);
 const orch = (...a) => sh([path.join(TOOLS, "scripts", "orch.mjs"), ...a], `orch.mjs ${a[0]}`);
 const verify = (...a) => cli("verify", PAPER, "--toolkit", tk, "--slug", SLUG, "--dry-run", ...a);
 const json = (f, edit) => { const v = JSON.parse(readFileSync(f, "utf8")); edit(v); writeFileSync(f, JSON.stringify(v, null, 2) + "\n"); };
@@ -40,7 +40,7 @@ const copy = (label) => sh([path.join(TOOLS, "scripts", "demo_capture.mjs"), "co
 rmSync(work, { recursive: true, force: true });
 mkdirSync(work, { recursive: true });
 cpSync(TEMPLATE, tk, { recursive: true });
-cpSync(path.join(tk, "theoremchecker.json.example"), path.join(tk, "theoremchecker.json"));
+cpSync(path.join(tk, "leansmith.json.example"), path.join(tk, "leansmith.json"));
 
 // start: the paper transcribed; Schur's inequality marked as the result it cites (round A offers it)
 verify("--stop-after", "V1");

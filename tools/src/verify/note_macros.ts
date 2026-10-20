@@ -598,7 +598,7 @@ export function scanNotes(scan: string, table: NoteMacroTable): NoteScan {
 
 /** The empty group a source file gets on a line the reading emptied inside a paragraph, marked so that
  * a text written from it can drop the line (`withoutFillerLines`). */
-export const SOURCE_FILLER = "{}% line emptied by TheoremChecker";
+export const SOURCE_FILLER = "{}% line emptied by LeanSmith";
 
 /**
  * `text` with the edits applied. `remove`: tokens are deleted inside their line and removed text leaves

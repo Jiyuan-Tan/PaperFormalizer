@@ -5,7 +5,7 @@ import { dryRunLeftover } from "../../src/verify/dry_run.js";
 
 const parse = parseVerifyArgsForTest;
 
-describe("theoremchecker verify argument parsing", () => {
+describe("leansmith verify argument parsing", () => {
   it("parses a bare input", () => {
     expect(parse(["paper.tex"])).toEqual({
       input: "paper.tex",

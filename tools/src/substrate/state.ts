@@ -77,7 +77,7 @@ export function clearStudyCap(state: SubstrateState, opts: StudyCapOptions): boo
  */
 export function studyExit(state: Pick<SubstrateState, "phase" | "terminalMessage" | "terminalEscalationKind">, slug: string, toolkitRoot: string): string {
   if (state.phase === "done") return "";
-  const cmd = (flags: string): string => `theoremchecker study ${slug} --resume${flags} --toolkit ${toolkitRoot}`;
+  const cmd = (flags: string): string => `leansmith study ${slug} --resume${flags} --toolkit ${toolkitRoot}`;
   const cap = studyCapOf(state);
   if (cap) return `Grant one more window with \`${cmd(` ${cap.flag}`)}\` (the staged Lean is kept; a second grant is the signal to stop), or leave the study.`;
   if (state.phase === "halted") return "Correct what the message names and run the command again (nothing was recorded).";

@@ -61,11 +61,11 @@ describe("fatal login vs transient failure", () => {
 
 describe("runCodex under a subscription login", () => {
   let home: string;
-  const saved = { home: process.env.CODEX_HOME, mode: process.env.THEOREMCHECKER_OPENAI_AUTH };
+  const saved = { home: process.env.CODEX_HOME, mode: process.env.LEANSMITH_OPENAI_AUTH };
   beforeEach(async () => {
     home = await mkdtemp(path.join(os.tmpdir(), "tc-codex-auth-"));
     process.env.CODEX_HOME = home;
-    process.env.THEOREMCHECKER_OPENAI_AUTH = "subscription";
+    process.env.LEANSMITH_OPENAI_AUTH = "subscription";
     calls.length = 0;
     resetCodexAuthForTest();
     resetChildRegistryForTest();
@@ -77,8 +77,8 @@ describe("runCodex under a subscription login", () => {
     setCodexSpawnStaggerForTest(CODEX_SPAWN_STAGGER_MS);
     if (saved.home === undefined) delete process.env.CODEX_HOME;
     else process.env.CODEX_HOME = saved.home;
-    if (saved.mode === undefined) delete process.env.THEOREMCHECKER_OPENAI_AUTH;
-    else process.env.THEOREMCHECKER_OPENAI_AUTH = saved.mode;
+    if (saved.mode === undefined) delete process.env.LEANSMITH_OPENAI_AUTH;
+    else process.env.LEANSMITH_OPENAI_AUTH = saved.mode;
     await rm(home, { recursive: true, force: true });
   });
   const fanOut = (n: number) => Promise.all(Array.from({ length: n }, (_, i) => runCodex({ prompt: `shard ${i}`, cwd: home, leanLsp: false })));
@@ -175,7 +175,7 @@ describe("the warm-up lock across runners", () => {
 
 describe("one at a time near the access token's expiry", () => {
   let home: string;
-  const saved = { home: process.env.CODEX_HOME, mode: process.env.THEOREMCHECKER_OPENAI_AUTH };
+  const saved = { home: process.env.CODEX_HOME, mode: process.env.LEANSMITH_OPENAI_AUTH };
   const warn = vi.fn();
   /** A ChatGPT `auth.json` whose access token expires at `expMs` (a fake JWT; only `exp` matters). */
   const writeAuth = async (expMs: number) => {
@@ -190,7 +190,7 @@ describe("one at a time near the access token's expiry", () => {
   beforeEach(async () => {
     home = await mkdtemp(path.join(os.tmpdir(), "tc-codex-exp-"));
     process.env.CODEX_HOME = home;
-    process.env.THEOREMCHECKER_OPENAI_AUTH = "subscription";
+    process.env.LEANSMITH_OPENAI_AUTH = "subscription";
     resetCodexAuthForTest();
     setCodexSpawnStaggerForTest(0);
     await writeFile(path.join(home, CODEX_AUTH_OK_FILE), `${new Date().toISOString()}\n`);
@@ -213,8 +213,8 @@ describe("one at a time near the access token's expiry", () => {
     setCodexSpawnStaggerForTest(CODEX_SPAWN_STAGGER_MS);
     if (saved.home === undefined) delete process.env.CODEX_HOME;
     else process.env.CODEX_HOME = saved.home;
-    if (saved.mode === undefined) delete process.env.THEOREMCHECKER_OPENAI_AUTH;
-    else process.env.THEOREMCHECKER_OPENAI_AUTH = saved.mode;
+    if (saved.mode === undefined) delete process.env.LEANSMITH_OPENAI_AUTH;
+    else process.env.LEANSMITH_OPENAI_AUTH = saved.mode;
     await rm(home, { recursive: true, force: true });
   });
   const fanOut = (n: number) => Promise.all(Array.from({ length: n }, (_, i) => runCodex({ prompt: `shard ${i}`, cwd: home, leanLsp: false })));
@@ -254,14 +254,14 @@ describe("resolveCodexSandboxMode", () => {
   it("lets the environment override local configuration", () => {
     expect(
       resolveCodexSandboxMode({
-        env: { THEOREMCHECKER_CODEX_SANDBOX: "workspace-write" },
+        env: { LEANSMITH_CODEX_SANDBOX: "workspace-write" },
         configured: "danger-full-access",
       }),
     ).toBe("workspace-write");
   });
 
   it("fails closed on an invalid override", () => {
-    expect(() => resolveCodexSandboxMode({ env: { THEOREMCHECKER_CODEX_SANDBOX: "read-only" } })).toThrow(
+    expect(() => resolveCodexSandboxMode({ env: { LEANSMITH_CODEX_SANDBOX: "read-only" } })).toThrow(
       /must be workspace-write or danger-full-access/,
     );
   });

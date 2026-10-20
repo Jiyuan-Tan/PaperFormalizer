@@ -2,7 +2,7 @@
    not a dashboard. JuliaMono for code, as there; the system monospace when offline. */
 @font-face { font-family: "JuliaMono"; src: url("https://cdn.jsdelivr.net/gh/cormullion/juliamono@master/webfonts/JuliaMono-Regular.woff2") format("woff2"); font-weight: 400; font-display: swap; }
 @font-face { font-family: "JuliaMono"; src: url("https://cdn.jsdelivr.net/gh/cormullion/juliamono@master/webfonts/JuliaMono-Bold.woff2") format("woff2"); font-weight: 700; font-display: swap; }
-/* TheoremChecker local UI — a parchment / cardinal system (paper column, contents rail,
+/* LeanSmith local UI — a parchment / cardinal system (paper column, contents rail,
    margin comments), plus the toolkit and library views. Light and dark follow the OS setting. */
 :root {
   --paper: #fdfcfa; --parchment: #f7f5f0; --parchment-deep: #f1eee7; --card: #ffffff;
@@ -715,7 +715,7 @@ ul.conds li code { font-size: var(--fs-2xs); opacity: 0.6; }
 /* the page of a shared paper (app.js snapshot mode): no run to follow */
 body.snapshot .pv-left > .side-h:first-child, body.snapshot #vstages { display: none; }
 
-/* the demo's tour (`theoremchecker demo`) */
+/* the demo's tour (`leansmith demo`) */
 .tour { position: fixed; right: 16px; bottom: 16px; z-index: 60; width: min(26rem, calc(100vw - 32px)); max-height: calc(100vh - var(--top) - 32px); overflow: auto; background: var(--card); color: var(--ink); border: 1px solid var(--rule); border-top: 3px solid var(--accent); border-radius: var(--r-card); box-shadow: 0 8px 28px var(--shadow); padding: 0.8rem 1rem; font-size: var(--fs-sm); }
 .tour.folded { width: auto; padding: 0.4rem; border-top-width: 1px; }
 /* moved off the step's target (`placeTour`); a short window keeps it to half its height */
