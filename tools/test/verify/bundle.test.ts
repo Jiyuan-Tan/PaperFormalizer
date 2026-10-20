@@ -13,7 +13,7 @@ import type { StateJson } from "../../src/types.js";
 import { compileTex, planAnnotations, readSourceTex, type CompileTex } from "../../src/verify/annotated_paper.js";
 import { readAnnotationRecords } from "../../src/verify/annotate_run.js";
 import { loadCatalog } from "../../src/toolkit/init.js";
-import { isBlockingTodo, renderTodo, writeBundle, type TodoItem } from "../../src/verify/bundle.js";
+import { isBlockingTodo, renderTodo, userPathIn, writeBundle, type TodoItem } from "../../src/verify/bundle.js";
 import { currentStatements, nodeTags, renderMatch } from "../../src/verify/bundle_match.js";
 import { buildF4Seal, checkF4Seal, runSealCli, sha256, type F4Seal } from "../../src/verify/f4_seal.js";
 import type { PageSnapshot } from "../../src/ui/page_snapshot.js";
@@ -836,5 +836,21 @@ describe("theoremchecker report", () => {
     const json = { lean_build: { ok: true, log_tail: "ok" }, sorry_scan: ["sorry in A.lean"], results: [{ lean: { decl: "D.a" }, axioms: ax }, { lean: null, axioms: null }] } as unknown as VerifyReportJson;
     expect(evidenceOnFile(json)).toEqual({ build: { ok: true, log_tail: "ok" }, sorry_scan: ["sorry in A.lean"], axioms: { "D.a": ax } });
     expect(evidenceOnFile({ ...json, lean_build: null })).toBeNull();
+  });
+});
+
+describe("the page snapshot keeps the machine's user out only where a path names it", () => {
+  it("a path names the user; the same word in prose does not", () => {
+    // the page is dropped when it names the user in a path, Unix or Windows (its backslashes doubled in JSON)
+    expect(userPathIn('"read /home/root/tk/Papers/X.lean"', "root")).toBe("/root");
+    expect(userPathIn('{"f":"C:\\\\Users\\\\Mark\\\\tk\\\\x.tex"}', "mark")).toBe("\\Mark");
+    expect(userPathIn("see ~lean/notes and more", "lean")).toBe("~lean");
+    expect(userPathIn('"/Users/mark"', "mark")).toBe("/mark");
+    // prose, or the name inside a longer one, is kept: a machine whose user is `root` once dropped every page saying "root-n"
+    expect(userPathIn('"the root-$n$ rate, a square root"', "root")).toBeNull();
+    expect(userPathIn('"/home/rooted/x"', "root")).toBeNull();
+    expect(userPathIn('"/opt/lean4/bin"', "lean")).toBeNull();
+    // a name too short to tell is not looked for
+    expect(userPathIn('"/home/jj/x"', "jj")).toBeNull();
   });
 });

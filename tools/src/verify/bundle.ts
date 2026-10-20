@@ -146,6 +146,16 @@ function machinePaths(dirs: readonly string[]): string[] {
   return [...dirs, repoRoot(), os.homedir(), os.tmpdir()].flatMap((p) => [path.resolve(p), real(p)]);
 }
 
+/** Where `text` names the machine's user `who` as part of a path — `/home/<who>`, `C:\\Users\\<who>` (in
+ *  JSON, its backslashes doubled), `~<who>`: the name right after a path separator or `~` and right
+ *  before another or the end of the path. The name as a word of prose ("the root-n rate" on a
+ *  machine whose user is `root`) is not a path. Null when it is named in none, or is too short to tell. Pure. */
+export function userPathIn(text: string, who: string): string | null {
+  if (who.length <= 2) return null;
+  const name = who.replace(/[.*+?^${}()|[\]\\]/gu, "\\$&");
+  return new RegExp(`(?:[\\\\/]|~)${name}(?=[\\\\/"'\\s:]|$)`, "iu").exec(text)?.[0] ?? null;
+}
+
 /** The compile log's located errors (`-file-line-error`), first few. */
 function logErrors(log: string): Array<{ file: string; line: number; msg: string }> {
   return [...log.matchAll(/^(?:\.\/)?([^\s:][^:\n]*\.(?:tex|sty|cls|bbl)):(\d+): (.*)$/gmu)].slice(0, 12).map((m) => ({ file: m[1]!, line: Number(m[2]), msg: m[3]!.trim() }));
@@ -564,7 +574,7 @@ export async function writeBundle(a: BundleArgs): Promise<BundleResult> {
     // The page is published: a home directory or this machine's user left in it (a path outside the
     // roots blanked above, quoted in a model's note) keeps it out of the bundle.
     const who = os.userInfo().username;
-    const left = (who.length > 2 && text.includes(who) ? `the user of this machine (\`${who}\`)` : null) ?? /\/(?:home|Users)\/[A-Za-z0-9._-]+/.exec(text)?.[0] ?? null;
+    const left = (userPathIn(text, who) ? `the user of this machine (\`${who}\`) in a path` : null) ?? /\/(?:home|Users)\/[A-Za-z0-9._-]+/.exec(text)?.[0] ?? null;
     if (left) throw new Error(`it names ${left}`);
     await writeFile(path.join(dir, PAGE_FILE), `${text}\n`, "utf8");
     page = PAGE_FILE;
