@@ -159,11 +159,17 @@ export interface SharedState {
   /** The run id (the slug), stamped on every save (see `saveState`). */
   qid?: string;
   /**
-   * Auto mode — set by `--auto`. When true the orchestrator makes every checkpoint decision
-   * itself and `--resume`s without asking the user. Persisted (latching) so a run stays
-   * autonomous across resumes, and re-surfaced on every checkpoint line (`checkpointGuidance`).
+   * Auto mode — the default (off under `verify --debug`), written by the verify runner from
+   * `debug_mode` / `full_auto`. When true the orchestrator makes every checkpoint decision itself and
+   * `--resume`s without asking the user; the owner's decisions stay theirs. Re-surfaced on every
+   * checkpoint line (`checkpointGuidance`).
    */
   auto_mode?: boolean;
+  /**
+   * Debug mode — set by `verify --debug`: auto mode off, so the orchestrator may bring a checkpoint
+   * ruling to the user. Latching: the run stays in debug mode across resumes.
+   */
+  debug_mode?: boolean;
   /**
    * Full auto — set by `verify --full-auto` (implies `auto_mode`). The owner delegates their own
    * decisions as well — a repair that would weaken a main result, the promotion rounds, any other
@@ -255,7 +261,7 @@ export interface PipelineContext {
   qid: string;
   dryRun: boolean;
   resume: boolean;
-  /** `--auto`: drive the run autonomously (see `SharedState.auto_mode`). Persisted onto state. */
+  /** Auto mode (the default; off under `verify --debug`): see `SharedState.auto_mode`. Persisted onto state. */
   auto?: boolean;
 }
 

@@ -339,7 +339,9 @@ would leave a main result weaker than printed, unless it is a bookkeeping assump
 asks you first); and the two **promotion rounds** that offer results to your toolkit. A lemma or
 definition the agent left weaker is listed on the page for your review. To hand all of these to the agent as
 well, start the run with `--full-auto`: each decision then takes the agent's recommendation and is
-listed for your review afterwards. If a cited source cannot be
+listed for your review afterwards. Every other halt the agent rules on itself, without asking you
+(auto mode, the default); start the run with `--debug` to have it bring a hard call to you instead.
+If a cited source cannot be
 fetched, the agent asks you for it. You can write to the agent from the page at any time ("Message the
 agent"), with files attached.
 
@@ -358,15 +360,13 @@ site of shared papers, <https://jiyuan-tan.github.io/TheoremCheckerPapers/>, aft
 GitHub in your browser — identity only, no permission. It is optional; `doc/USER_MANUAL.md`
 ("Sharing a finished paper") says what is published and how.
 
-## Status and known limits
+## What to expect
 
-Version 0.1 is a research preview. What to expect:
-
-- **The referee stages (V1, V1.5) are the reliable part.** They run without Lean, take an hour or a few
-  on a typical paper, and are where most findings come from. Start there: `--stop-after V1.5`.
-- **The Lean stages (F1–F5) work and need supervision.** A full paper takes many hours to days and
-  stops for rulings along the way; your agent handles most of them, and asks you for the ones that
-  are yours.
+- **Time.** The referee stages (V1, V1.5) run without Lean and take an hour or a few on a typical
+  paper; most findings come from them, and `--stop-after V1.5` gives a first report. The Lean stages
+  (F1–F5) take many hours to days on a full paper. A run stops for rulings along the way: your agent
+  makes most of them and asks you for the ones that are yours (with `--full-auto`, only for what it
+  cannot get itself, such as a cited source it cannot fetch).
 - **A finding is a claim to check.** The agent re-derives each one against your
   paper's text before reporting it; read the witness and decide for yourself.
 - **LaTeX it reads:** the common ways of writing a paper. Plain authors' note macros (a colour
@@ -376,11 +376,10 @@ Version 0.1 is a research preview. What to expect:
   annotated TeX in place of the PDF.
 - **Cited results are checked against their sources.** The agent fetches each cited work; one it
   cannot obtain it asks you for. A result used beyond what its source states is reported.
-- **Libraries are a help**, and StatLean is new: it builds and imports, and its first full run is
-  still to come.
+- **Libraries are a help**, not a requirement: a result they lack is proved in the paper's own Lean.
 
-When something goes wrong in the tool itself, the run's folder has `pipeline_issues.md`, where the
-agent records it. Please send that file back with the run's slug; it is how the tool improves.
+When something goes wrong in the tool itself, the agent records it in the run's
+`pipeline_issues.md`. Please open an issue on this repository with that file and the run's slug.
 
 ## One Mathlib, compatible libraries
 

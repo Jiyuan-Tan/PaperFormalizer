@@ -30,7 +30,8 @@ describe("theoremchecker verify argument parsing", () => {
       editReading: null,
       removeReading: null,
       umbrella: null,
-      auto: false,
+      auto: true,
+      debug: false,
       fullAuto: false,
       deferProposals: false,
       dryRun: false,
@@ -125,6 +126,7 @@ describe("theoremchecker verify argument parsing", () => {
       removeReading: null,
       umbrella: null,
       auto: true,
+      debug: false,
       fullAuto: false,
       deferProposals: true,
       dryRun: true,
@@ -179,6 +181,16 @@ describe("theoremchecker verify argument parsing", () => {
     expect(dryRunLeftover("/tk/runs/smoke")).toMatch(/dry run: it wrote \/tk\/runs\/smoke .* delete the directory/);
   });
 
+  it("auto mode is the default; --auto changes nothing; --debug turns it off, never with --full-auto; --stop takes neither", () => {
+    expect(parse(["paper.tex"])).toMatchObject({ auto: true, debug: false, fullAuto: false });
+    expect(parse(["paper.tex", "--auto"])).toMatchObject({ auto: true, debug: false });
+    expect(parse(["paper.tex", "--debug"])).toMatchObject({ auto: false, debug: true, fullAuto: false });
+    expect(parse(["paper.tex", "--full-auto"])).toMatchObject({ auto: true, debug: false, fullAuto: true });
+    expect(() => parse(["paper.tex", "--debug", "--full-auto"])).toThrow(/--debug and --full-auto exclude each other/);
+    expect(parse(["--stop", "--slug", "my_run"])).toMatchObject({ stop: true });
+    expect(() => parse(["--stop", "--slug", "my_run", "--debug"])).toThrow(/--stop combines only with --toolkit and --slug \(got debug\)/);
+    expect(() => parse(["--stop", "--slug", "my_run", "--auto"])).toThrow(/--stop combines only with --toolkit and --slug \(got auto\)/);
+  });
   it("requires --resume for --clear-gate", () => {
     expect(() => parse(["paper.tex", "--clear-gate", "proof_loop_cap_hit"])).toThrow(/--clear-gate requires --resume/);
   });

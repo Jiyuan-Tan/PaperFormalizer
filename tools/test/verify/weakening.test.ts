@@ -355,7 +355,7 @@ describe("the owner withdraws the finding (--reject-finding)", () => {
 });
 
 describe("the pipeline halt", () => {
-  it("halts in --auto, re-presents on a plain --resume, and continues to F1 on either answer", async () => {
+  it("halts in auto mode, re-presents on a plain --resume, and continues to F1 on either answer", async () => {
     for (const answer of ["accept", "decline", "reject"] as const) {
       const repoRoot = await mkdtemp(path.join(os.tmpdir(), "verify-weak-pipe-"));
       tmpDirs.push(repoRoot);

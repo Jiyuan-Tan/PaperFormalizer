@@ -36,7 +36,7 @@
  *
  * The receipt (`state.verify.cross_stage_rewind`, recorded `pending` by the F runner) is never
  * acted on silently. The runner PRESENTS it (`presentPendingRewind`: the finding, the statement,
- * the axis and the two ways forward) and halts, in every mode (`--auto` too: the orchestrator
+ * the axis and the two ways forward) and halts, in every mode (auto mode too: the orchestrator
  * skill judges). A plain `--resume` approves it (`applyPendingRewind`: the directive is written and
  * the receipt marked `applied`, so a resume never applies it twice); `--resume --reject-rewind
  * "<reason>"` rejects it (`rejectPendingRewind`: the receipt, the ruled-out list and a note on the
@@ -418,7 +418,7 @@ export async function presentPendingRewind(args: { runDir: string; state: StateJ
     ? `  left out of the batch (${left.length}):\n${left.map((t) => `    - ${t.node ?? t.obj_id ?? "?"}: ${t.why}`).join("\n")}\n`
     : "";
   const message =
-    `F-STAGE REWIND PROPOSED — the orchestrator decides (in every mode, --auto included).\n` +
+    `F-STAGE REWIND PROPOSED — the orchestrator decides (in every mode, auto mode included).\n` +
     findingsBlock +
     leftBlock +
     `  Continue with one of:\n` +

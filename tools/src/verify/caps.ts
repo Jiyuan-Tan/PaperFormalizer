@@ -13,7 +13,7 @@
  * A round due while a cap is reached never fails the run: the runner records
  * `state.verify.cap_reached` — the counter, the rounds spent, the level and its nodes, the findings
  * the round would carry and what the fixer's patch file proposes — and halts for the orchestrator
- * in every mode, `--auto` included. `--resume --clear-patch-cap` grants one more window (the
+ * in every mode, auto mode included. `--resume --clear-patch-cap` grants one more window (the
  * level's counter resets; at the backstop the total resets), `--resume --accept-cap` ends the
  * loop: at a V1.5 refinement cap the correct-but-non-minimal repair is accepted and F1 formalizes
  * it; otherwise V6 reports the state as it stands. Both are refused unless the run halted at a cap.
@@ -198,7 +198,7 @@ export function capMessage(cap: CapReached, slug: string, at: { rewind?: boolean
   if (cap.suggestions_only) {
     const findings = cap.findings.map((f) => `    - ${f.id} [${f.axis}] ${f.detail.replace(/\s+/g, " ").slice(0, 400)}`).join("\n");
     return (
-      `SUGGESTION LIMIT: ${rejected} (due at ${cap.origin}). The run halts for the orchestrator (in every mode, --auto included).\n` +
+      `SUGGESTION LIMIT: ${rejected} (due at ${cap.origin}). The run halts for the orchestrator (in every mode, auto mode included).\n` +
       `  The round would carry:\n${findings || "    (none)"}\n  Continue with one of:\n` +
       `    theoremchecker verify ${slug} --resume --clear-patch-cap   (the fixer answers these nodes again)\n` +
       `    theoremchecker verify ${slug} --resume --accept-cap        (end the loop; V6 reports)\n` +
@@ -218,7 +218,7 @@ export function capMessage(cap: CapReached, slug: string, at: { rewind?: boolean
         : `one more window of ${cap.cap} round(s) at level ${cap.level}; that level's counter resets`;
   return (
     `PATCH CAP: a ${cap.counter === "refinement_rounds" ? "refinement" : "patch"} round is due but ${which}${rejected ? `, and ${rejected}` : ""} ` +
-    `(${cap.rounds}/${cap.cap}; due at ${cap.origin}). The run halts for the orchestrator (in every mode, --auto included).\n` +
+    `(${cap.rounds}/${cap.cap}; due at ${cap.origin}). The run halts for the orchestrator (in every mode, auto mode included).\n` +
     `  The round would carry:\n${findings || "    (none)"}\n  The fixer's patch file proposes:\n${proposed}\n` +
     `  Continue with one of:\n` +
     `    theoremchecker verify ${slug} --resume --clear-patch-cap   (${window})\n` +

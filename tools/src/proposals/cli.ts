@@ -306,7 +306,7 @@ async function propose(parsed: ReturnType<typeof parseProposeArgs>, deps: Propos
 
   const resumeArgv = [
     fresh.verify!.source.input, "--slug", slug, "--toolkit", cfg.toolkitRoot, "--resume",
-    ...(fresh.auto_mode ? ["--auto"] : []), ...(parsed.dryRun ? ["--dry-run"] : []),
+    ...(fresh.debug_mode ? ["--debug"] : []), ...(parsed.dryRun ? ["--dry-run"] : []),
   ];
   log(`resuming the run: theoremchecker verify ${resumeArgv.join(" ")}`);
   const resume = deps.resumeVerify ?? (async (a: string[]) => (await import("../verify/cli.js")).runVerifyCli(a));

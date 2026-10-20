@@ -893,7 +893,7 @@ describe("runVerifyPipeline — the orchestrator rules on rewinds and caps (ever
     };
   }
 
-  it("--auto does not bypass the proposal; --reject-rewind records it, the F stages continue, and a repeat is a note", async () => {
+  it("auto mode does not bypass the proposal; --reject-rewind records it, the F stages continue, and a repeat is a note", async () => {
     const repoRoot = await tmpRepo();
     await atFormalization(repoRoot);
     const trace = newTrace();
@@ -1026,7 +1026,7 @@ describe("runVerifyPipeline — the orchestrator rules on rewinds and caps (ever
     };
   }
 
-  it("a V1.5 cap halts in --auto; a plain --resume stays halted; --clear-patch-cap opens a new window at V1", async () => {
+  it("a V1.5 cap halts in auto mode; a plain --resume stays halted; --clear-patch-cap opens a new window at V1", async () => {
     const repoRoot = await tmpRepo();
     const trace = newTrace();
     const args = { ...baseArgs(repoRoot, trace), auto: true };
@@ -1041,6 +1041,48 @@ describe("runVerifyPipeline — the orchestrator rules on rewinds and caps (ever
     expect(verify.patch_rounds).toBe(1);
     expect(verify.cap_reached ?? null).toBeNull();
     expect(verify.phase).toBe("done");
+  });
+
+  it("auto mode is the default; --debug turns it off for the run, kept by a later plain --resume", async () => {
+    const halt = async (debug: boolean, resumeDebug = debug) => {
+      const repoRoot = await tmpRepo();
+      const trace = newTrace();
+      const args = { ...baseArgs(repoRoot, trace), auto: !debug };
+      args.stages.v1_5 = cappingV1_5(trace);
+      const lines: string[] = [];
+      const spy = vi.spyOn(console, "log").mockImplementation((m: unknown) => { lines.push(String(m)); });
+      try {
+        await runVerifyPipeline(args);
+        const first = lines.join("\n");
+        lines.length = 0;
+        await runVerifyPipeline({ ...baseArgs(repoRoot, trace), stages: args.stages, resume: true, auto: !resumeDebug });
+        return { first, again: lines.join("\n"), state: await loadState(repoRoot, QID) };
+      } finally { spy.mockRestore(); }
+    };
+    const auto = await halt(false);
+    expect(auto.first).toContain("AUTO MODE");
+    expect(auto.again).toContain("AUTO MODE");
+    expect(auto.state).toMatchObject({ debug_mode: false, auto_mode: true });
+    const debug = await halt(true, false);
+    expect(debug.first).not.toContain("AUTO MODE");
+    expect(debug.again).not.toContain("AUTO MODE");
+    expect(debug.state).toMatchObject({ debug_mode: true, auto_mode: false });
+  });
+
+  it("full auto and debug mode exclude each other on a run: --full-auto ends debug mode; --debug leaves a full-auto run as it is", async () => {
+    const run = async (first: { auto: boolean; fullAuto?: boolean }, then: { auto: boolean; fullAuto?: boolean }) => {
+      const repoRoot = await tmpRepo();
+      const trace = newTrace();
+      const args = { ...baseArgs(repoRoot, trace), stopAfter: "V1.5" };
+      const spy = vi.spyOn(console, "log").mockImplementation(() => {});
+      try {
+        await runVerifyPipeline({ ...args, ...first });
+        await runVerifyPipeline({ ...args, ...then, resume: true });
+      } finally { spy.mockRestore(); }
+      return loadState(repoRoot, QID);
+    };
+    expect(await run({ auto: false }, { auto: true, fullAuto: true })).toMatchObject({ full_auto: true, debug_mode: false, auto_mode: true });
+    expect(await run({ auto: true, fullAuto: true }, { auto: false })).toMatchObject({ full_auto: true, debug_mode: false, auto_mode: true });
   });
 
   it("--accept-cap ends the loop at a V1.5 cap: the cap acceptance records, then V6 reports", async () => {
@@ -1129,7 +1171,7 @@ describe("runVerifyPipeline — rendering fallbacks are a checkpoint (user decis
     }
   };
 
-  it("an escaped fragment at the V1.5 pass end halts before F1 (--auto too); --resume renders again: still escaped → halted, clean → cleared and the run goes on", async () => {
+  it("an escaped fragment at the V1.5 pass end halts before F1 (auto mode too); --resume renders again: still escaped → halted, clean → cleared and the run goes on", async () => {
     await quiet(async (lines) => {
       const repoRoot = await tmpRepo();
       const trace = newTrace();

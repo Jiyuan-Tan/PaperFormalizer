@@ -178,7 +178,7 @@ the element it points at, and how it ends.
 
     npx tsx bin/theoremchecker.ts verify <paper.tex|dir|archive> [--toolkit <path>] [--slug s]
         [--main relpath] [--targets label,label] [--resume] [--from-stage <stage>] [--fresh-review]
-        [--from-transcript] [--stop-after <stage>] [--clear-gate <flag>]... [--defer-proposals] [--auto] [--dry-run]
+        [--from-transcript] [--stop-after <stage>] [--clear-gate <flag>]... [--defer-proposals] [--debug | --full-auto] [--dry-run]
         [--reject-rewind "<reason>"] [--clear-patch-cap] [--accept-cap]
         [--accept-repair [<node>,…]] [--decline-repair "[<node>,…: ]<reason>"] [--redo-repair "<node>: <guidance>"]...
         [--reject-finding "[<node>: [bookkeeping: ]]<reading>"]... [--add-condition "<node>: <condition>"]...
@@ -204,8 +204,10 @@ its full account is (the orchestrator guide's "Halt options" table says who rule
 - `--targets` limits the run to the named results (and what they rest on).
 - `--clear-gate <flag>` (with `--resume`) clears a resume-blocking cap gate that the halt message
   names; it is applied as the run is entered, whatever stage the resume starts at.
-- `--auto` lets an orchestrating agent take checkpoint decisions itself; it persists across resumes.
-- `--full-auto` (implies `--auto`; persists across resumes) delegates your own decisions as well: a
+- Auto mode is the default: the orchestrating agent takes the checkpoint decisions itself, without
+  asking you; your own decisions (below) stay yours. `--debug` (persists across resumes) turns it off:
+  the agent may then bring a checkpoint ruling to you. `--auto` is accepted and changes nothing.
+- `--full-auto` (persists across resumes; not with `--debug`) delegates your own decisions as well: a
   repair that would weaken a main result, the promotion rounds, and any other ruling that would
   weaken a main result take the agent's recommendation. Once the agent has recommended on every item,
   the decision is carried out as "Accept all recommendations" would, and each one appears under
@@ -1140,7 +1142,7 @@ restart it; after a hand edit of the Lean at a halt that lowers the proved count
 What a round offers, what an entry shows and how the user decides it are in "Promoting results into
 your toolkit". The agent's part and the mechanics:
 
-**Promotion is always the owner's decision, in every mode, `--auto` included.** At both promotion
+**Promotion is always the owner's decision, in every mode, auto mode included.** At both promotion
 points present the checklist to the user: per entry its title, reference, content in words, why it
 is reusable, the evidence (recurrence, closest existing results, the checker's verdict), and your
 recommendation (accept, accept_with_edits, generalize_first, decline or defer) with its reason. Put
@@ -1339,7 +1341,7 @@ the paper, stops the run for the agent without a proposal.
 
 An F2.5/F3/F4 `fix-source [statement-wrong]` or statement-wording `unclear` escalation is never
 routed silently: the run halts (every mode,
-`--auto` included — in auto mode YOU judge, without asking the user) and prints the finding — F
+auto mode included — in auto mode, the default, YOU judge, without asking the user) and prints the finding — F
 stage, route, statement, axis, the repair it would ask for — with the receipt in
 `state.verify.cross_stage_rewind` (`pending`, `presented`). A finding may name an assumption or
 definition of the core: the finding lands on that node, and the fixer replaces its printed text
@@ -1539,10 +1541,10 @@ the next V1.5 pass confirms it; the report shows it `repaired` with "narrowed: �
 paper as a normal repair whose note ends "This narrows the lemma: …". No halt. If a narrowed lemma
 leaves a main theorem unprovable at full strength, that theorem's own halt is where it is ruled on
 (fix as you go shows the narrowed lemma in its binding dependency verdicts). Only a pending
-suggestion on a main theorem halts, in every mode, `--auto` included, with
+suggestion on a main theorem halts, in every mode, auto mode included, with
 `state.verify.weakening_repair` (node, printed claim, proposed claim, what is given up, witness) —
 main theorems only. It is the user's decision, made on the paper's page: you
-recommend, they rule, `--auto` included. `--resume --accept-repair` applies the
+recommend, they rule, auto mode included. `--resume --accept-repair` applies the
 suggestions as patches (`accepted_weakening`; V1.5 confirms them; reported `repaired` with
 "contribution narrowed: …"). `--resume --decline-repair "<reason>"` reports each result `refuted` (`not_determined` when the paper leaves its statement open)
 (claim, witness, the declined suggestion) and descopes it from Lean with every result resting on

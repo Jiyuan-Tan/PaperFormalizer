@@ -24,11 +24,13 @@ import { warmUpLeanOrThrow } from "../shared/lean_warmup.js";
 export const USAGE =
   "Usage: theoremchecker verify <paper.tex|dir|archive> [--toolkit <path>] [--slug s] [--main relpath] " +
   "[--targets label,label] [--resume] " +
-  "[--from-stage <stage>] [--fresh-review] [--from-transcript] [--stop-after <stage>] [--clear-gate <flag>]... [--defer-proposals] [--auto] [--full-auto] [--dry-run]\n" +
+  "[--from-stage <stage>] [--fresh-review] [--from-transcript] [--stop-after <stage>] [--clear-gate <flag>]... [--defer-proposals] [--debug | --full-auto] [--dry-run]\n" +
   "  <paper.tex>: a .tex that includes files lying beside it is taken with its directory (the file the main one);\n" +
   "  one whose included .tex files are missing is refused — pass the paper's directory or an archive\n" +
   "  --defer-proposals: skip toolkit promotion round A (after F1); the paper's cited results stay assumptions\n" +
-  "  --full-auto (implies --auto; kept across resumes): the owner's decisions are delegated as well — a repair that\n" +
+  "  auto mode is the default: the orchestrating agent rules on every checkpoint itself, without asking; the owner's\n" +
+  "  decisions stay the owner's. --debug (kept across resumes) turns it off: the agent may bring a ruling to the user\n" +
+  "  --full-auto (kept across resumes): the owner's decisions are delegated as well — a repair that\n" +
   "  would weaken a main result and the promotion rounds take the agent's recommendation on each item, listed for\n" +
   "  the owner's review on the page\n" +
   "  verify --stop --slug <s> [--toolkit <path>] (no other flag; the paper in place of --slug names the same run):\n" +
@@ -50,7 +52,7 @@ export const USAGE =
   "  With --resume, --slug alone names the run: the paper it was launched on is read again.\n" +
   "  The run id is the slug: --slug, else the input's file name. --main applies at a cold start only; --targets at a\n" +
   "  cold start or with --from-stage V1 (the new transcription takes the new scope), never with a plain --resume.\n" +
-  "  An F-stage finding on a paper statement halts as a PROPOSED rewind (every mode, --auto too): --resume\n" +
+  "  An F-stage finding on a paper statement halts as a PROPOSED rewind (every mode, auto mode too): --resume\n" +
   "  approves it (a V1 patch round), --resume --reject-rewind \"<reason>\" rejects it (the F stages continue).\n" +
   "  A patch round due at its cap (3 error rounds per dependency level, a whole-run backstop, 3 refinement rounds)\n" +
   "  halts: --resume --clear-patch-cap grants one more window (that level's), --resume\n" +
@@ -135,8 +137,11 @@ export interface VerifyArgs {
   /** `--umbrella <node>` / `--umbrella "<node>: <title>"` (with `--resume`; repeatable): a split repair
    * becomes the umbrella form without a fixer round (`owner_rulings.ts` `convertToUmbrella`). */
   umbrella: string[] | null;
+  /** Auto mode: on unless `--debug`. */
   auto: boolean;
-  /** `--full-auto` (implies `auto`): the owner's decisions take the agent's recommendations (`SharedState.full_auto`). */
+  /** `--debug` (latching onto `state.debug_mode`): auto mode off for the run. */
+  debug: boolean;
+  /** `--full-auto`: the owner's decisions take the agent's recommendations (`SharedState.full_auto`). */
   fullAuto: boolean;
   /** `--defer-proposals`: skip toolkit promotion round A. */
   deferProposals: boolean;
@@ -186,7 +191,11 @@ function parseVerifyArgs(argv: string[]): VerifyArgs {
   // `verify --resume paper.tex` and `verify paper.tex --resume` behave alike.
   const resume = takeFlag("--resume");
   const fullAuto = takeFlag("--full-auto");
-  const auto = takeFlag("--auto") || fullAuto;
+  // auto mode is the default: `--auto` is accepted and changes nothing; `--debug` turns it off
+  const autoFlag = takeFlag("--auto");
+  const debug = takeFlag("--debug");
+  if (debug && fullAuto) throw usageError("--debug and --full-auto exclude each other: --debug turns auto mode off.");
+  const auto = !debug;
   const deferProposals = takeFlag("--defer-proposals");
   const dryRun = takeFlag("--dry-run");
   const freshReview = takeFlag("--fresh-review");
@@ -326,7 +335,7 @@ function parseVerifyArgs(argv: string[]): VerifyArgs {
   }
 
   if (stop) {
-    const others = Object.entries({ resume, auto, fullAuto, deferProposals, dryRun, freshReview, fromTranscript, main, targets, fromStage, stopAfter, answers: answers.length > 0, clearGates: clearGates.length > 0 })
+    const others = Object.entries({ resume, auto: autoFlag, debug, fullAuto, deferProposals, dryRun, freshReview, fromTranscript, main, targets, fromStage, stopAfter, answers: answers.length > 0, clearGates: clearGates.length > 0 })
       .filter(([, v]) => v !== false && v !== null)
       .map(([k]) => k);
     if (others.length > 0) throw usageError(`--stop combines only with --toolkit and --slug (got ${others.join(", ")}).`);
@@ -340,7 +349,7 @@ function parseVerifyArgs(argv: string[]): VerifyArgs {
     if (fromStage || freshReview) throw usageError("--from-transcript already re-enters at a fresh V1.5; it does not combine with --from-stage or --fresh-review.");
     if (answers.length > 0) throw usageError(`--from-transcript clears every halt; it does not combine with ${answers.join(", ")}.`);
   }
-  return { input, toolkit, slug, main, targets, resume, fromStage, stopAfter, clearGates, freshReview, fromTranscript, rejectRewind, clearPatchCap, acceptCap, acceptRepair, declineRepair, redoRepair, rejectFinding, addCondition, editReading, removeReading, umbrella, auto, fullAuto, deferProposals, dryRun, stop };
+  return { input, toolkit, slug, main, targets, resume, fromStage, stopAfter, clearGates, freshReview, fromTranscript, rejectRewind, clearPatchCap, acceptCap, acceptRepair, declineRepair, redoRepair, rejectFinding, addCondition, editReading, removeReading, umbrella, auto, debug, fullAuto, deferProposals, dryRun, stop };
 }
 
 function stageIndex(stage: VerifyFromStage): number {

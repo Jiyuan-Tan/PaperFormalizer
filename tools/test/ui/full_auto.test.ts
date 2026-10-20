@@ -34,7 +34,7 @@ function fixture(state: Record<string, unknown>) {
 }
 
 describe("verify --full-auto", () => {
-  it("implies --auto and is said at the halts it changes", () => {
+  it("is auto mode and is said at the halts it changes", () => {
     const p = parseVerifyArgsForTest(["paper.tex", "--full-auto"]);
     expect(p.fullAuto).toBe(true);
     expect(p.auto).toBe(true);

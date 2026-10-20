@@ -629,7 +629,7 @@ export interface CrossStageRewind {
    * presented it approves it (`applied`, or `refused` when nothing can be routed);
    * `--resume --reject-rewind "<reason>"` rejects it (`rejected`). */
   status: "pending" | "applied" | "refused" | "rejected";
-  /** Set when the runner halted to present it for approval (every mode, `--auto` included). */
+  /** Set when the runner halted to present it for approval (every mode, auto mode included). */
   presented?: boolean;
   /** The orchestrator's reason (set when rejected). */
   rejected_reason?: string;

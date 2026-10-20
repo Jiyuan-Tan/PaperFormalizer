@@ -75,8 +75,10 @@ export const stateSchema = z
     cited_checks: z.array(citedCheckSchema).default([]),
     cited_review_receipts: z.array(citedReviewReceiptSchema).default([]),
     delivery_review_receipts: z.array(deliveryReviewReceiptSchema).default([]),
-    // `--auto`: persisted autonomy flag (see SharedState.auto_mode).
+    // auto mode, the default: persisted autonomy flag (see SharedState.auto_mode).
     auto_mode: z.boolean().default(false),
+    // `--debug`: auto mode off for this run (see SharedState.debug_mode).
+    debug_mode: z.boolean().default(false),
     // `--full-auto`: the owner's decisions are delegated too (see SharedState.full_auto).
     full_auto: z.boolean().default(false),
     // The CLI that runs this run's claude roles, recorded at its first decision (`claude_roles.ts`).

@@ -21,7 +21,7 @@
  * accepted ones with the study pipeline and points the plan at them); `--defer-proposals` skips it,
  * and a round with nothing proposed continues without stopping. Round B (`proposals_B`), after the
  * report of a full F run: the paper's proved results are proposed the same way. The decisions are
- * the owner's in every mode (`--auto` too). `--from-stage V1|V1.5|F1` sets round A aside (it is
+ * the owner's in every mode (auto mode too). `--from-stage V1|V1.5|F1` sets round A aside (it is
  * held again after the new plan); a run already past F1 when round A was introduced is not sent
  * back to it.
  *
@@ -29,7 +29,7 @@
  * F-stage finding that a paper
  * statement is wrong or admits several readings (an F2.5–F4 proof-review escalation) comes back
  * from the F runner as a pending receipt (`state.verify.cross_stage_rewind`). The runner presents it
- * and halts in every mode (`--auto` too). `--resume` approves it: a V1 patch round
+ * and halts in every mode (auto mode too). `--resume` approves it: a V1 patch round
  * (`cross_stage_rewind.ts`) — fixer → V1 → V1.5 (only the changed nodes are graded) → F1 re-plans.
  * `--resume --reject-rewind "<reason>"` rejects it: recorded, and the F stages continue; the same
  * finding on the same node is a note from then on. A finding may name an assumption or definition
@@ -156,8 +156,10 @@ export interface VerifyPipelineArgs {
   fromStage: string | null;
   /** Halt once this stage (`V1` | `V1.5` | `F*` | `V6`) completes; `--resume` continues. */
   stopAfter?: string | null;
+  /** Auto mode, the default; `false` is `--debug`, which latches onto `state.debug_mode` (the run's
+   *  mode is `autoMode()` below, read from the state). */
   auto: boolean;
-  /** `--full-auto` (implies `auto`; latching onto `state.full_auto`): the owner's decisions take the
+  /** `--full-auto` (implies auto mode; latching onto `state.full_auto`): the owner's decisions take the
    *  agent's recommendations. */
   fullAuto?: boolean;
   dryRun: boolean;
@@ -472,8 +474,15 @@ export async function runVerifyPipeline(given: VerifyPipelineArgs): Promise<Veri
     log(`seeded ${stateFile} (main=${prepared.mainFile}, ${prepared.inputKind})`);
   }
   // `--full-auto` latches onto the state: the owner's decisions take the agent's recommendations from here on.
-  if (args.fullAuto && state.full_auto !== true) { state.full_auto = true; state.auto_mode = true; await saveState(repoRoot, qid, state); }
+  if (args.fullAuto && state.full_auto !== true) { state.full_auto = true; state.debug_mode = false; await saveState(repoRoot, qid, state); }
+  // `--debug` (`auto: false`) latches too: auto mode stays off for the run. A full-auto run is never in debug mode.
+  if (args.auto === false && state.debug_mode !== true) {
+    if (state.full_auto === true) log("--debug ignored: this run is in full auto, which it keeps across resumes");
+    else { state.debug_mode = true; await saveState(repoRoot, qid, state); }
+  }
   const fullAuto = (): boolean => state.full_auto === true;
+  const autoMode = (): boolean => fullAuto() || state.debug_mode !== true;
+  if (state.auto_mode !== autoMode()) { state.auto_mode = autoMode(); await saveState(repoRoot, qid, state); }
   if (stateExists && args.targets !== null && args.fromStage === "V1") {
     // A new transcription takes the new scope (`stage_v1.ts` `computeScope` reads `verify.targets`).
     verifyBlock(state, stateFile).targets = args.targets;
@@ -617,7 +626,7 @@ export async function runVerifyPipeline(given: VerifyPipelineArgs): Promise<Veri
           `    theoremchecker verify ${args.input} --resume   (renders the annotated paper again; the run continues where it stopped once it is clean)\n` +
           `  (with the --toolkit / --slug / --dry-run the run was started with; \`theoremchecker lint-annotated <slug>\` re-checks a tree written by \`theoremchecker annotate <slug>\`)`,
       );
-      log(renderCheckpointGuidance(args.auto));
+      log(renderCheckpointGuidance(autoMode()));
       return "halt";
     }
     // (Also with no fragment in this render: one routed earlier may still wait for its producer's pass.)
@@ -633,7 +642,7 @@ export async function runVerifyPipeline(given: VerifyPipelineArgs): Promise<Veri
           `    theoremchecker verify ${args.input} --resume   (routes the fragments to their producers again; the run continues where it stopped once they compile)\n` +
           `  (with the --toolkit / --slug / --dry-run the run was started with)`,
       );
-      log(contractCheckpointGuidance(args.auto));
+      log(contractCheckpointGuidance(autoMode()));
       return "halt";
     }
     if (verify.render_checkpoint) {
@@ -658,7 +667,7 @@ export async function runVerifyPipeline(given: VerifyPipelineArgs): Promise<Veri
     const a = annotated ?? (await annotate("patch cap halt"));
     if (await annotationHalt(a, "decision")) return verify;
     log(withAnnotatedPaper(capMessage(verify.cap_reached!, args.input, { rewind: verify.cross_stage_rewind?.status === "pending" }), a));
-    log(patchCapGuidance(args.auto));
+    log(patchCapGuidance(autoMode()));
     return verify;
   };
 
@@ -674,7 +683,7 @@ export async function runVerifyPipeline(given: VerifyPipelineArgs): Promise<Veri
       return null;
     }
     log(withAnnotatedPaper(weakeningMessage(verify.weakening_repair!, args.input, verify.paper_errors), a));
-    log(weakeningRepairGuidance(args.auto, fullAuto()));
+    log(weakeningRepairGuidance(autoMode(), fullAuto()));
     return verify;
   };
 
@@ -740,7 +749,7 @@ export async function runVerifyPipeline(given: VerifyPipelineArgs): Promise<Veri
         const shown = again.kind === "present" ? await presentRewindMessage(again.message) : again.message;
         if (shown === null) return "halt";
         log(shown);
-        if (again.kind === "present") log(rewindApprovalGuidance(args.auto));
+        if (again.kind === "present") log(rewindApprovalGuidance(autoMode()));
         return again.kind === "repeat" ? "continue" : again.kind === "refused" ? refusedFollowup() : "halt";
       }
       const n = rec.targets?.filter((t) => t.status !== "refused" && t.status !== "repeat").length ?? 1;
@@ -774,7 +783,7 @@ export async function runVerifyPipeline(given: VerifyPipelineArgs): Promise<Veri
       return "continue";
     }
     if (p.kind === "refused") return refusedFollowup();
-    log(rewindApprovalGuidance(args.auto));
+    log(rewindApprovalGuidance(autoMode()));
     return "halt";
   };
 
@@ -1406,7 +1415,7 @@ export async function runVerifyPipeline(given: VerifyPipelineArgs): Promise<Veri
           toolkit,
           qid,
           dryRun,
-          auto: args.auto || fullAuto(),
+          auto: autoMode(),
           startStage,
           stopAfterStage: roundAGate ? ("1" as Stage) : userStopAfter,
         });

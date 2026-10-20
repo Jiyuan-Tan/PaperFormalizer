@@ -20,7 +20,7 @@ export const THEOREMCHECKER_USAGE =
   "      the local web UI (127.0.0.1 only): toolkit, library, and each paper's run, live; decisions run the CLI\n" +
   "  theoremchecker verify <paper.tex|dir|archive> [--toolkit <path>] [--slug s] [--main relpath]\n" +
   "                        [--targets label,label] [--resume] [--from-stage <stage>] [--fresh-review] [--from-transcript]\n" +
-  "                        [--stop-after <stage>] [--clear-gate <flag>]... [--defer-proposals] [--auto] [--full-auto] [--dry-run]\n" +
+  "                        [--stop-after <stage>] [--clear-gate <flag>]... [--defer-proposals] [--debug | --full-auto] [--dry-run]\n" +
   "                        answering a halt (each with --resume): [--reject-rewind \"<reason>\"] [--clear-patch-cap] [--accept-cap]\n" +
   "                        [--accept-repair [<node>,…]] [--decline-repair \"[<node>,…: ]<reason>\"] [--redo-repair \"<node>: <guidance>\"]...\n" +
   "                        [--reject-finding \"[<node>: [bookkeeping: ]]<reading>\"]... [--add-condition \"<node>: <condition>\"]...\n" +

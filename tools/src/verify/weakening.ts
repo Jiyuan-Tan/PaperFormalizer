@@ -25,7 +25,7 @@
  * theorem's halt is where the owner decides.
  *
  * A pending suggestion on a main theorem halts the run for the paper's OWNER, in every mode
- * (`--auto` included), with one receipt for the batch (`state.verify.weakening_repair`):
+ * (auto mode included), with one receipt for the batch (`state.verify.weakening_repair`):
  *
  *   --resume --accept-repair             the suggestions become patches (`accepted_weakening`), a
  *                                        V1.5 pass confirms them, the report shows each result
@@ -343,7 +343,7 @@ export function weakeningMessage(rec: WeakeningRepair, slug: string, ledger?: Re
     .join("\n");
   return (
     `WEAKENED REPAIR: no repair keeps ${rec.items.length} main theorem(s) at full strength; the strongest true version is suggested. ` +
-    "The run halts for the paper's owner (in every mode, --auto included).\n" +
+    "The run halts for the paper's owner (in every mode, auto mode included).\n" +
     `${items}\n  Continue with one of:\n` +
     `    theoremchecker verify ${slug} --resume --accept-repair              (apply them; a V1.5 pass confirms them; reported repaired, contribution narrowed)\n` +
     `    theoremchecker verify ${slug} --resume --decline-repair "<reason>"  (report them ${unrepairedWord(rec.items.map((i) => i.node), ledger)}; they and what rests on them leave Lean; the run goes on)\n` +

@@ -50,7 +50,7 @@ repository and the toolkit (your harness's scratch directory, else one under the
 ```
 npx tsx bin/theoremchecker.ts verify <paper.tex|dir|archive> [--toolkit <path>] [--slug s] [--main relpath]
     [--targets l1,l2] [--resume] [--from-stage V1|V1.5|F1|F1.5|F2|F2.5|F5|V6] [--fresh-review] [--from-transcript]
-    [--stop-after <stage>] [--clear-gate <flag>]... [--defer-proposals] [--auto] [--full-auto] [--dry-run]
+    [--stop-after <stage>] [--clear-gate <flag>]... [--defer-proposals] [--debug | --full-auto] [--dry-run]
     [the answers of "Halt options", each with --resume]
 npx tsx bin/theoremchecker.ts verify --stop --slug s [--toolkit <path>]
 node tools/scripts/orch.mjs <watch|decided|handled|ask|reply|recommend|done|detach> <slug> --toolkit <path> …
@@ -99,7 +99,7 @@ attach is yours too.
 | a ruling that leaves a lemma or a definition weaker, no main result assuming more | you | make it and record it: `orch.mjs decided` |
 | a garden item that retires or removes a result | the user | put it to them in plain words ("V6 and the promotion rounds") |
 | on a run the user started with `--full-auto` (`state.json` `full_auto`), all of the above | you | recommend on every item as above, with the same care: the recommendation that completes a decision carries it out (a resume with the rulings, or `propose --apply --recommended`) and lists it for the user's review; any other weakening ruling you make, enter and record with `orch.mjs decided` ("Full auto: …"); `ask` only with `--owner-only`, for what only they can give. Never turn it on yourself |
-| everything else | you | decide and resume |
+| everything else | you | decide and resume; on a run the user started with `--debug` (`state.json` `debug_mode`), bring a hard call to them first (`orch.mjs ask`) |
 
 **The user decides two things (unless they started the run with `--full-auto`): anything that would weaken a main result, at every stage, and what enters their
 toolkit. Every other ruling is yours.** Weakening is wider than a fixer's suggested repair: when
@@ -114,7 +114,7 @@ makes an object well defined or measurable, an integrability that only lets an e
 any reader supplies. The test is that alone — not the kind of condition: anything that is not bookkeeping and can
 weaken the paper, ask; when you cannot tell, ask.
 
-**Two of the user's decisions are made on the paper's page**, in every mode, `--auto` included: a fixer's suggested
+**Two of the user's decisions are made on the paper's page**, in every mode, auto mode included: a fixer's suggested
 repair that would weaken a main result (`--accept-repair`, `--decline-repair`, `--redo-repair`) and the promotion
 checklists. Every halt that asks for a ruling (a weakened repair, a proposed rewind, a patch cap) writes `annotated/`
 for the run as it stands, the pending items marked at their passages ("… (awaiting your decision)"), and names the
@@ -252,7 +252,7 @@ the proof-review loop".
 
 ## Rewinds are proposed, the orchestrator approves
 
-A paper-statement finding of F2.5–F4 halts in every mode (`state.verify.cross_stage_rewind`); with `--auto` you judge
+A paper-statement finding of F2.5–F4 halts in every mode (`state.verify.cross_stage_rewind`); in auto mode (the default) you judge
 without asking. All findings of one review pass are one batch and one decision; to approve only some, delete the
 others from `…cross_stage_rewind.targets` first. Check each against the paper:
 

@@ -178,10 +178,9 @@ async function runPipelineInner(
     state.stage_completed = STAGE_ORDER[stageIndex(options.startStage) - 1]!;
   }
 
-  // Persist `--auto` onto state so a run stays autonomous across resumes even if
-  // a later `--resume` omits the flag. Latching: `--auto` turns it on; it is
-  // never auto-cleared here (start a fresh run to drop autonomy).
-  if (ctx.auto) state.auto_mode = true;
+  // The caller's mode, onto state: auto unless the run is in debug mode (`verify --debug`,
+  // itself latched by the verify runner, which passes `auto` from it).
+  if (ctx.auto !== undefined) state.auto_mode = ctx.auto;
 
   const resumeGate = await resolveResumeGates(ctx, state);
   if (!resumeGate.open) {
@@ -197,7 +196,7 @@ async function runPipelineInner(
   }
 
   // Commit resume preflight mutations before dispatching another stage. A live
-  // handler may crash after making external calls; if `--auto`
+  // handler may crash after making external calls; if the run's mode
   // or a satisfied missing-architecture gate only lived in memory until that
   // handler returned, the next resume resurrected stale state and repeated
   // already-authorized work.

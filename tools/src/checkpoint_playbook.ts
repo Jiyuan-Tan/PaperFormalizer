@@ -140,7 +140,7 @@ function f5RefusalGuidance(message: string): string {
 
 /**
  * The verify runner's halt on a PROPOSED F-stage rewind (`state.verify.cross_stage_rewind`,
- * `presented`). The orchestrator rules on it in every mode; `--auto` means it rules without asking.
+ * `presented`). The orchestrator rules on it in every mode; in auto mode (the default) it rules without asking.
  */
 export function rewindApprovalGuidance(autoMode: boolean): string {
   return (
