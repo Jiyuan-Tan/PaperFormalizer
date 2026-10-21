@@ -10,7 +10,7 @@ You run it through a coding agent (Claude Code or Codex) started in this
 repository: the agent runs the pipeline, acts at each halt, and brings up a local web page where
 you read the paper as the run marks it and make the decisions that are yours.
 
-https://github.com/user-attachments/assets/1fa20ae4-cb9c-40d0-95f3-33fbb3904d35
+https://github.com/user-attachments/assets/3dc78297-3204-4db3-afb1-861ce3ebd1bb
 
 *Install with your agent, ask it to verify a paper, and review the run on the local page. The run
 shown is the built-in demo (`paperformalizer demo`, see "Try the demo" below).*
