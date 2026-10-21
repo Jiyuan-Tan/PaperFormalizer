@@ -442,9 +442,9 @@ PaperFormalizer's own code and documents are under the PaperFormalizer License (
 on the MIT License with a responsible-use condition: the software or its output must not be used,
 or knowingly made available to others, for targeted harassment or threats, for abuse of people
 because of a protected characteristic, or to spread factual allegations known to be false or made
-with reckless disregard for the truth. Good-faith scientific criticism, peer review, the
-identification and reporting of mathematical errors, replication and reproducibility research —
-naming the papers and authors concerned — are expressly permitted, and an unfavorable finding or an
+with reckless disregard for the truth. Peer review, verification, replication and reproducibility
+research, and the identification and reporting of mathematical errors — each in good faith, naming
+the papers and authors concerned — are expressly permitted, and an unfavorable finding or an
 honest mistake is not a violation. Because of that condition it is not an OSI-approved open-source
 license. This summary is not the license; `LICENSE` governs. The copyright holders are listed in
 `AUTHORS`.
