@@ -434,9 +434,14 @@ converted, under the Lean module system; every statement stays as upstream wrote
 
 ## License
 
-PaperFormalizer's own code and documents are under the MIT License (`LICENSE`). The adapted
-libraries under `third_party/` keep their own licenses, each in its directory; Mathlib and
-Causalean are fetched from their repositories under theirs (Acknowledgements above).
+PaperFormalizer's own code and documents are under the PaperFormalizer License (`LICENSE`): the
+MIT License with a responsible-use condition — the software must not be used for targeted
+harassment, threats or discriminatory abuse, or to spread allegations known to be false, while
+good-faith scientific criticism, peer review and the reporting of mathematical errors, naming the
+papers and authors concerned, are expressly permitted. The copyright holders are listed in
+`AUTHORS`. The adapted libraries under `third_party/` keep their own licenses, each in its
+directory; Mathlib and Causalean are fetched from their repositories under theirs
+(Acknowledgements above).
 
 ## Documentation
 
