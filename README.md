@@ -440,14 +440,15 @@ commit and every kind of change made. The changes are provided under the copy's 
 
 PaperFormalizer's own code and documents are under the PaperFormalizer License (`LICENSE`), based
 on the MIT License with a responsible-use condition: the software or its output must not be used,
-or knowingly made available to others, for targeted harassment or threats, for abuse of people
-because of a protected characteristic, or to spread factual allegations known to be false or made
-with reckless disregard for the truth. Peer review, verification, replication and reproducibility
-research, and the identification and reporting of mathematical errors — each in good faith, naming
-the papers and authors concerned — are expressly permitted, and an unfavorable finding or an
-honest mistake is not a violation. Because of that condition it is not an OSI-approved open-source
-license. This summary is not the license; `LICENSE` governs. The copyright holders are listed in
-`AUTHORS`.
+or knowingly made available to others, to harass, threaten or intimidate anyone, to abuse people
+because of a protected characteristic, to allege misconduct (such as fraud, fabrication or
+plagiarism) that has not been independently corroborated, or to spread factual allegations known
+to be false or made with reckless disregard for the truth. Reporting errors in a paper (once a
+person has checked each one against the paper), peer review, verification, replication and
+reproducibility research are permitted when done in good faith and in keeping with accepted
+standards of scientific ethics, and an unfavorable finding or an honest mistake is not a
+violation. Because of that condition it is not an OSI-approved open-source license. This summary is
+not the license; `LICENSE` governs. The copyright holders are listed in `AUTHORS`.
 
 Versions published before this license was adopted on 21 October 2026 (among them the v0.1.0 and
 v0.1.1 releases) were released under the MIT License and remain available under it; later versions
