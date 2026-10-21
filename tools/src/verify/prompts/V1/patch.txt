@@ -11,12 +11,14 @@ what is wrong.
 
 A result is hypotheses ⇒ conclusion, with a proof. A repair makes the smallest change that
 makes the result true without shrinking what the paper meant to claim. In increasing size:
-(1) the proof alone — the statement stands, the argument is completed (proof ops only);
+(1) the proof alone — the statement stands, the argument is completed (proof ops, or
+    `proof_note`, only; `readings` and `conditions` may stand beside it);
 (2) the conclusion's displayed form, only to what the paper's own proof establishes (an
     exponent, constant, sign, index, term);
-(3) the hypotheses, only without shrinking the paper's intended scope — write down a
-    condition every reader takes for granted, or replace a loose paraphrase by the paper's
-    own setting or null.
+(3) the hypotheses, only without shrinking the paper's intended scope — spell out a
+    convention the paper already invokes, or replace a loose paraphrase by the paper's own
+    setting or null (a regularity side condition every reader takes for granted goes in
+    `conditions`, never into the statement).
 Anything else — a different limit, rate, object, or a hypothesis excluding cases the paper
 meant to cover — changes the claim: report `unfixable` with the strongest true version as
 `suggested_repair`. Minimal means the earliest applicable step and the smallest change within
@@ -74,9 +76,9 @@ Reply with ONE JSON object, the whole patch file:
     their ids. `{op: "replace", unit, to, tex}` puts `tex` in place of the units `unit` … `to` (`to`
     null: one unit). That is the only operation: an insertion replaces the unit it follows by that
     unit's text followed by the new text; a hypothesis is added by replacing the statement's units
-    with the statement restated with it. Change only the units that change: an unchanged unit is
-    never replaced (a proof unit that only gains a detail is replaced by its printed text with the
-    detail after it), and a statement unit's content is never dropped. For one item, `tex` is its
+    with the statement restated with it. Change only the units that change: a unit is replaced only
+    when its text changes or a detail follows it (then by its printed text verbatim, the detail
+    after it), and a statement unit's content is never dropped. For one item, `tex` is its
     content (its \item stays), and for a step of an algorithm its text (its step command stays;
     one op per step, a control line replaced by a control line); a run of several units takes
     every list it touches whole, its `tex`
@@ -92,7 +94,8 @@ Reply with ONE JSON object, the whole patch file:
     neither it nor a corollary's `statement` opens a theorem-like environment (\begin{theorem},
     \begin{corollary}, …): a result that stands apart is an entry of `corollaries`, whose heading
     the runner sets. A step
-    the note says is wrong is replaced, never left standing with a justification after it.
+    the note says is wrong is corrected in its units — the wrong part changed, the rest of what it
+    prints kept — never left standing with a justification or a detail after it.
   - The corrected statement your ops produce (the runner derives it) reads
     like the paper's own statement: its clause structure (numbered clauses, paragraph breaks)
     and its references to cited results verbatim. It is a DROP-IN REPLACEMENT: substituted for
@@ -148,8 +151,10 @@ Reply with ONE JSON object, the whole patch file:
     results — group by shared conditions: never one block per formula when several follow from the
     same lemma under the same hypotheses. `statement` is complete and self-contained (its own
     conditions and conclusion; it may cite the result and others by `\ref`); `follows` is its
-    complete proof, printed as the block's proof: written as the paper writes its proofs, with its
-    details aside (STYLE below), citing by `\ref` every result it uses; `adds` lists the
+    complete proof, printed as the block's proof (STYLE below), citing by `\ref` every result it
+    uses — when the printed proof proves a conclusion moved to the block, `follows` carries that
+    passage as printed (revised only where the repair requires) and the parent's proof ops remove
+    it; `adds` lists the
     assumptions and definitions of the core its statement itself imposes or uses (else null);
     `title` is the few words the author would name it by (else null).
     A block is shown as a COROLLARY when it is a consequence of the corrected statement, and as a
@@ -159,7 +164,8 @@ Reply with ONE JSON object, the whole patch file:
     the corrected statement. So `follows` cites the corrected statement exactly when it uses it:
     never as decoration, never omitted when used.
     Never split a statement that is one claim, a further conclusion under the same hypotheses
-    ("moreover …" stays in the statement), or to shorten; never to drop content: every conclusion
+    ("moreover …" stays in the statement), or to shorten, and never into a block that only restates
+    the corrected statement; never to drop content: every conclusion
     of the printed statement that is true stays in some block, and what no block keeps is given up
     (`gives_up`). A conclusion moved to a block is the one exception to keeping every unit's
     content in the statement. A clarification still goes to `readings`.
@@ -176,8 +182,8 @@ Reply with ONE JSON object, the whole patch file:
     (the ops) and the rest are its blocks. Never an umbrella for a single claim, for a further
     conclusion under the same assumptions, or for length.
   - `proof_note`: null when the paper prints a proof of the node (proof ops carry any change).
-    Only when it prints none: the complete proof, written as the paper writes its proofs, with its
-    details aside (STYLE below).
+    Only when it prints none: the complete proof (STYLE below). For an assumption or definition
+    patched with no ops: one sentence naming the results that restate it.
   - `owner_explanation`: the error and the repair for the paper's AUTHOR, shown next to the
     printed statement, so that the author sees from it alone WHY the statement needs correcting.
     A `gives_up` that is not null names every class of cases the repair excludes and every limit
@@ -193,19 +199,29 @@ Reply with ONE JSON object, the whole patch file:
 
 === STYLE: THE AUTHOR'S PROOF, ITS DETAILS ASIDE ===
 
-The author reads your proof text as a revision of their own proof. A proof step you write or change
-(in ops, `proof_note` or a block's `follows`) is written as the paper writes its proofs: its level of
-detail, its notation, its way of citing. Keep the paper's argument: revise the steps a finding names,
-never replace a proof that a revised step would repair by a new proof. A step the paper takes from
-another proof stays so ("as in the proof of Theorem~\ref{…}, with … in place of …") when that argument
-applies; a standard fact is cited, not derived again.
-What the referee or the Lean proof needs beyond that — the instantiation of a reused argument, the
-check of a side condition, a computation the paper leaves to the reader — goes in a DETAIL,
-`\vsDetail{…}`, right after the sentence or display it completes (never inside mathematics). The
-author sees it as a side note beside the step; the referee and the Lean stages read the step with
-its details, as one argument. The step with its details is complete: a detail derives what it adds
-— never "similar", "analogous", "as above" or "omitted" — and the referee sends a gap back. A
-statement, a reading, a condition, `owner_explanation` and `reason` take no detail.
+The author reads your proof text as a revision of their own proof, and the corrected paper prints it
+WITHOUT its details. A proof step you write or change (in ops, `proof_note` or a block's `follows`)
+is written at the paper's level of detail — that of the printed proof it revises, or, for a proof
+the paper does not print, that of its own proofs of results of the same kind — in its notation and
+its way of citing.
+Keep the paper's argument and its presentation: revise the steps the repair makes wrong (those a
+finding names, and those its change reaches), changing in them only what that requires (the
+assumption a line invokes, a term, a constant) and keeping every display, intermediate step and
+cited result the paper prints there. Never condense, summarize or paraphrase printed mathematics,
+nor move it into a detail, and never replace a proof that a revised step would repair by a new
+proof. A step the paper takes from another proof stays so ("as in the proof of Theorem~\ref{…},
+with … in place of …") when that argument applies; a standard fact is cited, not derived again (a
+derivation in place of the printed reference drops what the paper prints).
+What the referee or the Lean proof needs beyond the paper's level of detail — the instantiation of a
+reused argument, the check of a side condition, a computation the paper leaves to the reader — goes
+in a DETAIL, `\vsDetail{…}`, right after the sentence or display it completes (never inside
+mathematics). The author sees it as a side note beside the step; the referee and the Lean stages
+read the step with its details, as one argument. The step with its details is complete: a detail
+derives what it adds, and never defers ("similar", "analogous", "as above", "omitted") — the referee
+sends a gap back. A detail only adds what the paper's proofs leave out, so your proof text without
+its details is never less complete than the printed proof it revises, and a proof the paper does
+not print (`proof_note`, a block's `follows`) is, without its details, a complete proof at the
+paper's level. A statement, a reading, a condition, `owner_explanation` and `reason` take no detail.
 Answer every defect a finding lists, and keep meeting the EARLIER FINDINGS shown for the node.
 
 An OWNER READINGS block, when present, lists readings the paper's owner adopted when
@@ -249,8 +265,9 @@ node itself a patch with no ops (its note's `gives_up` null), its `proof_note` n
 restated.
 
 A step the referee could not check (a `clarify` finding on the paper's own proof, a repair it
-could not reproduce) is step (1): an op on that step's units completes it — its words revised only
-where they are wrong, what the referee missed in a detail after it — nothing else changed.
+could not reproduce) is step (1): an op on that step's units (in a `proof_note` or `follows`, that
+step revised) completes it — its words revised only where they are wrong, what the referee missed
+in a detail after it — nothing else changed.
 When the referee says a patch is not minimal, adopt the smaller change it names.
 A `consequence` finding: the result held as printed, but no longer follows from a repaired result
 it uses. Patch it as a consequence of that repair (`consequence_of`, `reason`): restate it or

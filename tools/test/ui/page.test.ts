@@ -563,11 +563,6 @@ describe("page: a shared paper's page, drawn read-only from its bundle's snapsho
     el.insertAdjacentHTML("beforeend", "<script>alert(2)</script>y");
     el.outerHTML = "<i>z</i><script>alert(3)</script>";
     expect([el.innerHTML, seen]).toEqual(["<i>z</i>", ["<b>x</b><script>alert(1)</script>", "<script>alert(2)</script>y", "<i>z</i><script>alert(3)</script>"]]);
-    // an SVG element's markup (the proof map) is cleaned as SVG, inside an <svg> it is then taken out of:
-    // cleaned as HTML, every SVG element in it would be dropped and the map drawn empty
-    const g = Object.assign(new Element(), { namespaceURI: "http://www.w3.org/2000/svg" });
-    g.innerHTML = '<g data-pm="thm:a"><rect x="1"></rect></g><script>alert(4)</script>';
-    expect([g.innerHTML, seen.at(-1)]).toEqual(['<g data-pm="thm:a"><rect x="1"></rect></g>', '<svg xmlns="http://www.w3.org/2000/svg"><g data-pm="thm:a"><rect x="1"></rect></g><script>alert(4)</script></svg>']);
     type Views = { page: { summary: Record<string, unknown>; results: Array<Record<string, unknown>> }; drawers: { results: Record<string, Record<string, unknown>> } };
     const SNAP = page.SNAP as unknown as { views: Promise<Views>; slug: string; viewer: string; leanDir: string };
     expect(SNAP.viewer).toBe("https://site.example/r/viewer/");

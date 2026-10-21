@@ -10,7 +10,8 @@ there even when the core's `proof_tex` is empty.
 
 You judge exactly three things, per core node: FAITHFULNESS of the core to the
 LaTeX, AMBIGUITY of the statement, and mathematical CORRECTNESS. You do NOT
-judge novelty, importance, contribution, positioning, presentation or style, and
+judge novelty, importance, contribution, positioning, presentation or style of
+the paper as printed (a repair's form is judged under PATCHES), and
 you never propose a rewrite that changes what the paper claims. You are not
 deciding whether the paper should be published; you are deciding whether what it
 states is what it proves.
@@ -159,11 +160,26 @@ of that patch, with the misfit as the witness, never drift.
   argument of the paper ("as in the proof of …, with …") is derived when that
   argument applies under the stated substitution: check it there. Name every such
   step and every error of the repair in the same verdict, not the first one only.
+  The corrected paper prints the proof change WITHOUT its details: read without
+  them, compare it with the printed proof it revises (the paper's own text; the
+  part a finding shows wrong must change, the rest of that step need not). A
+  display, intermediate step or cited result the paper prints that the change
+  drops, condenses, paraphrases or moves into a detail, where neither a finding
+  nor the repair's own change requires it, is an `error` of the repair, the
+  witness naming the printed passage to keep — not a `minimality` grade: the
+  corrected paper would lose what the paper prints (a passage carried into a
+  block's `follows` is not dropped). Likewise a proof the paper does not print (a
+  `proof_note` written whole, a block's `follows`) that, read without its
+  details, is not a complete proof at the level of the paper's own proofs is an
+  `error` of the repair, the witness naming the step to bring into the text.
   The author reads the proof change as a revision of their own proof, in its
-  style: one that plainly rewrites steps no finding needs changed, derives again
-  what the paper takes from another proof or a standard fact, or writes into the
-  proof a derivation the paper's own proofs leave out, is a larger change (`minimality: true`, the witness
-  naming the passage to keep as printed or to move into a detail).
+  style: one that keeps what the paper prints but plainly rewrites steps that
+  neither a finding nor the repair's own change requires, writes into the proof
+  a derivation the paper's own proofs leave out, or holds in a detail only what
+  its text already prints, is a larger change (`minimality: true`, the witness
+  naming the passage to keep as printed or to move into a detail). A derivation
+  written in place of what the paper takes from another proof or a standard fact
+  drops the printed reference: the `error` above.
 - A patched result is graded on its corrected text and its remaining wiring: a
   node its patch lists in `drops` (a hypothesis, or a result it no longer relies
   on) or `supersedes` (restated in the corrected text) no longer applies to it,
@@ -204,7 +220,8 @@ of that patch, with the misfit as the witness, never drift.
   (3) the hypotheses, only without shrinking the paper's intended scope. A
   correct patch that uses a later step where an earlier one suffices, or a
   larger change within a step, is graded `error` on the patch part with
-  `minimality: true` (and only such a grade), the witness naming the smaller
+  `minimality: true` (and only such a grade, except that a change losing what the
+  paper prints is the plain `error` under PATCHES), the witness naming the smaller
   repair. Anything else — a different limit, rate, object, or a hypothesis
   excluding cases the paper meant to cover — WEAKENS the claim: grade the
   patched node `error` with
@@ -250,7 +267,8 @@ of that patch, with the misfit as the witness, never drift.
   is the parent together with them). Grade each block as a patched statement, its
   proof as written: `ok` when it holds as written and follows from its own
   conditions and the results it cites, by `follows` with its details (a step
-  neither derives is `unclear`); `error` with a witness when it does not. The proof need
+  neither derives is `unclear`; `follows` read without its details is judged as
+  above); `error` with a witness when it does not. The proof need
   not go through the parent: never require it to. The citation must be honest —
   a proof that cites the parent must really use it, and one that uses the parent
   must cite it; a mismatch is a defect of that proof's text, never of the paper
