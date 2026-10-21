@@ -29,8 +29,9 @@ import { checkF4Seal, F4_REVIEWS_FILE, F4_SEAL_FILE, sealedPaths, sha256 } from 
 import { isFinal, readShare, SHARE_FILE, STATUSES, type ShareRecord, type ShareStatus } from "./share_record.js";
 export { isFinal, readShare, SHARE_FILE, shareRecordView, type ShareRecord, type ShareStatus, type ShareView } from "./share_record.js";
 
-/** The share service, unless `PAPERFORMALIZER_SHARE_URL` names another. */
-export const DEFAULT_SHARE_URL = "https://paperformalizer-share.comments-worker.workers.dev";
+/** The share service, unless `PAPERFORMALIZER_SHARE_URL` names another. The Worker keeps the name it
+ *  was deployed under (its OAuth callback and secrets are bound to it): renaming the project leaves it. */
+export const DEFAULT_SHARE_URL = "https://theoremchecker-share.comments-worker.workers.dev";
 export const SHARE_URL_ENV = "PAPERFORMALIZER_SHARE_URL";
 /** The public site of shared papers: a paper's page is `<site>papers/<slug>/`. */
 export const SITE_URL = "https://jiyuan-tan.github.io/PaperFormalizerPapers/";
