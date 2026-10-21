@@ -31,7 +31,7 @@ export { isFinal, readShare, SHARE_FILE, shareRecordView, type ShareRecord, type
 
 /** The share service, unless `PAPERFORMALIZER_SHARE_URL` names another. The Worker keeps the name it
  *  was deployed under (its OAuth callback and secrets are bound to it): renaming the project leaves it. */
-export const DEFAULT_SHARE_URL = "https://theoremchecker-share.comments-worker.workers.dev";
+export const DEFAULT_SHARE_URL = "https://share.paperformalizer.org";
 export const SHARE_URL_ENV = "PAPERFORMALIZER_SHARE_URL";
 /** The public site of shared papers: a paper's page is `<site>papers/<slug>/`. */
 export const SITE_URL = "https://paperformalizer.org/";
