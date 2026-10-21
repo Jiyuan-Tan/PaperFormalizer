@@ -1,9 +1,9 @@
 # PaperFormalizer
 
-Verify a paper's mathematics in Lean. PaperFormalizer transcribes a LaTeX paper's results (V1),
-referees them for faithfulness and correctness (V1.5), formalizes and proves them in Lean against
-Mathlib, the domain libraries you chose and your personal toolkit (F1–F5), and reports what held,
-what was wrong and how it was repaired (V6). Every run lives in your toolkit (`runs/<slug>/`, the
+Turn your paper into a Lean-verified version, with you deciding every change. PaperFormalizer
+transcribes a LaTeX paper's results (V1), audits each for faithfulness, ambiguity and correctness
+(V1.5), formalizes and proves them in Lean against Mathlib, the domain libraries you chose and your
+personal toolkit (F1–F5), and reports what was proved and what was revised (V6). Every run lives in your toolkit (`runs/<slug>/`, the
 Lean under `Papers/<Slug>/`).
 
 You run it through a coding agent (Claude Code or Codex) started in this
