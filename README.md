@@ -426,22 +426,36 @@ libraries. That code belongs to its authors.
   [Stat-Lean](https://github.com/StatLean/Stat-Lean) by the StatLean contributors (Apache-2.0,
   Copyright 2024 Junwei Lu; it includes code from the formal-learning-theory kernel, Apache-2.0,
   Copyright (c) 2026 Dhruv Gupta, whose license is kept under `LICENSES/`).
+- **DOMPurify** — `tools/src/ui/static/vendor/purify.min.js`, an unmodified release by Cure53 and
+  other contributors (Apache-2.0 or MPL-2.0; its license is `purify.LICENSE` beside it). KaTeX
+  (MIT) and pdf.js (Apache-2.0) are installed from npm with their licenses.
 
 Each adapted copy is changed only so that it builds against the pinned Lean and Mathlib and, where
-converted, under the Lean module system; every statement stays as upstream wrote it. Its upstream `LICENSE` (and
-`LICENSES/`) is kept unchanged in the copy, the authors' headers stay in the files, and its
-`UPSTREAM.md` records the upstream commit and every kind of change made.
+converted, under the Lean module system; no statement changes its mathematical meaning (renames and
+the like are listed in `UPSTREAM.md`). Its upstream `LICENSE` (and `LICENSES/`) is kept unchanged
+in the copy, the authors' headers stay in the files, and its `UPSTREAM.md` records the upstream
+commit and every kind of change made. The changes are provided under the copy's own license.
 
 ## License
 
-PaperFormalizer's own code and documents are under the PaperFormalizer License (`LICENSE`): the
-MIT License with a responsible-use condition — the software must not be used for targeted
-harassment, threats or discriminatory abuse, or to spread allegations known to be false, while
-good-faith scientific criticism, peer review and the reporting of mathematical errors, naming the
-papers and authors concerned, are expressly permitted. The copyright holders are listed in
-`AUTHORS`. The adapted libraries under `third_party/` keep their own licenses, each in its
-directory; Mathlib and Causalean are fetched from their repositories under theirs
-(Acknowledgements above).
+PaperFormalizer's own code and documents are under the PaperFormalizer License (`LICENSE`), based
+on the MIT License with a responsible-use condition: the software or its output must not be used,
+or knowingly made available to others, for targeted harassment or threats, for abuse of people
+because of a protected characteristic, or to spread factual allegations known to be false or made
+with reckless disregard for the truth. Good-faith scientific criticism, peer review, the
+identification and reporting of mathematical errors, replication and reproducibility research —
+naming the papers and authors concerned — are expressly permitted, and an unfavorable finding or an
+honest mistake is not a violation. Because of that condition it is not an OSI-approved open-source
+license. This summary is not the license; `LICENSE` governs. The copyright holders are listed in
+`AUTHORS`.
+
+Versions published before this license was adopted on 21 October 2026 (among them the v0.1.0 and
+v0.1.1 releases) were released under the MIT License and remain available under it; later versions
+are under the PaperFormalizer License.
+
+Third-party code keeps its own license: the adapted libraries under `third_party/`, each in its
+directory, and DOMPurify (above); Mathlib and Causalean are fetched from their repositories under
+theirs (Acknowledgements above).
 
 ## Documentation
 

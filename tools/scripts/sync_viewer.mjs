@@ -3,8 +3,9 @@
 //   node tools/scripts/sync_viewer.mjs <registry-dir>
 // writes <registry-dir>/site/viewer/ afresh: the local UI's app.js and app.css (app.js draws a
 // shared paper in its snapshot mode), the page template snapshot.html as page.html, DOMPurify,
-// KaTeX (its stylesheet, script and web fonts) and pdf.js (its module and worker), with VERSION
-// naming the PaperFormalizer commit they come from. The registry's site build reads them; they are
+// KaTeX (its stylesheet, script and web fonts) and pdf.js (its module and worker), each with its
+// license file (their licenses require the notice in every copy), with VERSION naming the
+// PaperFormalizer commit they come from. The registry's site build reads them; they are
 // never edited there.
 import { execFileSync } from "node:child_process";
 import { cpSync, existsSync, mkdirSync, readdirSync, readFileSync, rmSync, writeFileSync } from "node:fs";
@@ -34,6 +35,9 @@ copy(path.join(STATIC, "app.js"), "app.js");
 copy(path.join(STATIC, "app.css"), "app.css");
 copy(path.join(STATIC, "snapshot.html"), "page.html");
 copy(path.join(STATIC, "vendor", "purify.min.js"), "purify.min.js");
+copy(path.join(STATIC, "vendor", "purify.LICENSE"), "purify.LICENSE");
+copy(path.join(path.dirname(require.resolve("katex/package.json")), "LICENSE"), "katex/LICENSE");
+copy(path.join(path.dirname(require.resolve("pdfjs-dist/package.json")), "LICENSE"), "pdfjs/LICENSE");
 copy(path.join(katex, "katex.min.css"), "katex/katex.min.css");
 copy(path.join(katex, "katex.min.js"), "katex/katex.min.js");
 // the fonts a current browser takes (the stylesheet names woff2 first, then woff and ttf)

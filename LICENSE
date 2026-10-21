@@ -1,4 +1,5 @@
-PaperFormalizer License (MIT with Responsible-Use Condition)
+PaperFormalizer License
+(based on the MIT License, with a Responsible-Use Condition)
 
 Copyright (c) 2026 The PaperFormalizer Authors (see AUTHORS)
 
@@ -6,29 +7,41 @@ Permission is hereby granted, free of charge, to any person obtaining a copy
 of this software and associated documentation files (the "Software"), to use,
 copy, modify, merge, publish, distribute, sublicense, and/or sell copies of the
 Software, and to permit persons to whom the Software is furnished to do so,
-subject to the following conditions:
+subject to the following conditions. In this License, "you" means any person
+or entity exercising these permissions, including a sublicensee.
 
-1. The above copyright notice, this permission notice and the Responsible-Use
-   Condition below shall be included in all copies or substantial portions of
-   the Software.
+1. The above copyright notice and this License, including condition 2, shall
+   be included in all copies or substantial portions of the Software. Any
+   sublicense must be subject to the conditions of this License.
 
-2. Responsible-Use Condition. You must not use the Software to conduct or
-   facilitate targeted harassment, threats, or discriminatory abuse against
-   individuals or groups, or to disseminate false factual allegations about
-   them knowing those allegations to be false or with reckless disregard for
-   their truth or falsity.
+2. Responsible-Use Condition. You must not use the Software or its output, or
+   knowingly enable another person to use them, to engage in targeted
+   harassment of, or threats against, any person or group; to abuse any person
+   or group because of race, ethnicity, national origin, religion, sex, gender
+   identity, sexual orientation, age, disability, or another characteristic
+   protected by applicable law; or to disseminate false factual allegations
+   about any person or group knowing them to be false or with reckless
+   disregard for their truth or falsity.
 
    Good-faith scientific criticism, peer review, the identification and
    reporting of mathematical errors, replication, and reproducibility research
-   are permitted, including identifying the papers and authors concerned. An
-   unfavorable scientific finding does not, by itself, constitute a prohibited
-   use.
+   are not prohibited uses, including when they identify the papers and
+   authors concerned. An unfavorable scientific finding, or an honest mistake,
+   does not by itself constitute a prohibited use. Threats, and allegations
+   made knowing them to be false or with reckless disregard for their truth or
+   falsity, are not good-faith criticism.
 
-3. The permissions granted by this License terminate automatically for anyone
-   who violates condition 2.
+3. If you violate condition 2, all permissions granted to you by this License
+   terminate automatically. Termination does not affect the permissions of
+   anyone who received the Software from you and complies with this License.
+   The copyright holders may reinstate your permissions in writing. The
+   disclaimer below survives termination.
 
-Components under third_party/, and other third-party code distributed with the
-Software, remain under their own licenses and are not covered by this License.
+Third-party components distributed with the Software, including those under
+third_party/ and tools/src/ui/static/vendor/purify.min.js, are not licensed
+under this License; each remains under its own license, included with it.
+Changes made to those components for this project are provided under the
+license of the component they modify.
 
 THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
 IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
