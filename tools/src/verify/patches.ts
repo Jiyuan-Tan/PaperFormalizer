@@ -103,6 +103,12 @@ const PatchSchema = z.object({
    * — the specification an ambiguity needed, stated beside the statement instead of written into it.
    * The build pins each (`ass:pin-fix-<hash>`, `core_graph.ts`); the referee grades it with the patch. */
   readings: optionalTexts(),
+  /** The fixer's: the side conditions the corrected node needs — a regularity condition
+   * (measurability, integrability, finiteness, non-degeneracy) that changes nothing of what the result
+   * says, each ONE condition in the paper's notation, stated beside the statement instead of written
+   * into it. The build adds each as a bookkeeping condition (`ass:bk-fix-<hash>`, `core_graph.ts`);
+   * the referee grades it with the patch. */
+  conditions: optionalTexts(),
   /** The fixer's: results the repair SPLITS OFF the node — when the true content of a printed result
    * divides into a general statement and special cases holding under their own conditions, the node
    * keeps the general statement and each case is a corollary, a result of its own. Only on a result.
@@ -298,6 +304,7 @@ export function isPendingSuggestion(u: Unfixable): boolean {
 export function suggestionText(s: SuggestedRepair): string {
   return [
     s.corrected_statement ? `corrected statement: ${s.corrected_statement}` : "",
+    ...(s.conditions ?? []).map((c) => `condition: ${c}`),
     ...(s.corollaries ?? []).map((c, i) => `corollary ${i + 1}${c.title ? ` (${c.title})` : ""}: ${c.statement}`),
     s.umbrella ? "the statement becomes an umbrella over these blocks" : "",
     s.given_up ? `gives up: ${s.given_up}` : "",
@@ -325,7 +332,7 @@ export function applySuggestions(file: PatchFile, nodes: ReadonlySet<string>): P
 
 /** A repair's `drops` / `adds` in the fixer's reply: node ids, or null. */
 const HYPOTHESES_JSON: Record<string, unknown> = { anyOf: [{ type: "array", items: { type: "string" } }, { type: "null" }] };
-/** A repair's `readings` in the fixer's reply: TeX texts, not ids. */
+/** A repair's `readings` / `conditions` in the fixer's reply: TeX texts, not ids. */
 const READINGS_JSON: Record<string, unknown> = { anyOf: [{ type: "array", items: TEX_STRING }, { type: "null" }] };
 
 /** A repair's `corollaries` in the fixer's reply: `{title, statement, follows, adds}` entries, or null. */
@@ -360,13 +367,14 @@ export const PATCH_REPLY_JSON_SCHEMA: Record<string, unknown> = {
       items: {
         type: "object",
         additionalProperties: false,
-        required: ["node", "ops", "drops", "adds", "readings", "corollaries", "umbrella", "proof_note", "owner_explanation", "consequence_of", "reason"],
+        required: ["node", "ops", "drops", "adds", "readings", "conditions", "corollaries", "umbrella", "proof_note", "owner_explanation", "consequence_of", "reason"],
         properties: {
           node: { type: "string" },
           ops: OPS_JSON,
           drops: HYPOTHESES_JSON,
           adds: HYPOTHESES_JSON,
           readings: READINGS_JSON,
+          conditions: READINGS_JSON,
           corollaries: COROLLARIES_JSON,
           umbrella: UMBRELLA_JSON,
           proof_note: TEX_STRING_OR_NULL,
@@ -392,12 +400,13 @@ export const PATCH_REPLY_JSON_SCHEMA: Record<string, unknown> = {
               {
                 type: "object",
                 additionalProperties: false,
-                required: ["ops", "drops", "adds", "readings", "corollaries", "umbrella", "proof_note"],
+                required: ["ops", "drops", "adds", "readings", "conditions", "corollaries", "umbrella", "proof_note"],
                 properties: {
                   ops: OPS_JSON,
                   drops: HYPOTHESES_JSON,
                   adds: HYPOTHESES_JSON,
                   readings: READINGS_JSON,
+                  conditions: READINGS_JSON,
                   corollaries: COROLLARIES_JSON,
                   umbrella: UMBRELLA_JSON,
                   proof_note: TEX_STRING_OR_NULL,
@@ -812,12 +821,12 @@ export function materializeReply(
     const parsed = z.array(PatchOpSchema).safeParse(x.ops ?? []);
     if (!parsed.success) return void violations.push(`${where}: \`ops\` does not parse: ${parsed.error.issues.map((i) => i.message).join("; ")}`);
     x.ops = parsed.data;
-    // A detail completes a proof step: the statement, a reading or a block's statement takes none.
+    // A detail completes a proof step: the statement, a reading, a condition or a block's statement takes none.
     parsed.data.forEach((op, k) => {
       if (isStatementOp(op) && hasDetail(op.tex)) violations.push(`${where}: ops[${k}] (${op.op}) replaces text of the statement and holds a \`\\vsDetail\`: only proof text (proof ops, \`proof_note\`, a block's \`follows\`) takes a detail`);
     });
     const texts = (v: unknown, pick: (e: Record<string, unknown>) => unknown = (e) => e): string[] => (Array.isArray(v) ? v.map((e) => pick(e as Record<string, unknown>)).filter((t): t is string => typeof t === "string") : []);
-    if ([...texts(x.readings), ...texts(x.corollaries, (c) => c?.statement)].some(hasDetail)) violations.push(`${where}: a reading or a block's statement holds a \`\\vsDetail\`: only proof text (proof ops, \`proof_note\`, a block's \`follows\`) takes a detail`);
+    if ([...texts(x.readings), ...texts(x.conditions), ...texts(x.corollaries, (c) => c?.statement)].some(hasDetail)) violations.push(`${where}: a reading, a condition or a block's statement holds a \`\\vsDetail\`: only proof text (proof ops, \`proof_note\`, a block's \`follows\`) takes a detail`);
     // An umbrella takes its texts from the pipeline (ops on it are a violation, `validatePatchFile`).
     if (x.umbrella === true && Array.isArray(x.corollaries) && x.corollaries.length > 0 && parsed.data.length === 0) {
       x.corrected_statement = UMBRELLA_STATEMENT;

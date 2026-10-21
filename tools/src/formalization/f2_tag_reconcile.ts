@@ -73,11 +73,11 @@ const CARRYOVER_TAG = "PRIOR PROOF (carry-over: auto";
 /** V1.5's positional pin / bookkeeping ids. */
 export const POSITIONAL_ID_RE = /^ass:(?:pin|bk)-\d+$/;
 
-/** A repair's hashed ids (`verify/core_graph.ts`): a reading it states (`ass:pin-fix-<hash>`) and a
- * corollary it splits off (`<thm|lem|prop>:cor-fix-<hash>`). Only the runner writes such an id, and a
+/** A repair's hashed ids (`verify/core_graph.ts`): a reading or side condition it states
+ * (`ass:pin-fix-<hash>`, `ass:bk-fix-<hash>`) and a corollary it splits off (`<thm|lem|prop>:cor-fix-<hash>`). Only the runner writes such an id, and a
  * repair revised or withdrawn drops it: its tag is then stale like a renumbered positional one (retagged
  * only by Lean name; else its declaration removed, or kept and reported when still referenced). */
-export const REPAIR_ID_RE = /^(?:ass:pin-fix|(?:thm|lem|prop):cor-fix)-[0-9a-f]{8}$/;
+export const REPAIR_ID_RE = /^(?:ass:(?:pin|bk)-fix|(?:thm|lem|prop):cor-fix)-[0-9a-f]{8}$/;
 
 export type RetagBasis = "lean-name" | "prev-core-text" | "docstring-text";
 

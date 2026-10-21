@@ -3,7 +3,7 @@ import { DIRECTORY_LINK, FILE_SYMLINKS } from "../platform.js";
 import { tmpdir } from "node:os";
 import { dirname, join } from "node:path";
 import { afterEach, describe, expect, it } from "vitest";
-import { parseLeanSmithCommand } from "../../bin/leansmith.js";
+import { parsePaperFormalizerCommand } from "../../bin/paperformalizer.js";
 import { addNode, setLean, setNodeReview } from "../../src/graph/mutate.js";
 import { createEmptyGraph } from "../../src/graph/store.js";
 import type { ConvergenceLedger, FormalizationGraph } from "../../src/graph/types.js";
@@ -176,8 +176,8 @@ describe("the F4 seal", () => {
     expect(() => parseReportArgs(["demo", "--arxiv", "nonsense"])).toThrow(/not an arXiv identifier/u);
   });
 
-  it("is checked from a bundle directory by `leansmith seal`", async () => {
-    expect(parseLeanSmithCommand(["seal", "x"]).mode).toBe("seal");
+  it("is checked from a bundle directory by `paperformalizer seal`", async () => {
+    expect(parsePaperFormalizerCommand(["seal", "x"]).mode).toBe("seal");
     const dir = await mkdtemp(join(tmpdir(), "f4seal-"));
     tmpDirs.push(dir);
     const s = seal(ALL);

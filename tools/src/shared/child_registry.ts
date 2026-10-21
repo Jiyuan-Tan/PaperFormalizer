@@ -13,7 +13,7 @@
  *     what is left after a grace period, log `stopped N child process(es)`, exit 128+signo;
  *     a normal exit SIGKILLs any straggler synchronously;
  *   - while a run is known, the live set is persisted to `runs/<slug>/logs/children.json`
- *     so `leansmith verify … --stop` can clean up after a crash or an external SIGKILL
+ *     so `paperformalizer verify … --stop` can clean up after a crash or an external SIGKILL
  *     (`stopRecordedRun`), matching each recorded pid by its start time so a reused pid is
  *     never signalled.
  */
@@ -45,13 +45,13 @@ export interface ChildRecord {
 export interface ChildrenFile {
   /** `host`: the machine the runner runs on — pids of another host of a shared mount are not ours to signal. */
   runner: { pid: number; startId: string | null; cmd: string; host?: string };
-  /** Value of `LEANSMITH_RUN_TAG` in every child's environment (identifies a leaderless group's members). */
+  /** Value of `PAPERFORMALIZER_RUN_TAG` in every child's environment (identifies a leaderless group's members). */
   runTag: string;
   children: ChildRecord[];
 }
 
 /** Environment variable every child inherits, naming the runner that spawned it. */
-export const RUN_TAG_ENV = "LEANSMITH_RUN_TAG";
+export const RUN_TAG_ENV = "PAPERFORMALIZER_RUN_TAG";
 /** Grace between SIGTERM and SIGKILL. */
 export const STOP_GRACE_MS = 2_000;
 
@@ -333,7 +333,7 @@ export function installStopHandlers(opts: { graceMs?: number; log?: (line: strin
     stopping = true;
     void terminateChildren(opts.graceMs ?? STOP_GRACE_MS).then(
       (n) => {
-        log(`[leansmith] ${sig}: stopped ${n} child process(es)`);
+        log(`[paperformalizer] ${sig}: stopped ${n} child process(es)`);
         children.clear();
         clearChildrenFile();
         process.exit(code);
@@ -345,7 +345,7 @@ export function installStopHandlers(opts: { graceMs?: number; log?: (line: strin
   process.on("exit", () => {
     const left = liveChildren().filter(recordAlive);
     for (const r of left) signalRecord(r, "SIGKILL");
-    if (left.length > 0) log(`[leansmith] exit: stopped ${left.length} child process(es)`);
+    if (left.length > 0) log(`[paperformalizer] exit: stopped ${left.length} child process(es)`);
     clearChildrenFile();
   });
 }
@@ -384,7 +384,7 @@ export async function stopRecordedRun(
   };
   const first = read();
   if (!first) {
-    log(`[leansmith] --stop: no ${file}; nothing recorded to stop.`);
+    log(`[paperformalizer] --stop: no ${file}; nothing recorded to stop.`);
     return { stopped: 0, refused: [] };
   }
   const refused: string[] = [];
@@ -393,13 +393,13 @@ export async function stopRecordedRun(
   // Recorded on another machine of a shared mount: its pids are not ours to read or signal,
   // and the file is its runner's to remove.
   if (runner.host && runner.host !== os.hostname()) {
-    log(`[leansmith] --stop: ${file} was written on ${runner.host}, not ${os.hostname()}; stop the run there.`);
+    log(`[paperformalizer] --stop: ${file} was written on ${runner.host}, not ${os.hostname()}; stop the run there.`);
     return { stopped: 0, refused: [`runner pid ${runner.pid}: recorded on ${runner.host}`] };
   }
   if (runner.pid !== process.pid && pidAlive(runner.pid)) {
     const same = sameProcess(runner.pid, runner.startId, runner.cmd);
     if (same.ok) {
-      log(`[leansmith] --stop: runner ${runner.pid} still alive; sending SIGTERM`);
+      log(`[paperformalizer] --stop: runner ${runner.pid} still alive; sending SIGTERM`);
       process.kill(runner.pid, "SIGTERM");
       const deadline = Date.now() + graceMs + 5_000;
       while (Date.now() < deadline && pidAlive(runner.pid)) await sleep(100);
@@ -424,9 +424,9 @@ export async function stopRecordedRun(
     if (!targets.some((t) => t.pid === pid)) targets.push({ pid, groupLeader: false });
   }
   stopped += await terminate(targets, graceMs);
-  for (const r of refused) log(`[leansmith] --stop: left alone — ${r}`);
+  for (const r of refused) log(`[paperformalizer] --stop: left alone — ${r}`);
   rmSync(file, { force: true });
-  log(`[leansmith] --stop: stopped ${stopped} process(es)`);
+  log(`[paperformalizer] --stop: stopped ${stopped} process(es)`);
   return { stopped, refused };
 }
 

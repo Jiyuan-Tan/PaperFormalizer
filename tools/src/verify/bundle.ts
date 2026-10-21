@@ -486,7 +486,7 @@ async function writeLean(a: BundleArgs, dir: string, names: Record<string, strin
     const local = t?.path ? path.resolve(a.toolkitRoot, t.path) : path.join(a.toolkitRoot, ".lake", "packages", r.name);
     if (t?.path) localDirs.push(local);
     const reach = [...external].flatMap(([root, ms]) => (root === r.lib || r.provides.includes(root) ? [...ms] : []));
-    base.push(await compareLocal(r, local, reach, { git: a.git, publicTree: a.publicTree, verifyCommand: `leansmith report ${a.slug} --verify-public` }));
+    base.push(await compareLocal(r, local, reach, { git: a.git, publicTree: a.publicTree, verifyCommand: `paperformalizer report ${a.slug} --verify-public` }));
   }
   if (toolchain !== pinnedToolchain) warnings.push(`built with ${toolchain ? `the toolchain \`${toolchain}\`` : "an unrecorded toolchain"}, which differs from the pinned \`${pinnedToolchain}\` this bundle requires`);
   const mathlib = manifest.find((p) => p.name === "mathlib")?.rev ?? null;
@@ -509,7 +509,7 @@ async function writeLean(a: BundleArgs, dir: string, names: Record<string, strin
   for (const r of vendored) R.push(`- \`${r.name}\` (${r.summary}): no public repository carries the adapted copy this was built with, so it is included in \`${r.path}/\` with its licence${existsSync(path.join(lean, r.path!, "UPSTREAM.md")) ? ` (\`${r.path}/UPSTREAM.md\`: where it comes from)` : ""}`);
   R.push("");
   // a reminder, never a refusal: the paper was checked on the version it pins
-  for (const r of git.filter((x) => x.catalogRev && x.catalogRev !== x.rev)) R.push(`Built on \`${r.name}\` at \`${r.rev!.slice(0, 12)}\`; LeanSmith now pins \`${r.catalogRev!.slice(0, 12)}\`. To build on that version, set \`rev = "${r.catalogRev}"\` for \`${r.name}\` in the toolkit's \`lakefile.toml\`, run \`lake update ${r.name}\` and check the paper again.`, "");
+  for (const r of git.filter((x) => x.catalogRev && x.catalogRev !== x.rev)) R.push(`Built on \`${r.name}\` at \`${r.rev!.slice(0, 12)}\`; PaperFormalizer now pins \`${r.catalogRev!.slice(0, 12)}\`. To build on that version, set \`rev = "${r.catalogRev}"\` for \`${r.name}\` in the toolkit's \`lakefile.toml\`, run \`lake update ${r.name}\` and check the paper again.`, "");
   if (warnings.length > 0) R.push("**Warning — this may not be what was built:**", "", ...warnings.map((w) => `- ${w}`), "");
   for (const b of base.filter((x) => x.status !== "differs")) R.push(`${b.status === "same" ? "Verified" : "Note"}: ${b.detail}.`, "");
   R.push("## The paper's results", "");
@@ -616,16 +616,16 @@ export async function writeBundle(a: BundleArgs): Promise<BundleResult> {
     `- \`${PAPER_DIR}/TODO.md\` — what remains before submitting, each item with its file and line.`,
     "- `REPORT.md` — what was wrong, what was done about it, and what was proved in Lean.",
     "- `MATCH.md` — each result beside its Lean declaration, phrase by phrase.",
-    ...(page ? [`- \`${page}\` — the paper's page as LeanSmith's reader draws it (the statements as corrected, the notes, each result's verdict and its Lean), as data.`] : []),
+    ...(page ? [`- \`${page}\` — the paper's page as PaperFormalizer's reader draws it (the statements as corrected, the notes, each result's verdict and its Lean), as data.`] : []),
     ...(lean ? [`- \`lean/\` — the Lean code, a standalone project to send to whoever checks it (\`lean/README.md\`: how to build it); ${lean.self_contained.ok ? "self-contained" : "NOT self-contained"}${lean.warnings.length > 0 ? `, ${lean.warnings.length} warning(s) on the base libraries it was built against` : ""}.`] : []),
-    ...(bundle.f4_seal ? [`- \`${F4_SEAL_FILE}\` — the two reviewers' verdicts on each Lean statement, under the code \`${bundle.f4_seal.code}\`${bundle.f4_seal.problems.length > 0 ? ` (NOT a finished review: ${bundle.f4_seal.problems.length} problem(s), see \`bundle.json\`)` : ""}, with the hash of every file of \`lean/\`, \`${PAPER_DIR}/\` and \`page/\`${seal?.arxiv ? ` and the paper's arXiv identifier as declared (${seal.arxiv})` : ""}; \`leansmith seal\` checks it. The files at this directory's root (\`REPORT.md\`, \`MATCH.md\`, \`bundle.json\`, this file) are outside the seal.${bundle.f4_seal.reviews ? ` \`${F4_REVIEWS_FILE}\` — what the two reviewers answered at each review pass of the run, earlier passes included.` : ""}`] : []),
+    ...(bundle.f4_seal ? [`- \`${F4_SEAL_FILE}\` — the two reviewers' verdicts on each Lean statement, under the code \`${bundle.f4_seal.code}\`${bundle.f4_seal.problems.length > 0 ? ` (NOT a finished review: ${bundle.f4_seal.problems.length} problem(s), see \`bundle.json\`)` : ""}, with the hash of every file of \`lean/\`, \`${PAPER_DIR}/\` and \`page/\`${seal?.arxiv ? ` and the paper's arXiv identifier as declared (${seal.arxiv})` : ""}; \`paperformalizer seal\` checks it. The files at this directory's root (\`REPORT.md\`, \`MATCH.md\`, \`bundle.json\`, this file) are outside the seal.${bundle.f4_seal.reviews ? ` \`${F4_REVIEWS_FILE}\` — what the two reviewers answered at each review pass of the run, earlier passes included.` : ""}`] : []),
     "",
     "What is checked is the paper's results: each corrected statement and proof, and every result that depends on one. The prose around them is the authors', as printed.",
     "",
   );
   await writeFile(path.join(dir, "README.md"), R.join("\n"), "utf8");
   await writeFile(path.join(dir, "bundle.json"), `${JSON.stringify({ slug: a.slug, ...bundle, names: paper.names, todo_items: paper.todo }, null, 2)}\n`, "utf8");
-  for (const r of lean?.requires ?? []) if (r.catalog_rev && r.rev) log(`bundle: built on ${r.name} at ${r.rev.slice(0, 12)}; LeanSmith now pins ${r.catalog_rev.slice(0, 12)} — the Lean README says how to move to it`);
+  for (const r of lean?.requires ?? []) if (r.catalog_rev && r.rev) log(`bundle: built on ${r.name} at ${r.rev.slice(0, 12)}; PaperFormalizer now pins ${r.catalog_rev.slice(0, 12)} — the Lean README says how to move to it`);
   log(`bundle: ${dir} — corrected paper compile ${paper.compile.status}${paper.pages ? ` (${paper.pages} pages)` : ""}, ${paper.todo.length} TODO item(s) (${blocking} blocking)${lean ? `, ${lean.files} Lean file(s), ${lean.self_contained.ok ? "self-contained" : `NOT self-contained (${lean.self_contained.problems.length} problem(s))`}${lean.warnings.length > 0 ? `, ${lean.warnings.length} warning(s) on the base libraries` : ""}` : ""}`);
   return { dir, bundle, names: paper.names, todo: paper.todo };
 }

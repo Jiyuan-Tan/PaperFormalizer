@@ -1,10 +1,10 @@
 {
-  "name": "leansmith",
+  "name": "paperformalizer",
   "version": "0.1.0",
   "private": true,
   "type": "module",
   "bin": {
-    "leansmith": "./bin/leansmith.ts"
+    "paperformalizer": "./bin/paperformalizer.ts"
   },
   "scripts": {
     "check": "npm run typecheck && npm run lint:template && npm test",

@@ -1,4 +1,4 @@
-// `leansmith demo`: one recorded run of a made-up paper, played back on the real page of a
+// `paperformalizer demo`: one recorded run of a made-up paper, played back on the real page of a
 // throwaway toolkit, step by step, with a tour beside it. No model call, no Lean, no account: the
 // recorded states (`tools/data/demo/snapshots/`, written by `scripts/demo_capture.mjs build`) are laid
 // over the toolkit one after the other, and this driver stands in for the attached agent — it takes
@@ -84,7 +84,7 @@ export class DemoDriver {
     /** How long a step's `running` lasts, as a share of what the script says (tests: 0). */
     private readonly pace: number = 1,
   ) {
-    this.stateFile = path.join(root, ".lake", "leansmith-demo.json");
+    this.stateFile = path.join(root, ".lake", "paperformalizer-demo.json");
     try { this.step = Math.min(Number(JSON.parse(readFileSync(this.stateFile, "utf8")).step) || 0, script.steps.length - 1); } catch { this.step = 0; }
   }
 

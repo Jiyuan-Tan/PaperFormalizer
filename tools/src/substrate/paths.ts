@@ -1,4 +1,4 @@
-// Study-mode paths inside a LeanSmith toolkit. `root` is always the toolkit root.
+// Study-mode paths inside a PaperFormalizer toolkit. `root` is always the toolkit root.
 import path from "node:path";
 import { TOOLKIT_RUNS_DIRNAME, TOOLKIT_STAGING_SEGMENT } from "../toolkit/config.js";
 import { pascalIdentifier } from "../paths.js";

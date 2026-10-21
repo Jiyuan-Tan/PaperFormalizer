@@ -1,7 +1,7 @@
 // A theorem's Lean statement as the rows F5 links and the paper page draws — ONE cut for both.
 //
 // `leanStatementView` is the nested view of `presentation/lean_structure.ts` with what
-// LeanSmith adds to it: a stable id on every row, the chip saying whether a binder is an
+// PaperFormalizer adds to it: a stable id on every row, the chip saying whether a binder is an
 // object or a hypothesis, and the statement's own text (what the links are checked against).
 // `expandTypeOf` puts, in place of a clause written `type_of% @name`, the statement of the run's
 // theorem `name`: its rows are rows of this statement, with ids under the clause's (`r3/r7`). The
@@ -112,7 +112,7 @@ export function binderChip(names: string, type: string, known?: "prop" | "data" 
 }
 
 /**
- * Set every hypothesis row's chip by LeanSmith's rule (the ported structurer reads a name
+ * Set every hypothesis row's chip by PaperFormalizer's rule (the ported structurer reads a name
  * starting with `h` as a hypothesis and any `∀` type as a proposition): a typed binder group by
  * `binderChip` (an implicit one is an object), a `∀` header as the quantifier it is; a hypothesis
  * naming one of `cited` is an assumed external result. Pure but for `view`.

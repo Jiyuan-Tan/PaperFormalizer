@@ -73,7 +73,7 @@ describe("library catalog", () => {
   });
 });
 
-describe("leansmith init", () => {
+describe("paperformalizer init", () => {
   it.each(["\n", "\r\n"])("renders a %j template with the pinned revision and domain markers intact", (eol) => {
     const c = loadCatalog();
     const template = readFileSync(path.join(repoRoot(), "templates/toolkit/lakefile.toml"), "utf8")
@@ -107,7 +107,7 @@ describe("leansmith init", () => {
     expect(cfg.baseLibraries.map((b) => b.name)).toEqual(["Mathlib", "Causalean"]);
     expect(cfg.baseLibraries[1]!.index).toBe(path.join(dir, ".lake/packages/Causalean/doc/library_index.json"));
     expect(existsSync(path.join(dir, ".git"))).toBe(true);
-    expect(existsSync(path.join(dir, "leansmith.json.example"))).toBe(false);
+    expect(existsSync(path.join(dir, "paperformalizer.json.example"))).toBe(false);
   });
 
   it("requires a vendored library by its path in this repository, its index generated into the toolkit", () => {

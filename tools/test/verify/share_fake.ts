@@ -95,7 +95,7 @@ export function fakeService(base = SERVICE): { fetch: typeof fetch; uploads: Map
 /** A toolkit with one finished run and its bundle in the current layout, sealed. */
 export async function finishedRun(): Promise<{ root: string; run: string; bundle: string }> {
   const root = await tmp("toolkit");
-  await writeFile(path.join(root, "leansmith.json"), JSON.stringify(TOOLKIT_JSON));
+  await writeFile(path.join(root, "paperformalizer.json"), JSON.stringify(TOOLKIT_JSON));
   const run = path.join(root, "runs", SLUG);
   const bundle = path.join(run, "bundle");
   const files: Record<string, string> = {

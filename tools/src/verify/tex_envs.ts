@@ -1,5 +1,5 @@
 /**
- * `leansmith verify` V1 step 1 — the mechanical LaTeX environment parser.
+ * `paperformalizer verify` V1 step 1 — the mechanical LaTeX environment parser.
  *
  * Pure functions over a source tree: flatten `\input`/`\include`, strip comments while
  * keeping a 1:1 line map back to the ORIGINAL files, learn which environment names are

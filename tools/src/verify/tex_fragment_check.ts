@@ -510,13 +510,13 @@ export function envKeepProblem(tex: string, printed: string | null | undefined):
  * context (a statement op `statement`, a proof op `step`; balanced like the text it replaces, `printed`
  * of the op: `balancedLikeUnit`, a violation when it does not keep that text's crossing environments:
  * `envKeepProblem`) and the corrected statement it derives
- * (`statement`), a proof note the fixer wrote whole (not an amended printed proof: the paper's own
+ * (`statement`), each side condition (`hypothesis`), a proof note the fixer wrote whole (not an amended printed proof: the paper's own
  * text), a consequential `reason` and an unfixable `reason` (`note`), and the
  * explanation's fields — for patches and suggested repairs alike. The fixer's wiring passes them to
  * `texFieldViolations`. Pure.
  */
 export function patchFileTexFields(file: Pick<PatchFile, "patches" | "unfixable">, printed: (op: PatchOp) => string | null = () => null): TexField[] {
-  type Body = { corrected_statement?: string | null; ops?: PatchOp[]; proof_note?: string | null; corollaries?: ReadonlyArray<{ statement: string; follows: string }> | null };
+  type Body = { corrected_statement?: string | null; ops?: PatchOp[]; proof_note?: string | null; conditions?: readonly string[] | null; corollaries?: ReadonlyArray<{ statement: string; follows: string }> | null };
   // Each op's TeX in its unit's context: a proof step, or a statement's text.
   const kindOf = (op: PatchOp): TexFragmentKind => (isProofOp(op) ? "step" : "statement");
   // A corrected algorithm is the paper's own float around its ops, each compiled on its own (a control
@@ -534,6 +534,8 @@ export function patchFileTexFields(file: Pick<PatchFile, "patches" | "unfixable"
     // A proof note the fixer wrote whole (the paper prints no proof); an amended printed proof is the
     // paper's own text around the proof ops, each already compiled as a step.
     ...((b.ops ?? []).some(isProofOp) ? [] : [{ where: `${where}: its proof_note`, text: b.proof_note, kind: "note" as const }]),
+    // Each side condition it states beside the statement, set as a hypothesis.
+    ...(b.conditions ?? []).map((c, k) => ({ where: `${where}: conditions[${k}]`, text: c, kind: "hypothesis" as const })),
     // Each corollary it splits off: a statement of its own, and its proof.
     ...(b.corollaries ?? []).flatMap((c, k) => [
       { where: `${where}: corollaries[${k}].statement`, text: c.statement, kind: "statement" as const },

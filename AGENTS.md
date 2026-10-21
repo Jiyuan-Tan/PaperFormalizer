@@ -1,6 +1,6 @@
-# LeanSmith — agent guide
+# PaperFormalizer — agent guide
 
-This file is the guide for the coding agent that installs and runs LeanSmith for a user, Claude
+This file is the guide for the coding agent that installs and runs PaperFormalizer for a user, Claude
 Code and Codex alike (`CLAUDE.md` only imports it). Where it conflicts with a higher-priority system or developer
 instruction of your harness, follow that instruction and keep the intent of this file.
 
@@ -10,12 +10,12 @@ nothing in this file applies to it.
 
 ## Layout
 
-    LeanSmith/            this repository (git root; work from here)
+    PaperFormalizer/            this repository (git root; work from here)
       tools/                   the TypeScript pipeline: bin/ (CLI), src/, test/, scripts/node_env.sh
-                               (src/ui/: the local web UI, `leansmith ui`)
+                               (src/ui/: the local web UI, `paperformalizer ui`)
       doc/USER_MANUAL.md       user-facing manual
-      .claude/skills/leansmith/SKILL.md   the orchestrator guide (stages, halts, reading a run)
-      templates/toolkit/       template for a new toolkit (`leansmith init` copies it)
+      .claude/skills/paperformalizer/SKILL.md   the orchestrator guide (stages, halts, reading a run)
+      templates/toolkit/       template for a new toolkit (`paperformalizer init` copies it)
       third_party/             adapted copies of optional domain libraries, on the pinned Mathlib
       tools/data/libraries.json  the pin (Lean, Mathlib) and the optional-library catalog
       <toolkit>/               your toolkit — its own git repository, wherever `init` put it; passed with `--toolkit`:
@@ -27,23 +27,23 @@ Causalean is one optional domain library (README).
 ## Installing for a user
 
 Follow README "Install". Every domain library (Causalean, StatLean, FoML, optlib, …) is optional:
-never choose for the user — show them `leansmith init --list`, ask which they want and where
+never choose for the user — show them `paperformalizer init --list`, ask which they want and where
 the toolkit should live, then run `init` with their answer. While it builds, offer a first-time
-user the demo (README "Try the demo"): start `leansmith demo` detached and give them its link.
+user the demo (README "Try the demo"): start `paperformalizer demo` detached and give them its link.
 When the user finishes the tour, stop the demo server you started by its PID; closing its browser
 tab does not stop it. Do not leave a detached demo running after the installation guide is finished.
 A library that is not offered is ported to the pin by `doc/PORTING.md`.
 
 ## Running the pipeline
 
-Before running or orchestrating `leansmith verify` (or reading a run for the user), read
-`.claude/skills/leansmith/SKILL.md` — Claude loads it as the `leansmith` skill; Codex reads
+Before running or orchestrating `paperformalizer verify` (or reading a run for the user), read
+`.claude/skills/paperformalizer/SKILL.md` — Claude loads it as the `paperformalizer` skill; Codex reads
 the file directly. From `tools/`, always `source scripts/node_env.sh` first (never hand-pin a Node):
 
-    npx tsx bin/leansmith.ts verify <src> --toolkit <toolkit> --slug <slug> --stop-after V1.5
+    npx tsx bin/paperformalizer.ts verify <src> --toolkit <toolkit> --slug <slug> --stop-after V1.5
 
 - At the start of an interaction on a run, bring up the toolkit's local UI and give the user its link
-  (`npx tsx bin/leansmith.ts ui --toolkit <toolkit>`, detached; it prints the link of a UI already
+  (`npx tsx bin/paperformalizer.ts ui --toolkit <toolkit>`, detached; it prints the link of a UI already
   running and exits), then attach yourself to the run by watching it,
   `node tools/scripts/orch_watch_loop.mjs --toolkit <toolkit> <slug>…` over your unfinished runs (a run in phase `done` is left out)
   (Claude: under the Monitor tool, plus a recurring check-in; Codex: `orch.mjs watch <slug> --toolkit <toolkit>

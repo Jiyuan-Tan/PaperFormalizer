@@ -1,10 +1,10 @@
 // PORTED from the upstream project's `tools/src/presentation/lean_structure.ts` (the "structured
 // (hypotheses / conclusions) view" of its site's `paperLean.ts`, plus `assignRowIds`): a statement
 // as shared hypothesis rows and nested conclusion cards, a Prop-valued definition or record the
-// same way. Re-sync by re-copying that file, then re-apply the LeanSmith changes, each a call
-// marked `LeanSmith` into `lean_structure_tc.ts` (what those additions are is said there) or a
+// same way. Re-sync by re-copying that file, then re-apply the PaperFormalizer changes, each a call
+// marked `PaperFormalizer` into `lean_structure_tc.ts` (what those additions are is said there) or a
 // one-line change so marked; the text primitives (`squash`, `dedent`, the bracket matcher, …) live
-// in `lean_text.ts`. The chips are set again by LeanSmith's own rule outside this file
+// in `lean_text.ts`. The chips are set again by PaperFormalizer's own rule outside this file
 // (`formalization/lean_rows.ts` `chipRows`).
 //
 // `assignRowIds` stamps a stable `id` ("r1", "r2", … in reading order) on every hypothesis row and
@@ -50,14 +50,14 @@ export interface HypRow {
   /** Space-separated NL↔Lean crosslink ids (HTML-class style; word-match
    *  with `[data-xl~="…"]`). A row can be covered by several links. */
   xl?: string;
-  /** LeanSmith: a premise that states a claim with parts of its own — `(A → B)`,
+  /** PaperFormalizer: a premise that states a claim with parts of its own — `(A → B)`,
    *  `(∀ x ∈ s, P x ∧ Q x)`, `(A ∧ B)` — cut like a conclusion clause. `code` keeps the premise
    *  whole; its rows are `sub`'s, and the premise has no row of its own. */
   sub?: ConclusionCard[];
-  /** LeanSmith: a NAMED hypothesis with parts (`lean_structure_tc.ts` `namedRow`): its own
+  /** PaperFormalizer: a NAMED hypothesis with parts (`lean_structure_tc.ts` `namedRow`): its own
    *  line — the name and what its type quantifies or assumes (`(h : ∀ k,`); `sub` holds the parts. */
   head?: string;
-  /** LeanSmith: a binder of the enclosing section's `variable`s the statement uses
+  /** PaperFormalizer: a binder of the enclosing section's `variable`s the statement uses
    *  (`formalization/lean_rows.ts` `withSectionVariables`), not one of the declaration's own. */
   section?: true;
 }
@@ -75,7 +75,7 @@ export interface ConclusionCard {
   /** A leading run of `∃` binder groups, verbatim through its trailing comma —
    *  it scopes everything below, but is not a hypothesis. Only ever set
    *  alongside `sub`: an `∃` whose body doesn't split stays inside `code`.
-   *  LeanSmith: also a run of filter quantifiers (`∀ᵐ x ∂μ,`), the head of a
+   *  PaperFormalizer: also a run of filter quantifiers (`∀ᵐ x ∂μ,`), the head of a
    *  case split (`match x with`), a branch's condition or pattern (`if c then`,
    *  `else`, `| p =>`) and a record field's name (`name :`). */
   intro?: string;
@@ -86,7 +86,7 @@ export interface ConclusionCard {
   /** Space-separated NL↔Lean crosslink ids for the card's own content row:
    *  its `intro` when it nests, its `code` when it is a leaf. */
   xl?: string;
-  /** LeanSmith: one alternative of a disjunction cut into its alternatives (`disjunctSplit`). */
+  /** PaperFormalizer: one alternative of a disjunction cut into its alternatives (`disjunctSplit`). */
   alt?: "either" | "or";
 }
 
@@ -136,7 +136,7 @@ export function structurePropRecordView(rawSource: string): StructuredView | nul
   const record = structureRecordSource(rawSource);
   if (!record?.fields) return null;
 
-  // LeanSmith: the parameters are the binder groups as written (the record parse folds an
+  // PaperFormalizer: the parameters are the binder groups as written (the record parse folds an
   // instance into the parameter it constrains, which no bracket pair can quote back).
   const groups = recordGroups(rawSource);
   if (!groups) return null;
@@ -157,7 +157,7 @@ export function structurePropRecordView(rawSource: string): StructuredView | nul
     if (!isBinderRow(item)) continue;
     const body = stmtBodyText(item.body);
     if (!body) return null;
-    conclusions.push(fieldCard(item.names, body, buildCard)); // LeanSmith
+    conclusions.push(fieldCard(item.names, body, buildCard)); // PaperFormalizer
   }
   return conclusions.length > 0 ? { sharedHyps, conclusions } : null;
 }
@@ -171,7 +171,7 @@ export function structurePropRecordView(rawSource: string): StructuredView | nul
 // structured (hypotheses / conclusions) view
 // ---------------------------------------------------------------------------
 
-// LeanSmith: `letI`/`haveI` scope the rest of the clause as `let`/`have` do.
+// PaperFormalizer: `letI`/`haveI` scope the rest of the clause as `let`/`have` do.
 const SCOPE_KEYWORDS = ["let", "letI", "have", "haveI", "fun", "match", "if", "do"];
 /** Big-operator binders (`∑ x : T, …`): like `∀`, they scope the rest of the clause. */
 const BIG_OPERATORS = new Set(["∑", "∏", "⨆", "⨅", "∫", "⨍", "⋃", "⋂", "⨁", "∮"]);
@@ -188,7 +188,7 @@ function leadingImplicationIndex(text: string): number {
   for (let i = 0; i < text.length; i++) {
     if (depths[i] !== 0) continue;
     const c = text[i];
-    // LeanSmith: `P → Q ↔ R` is `(P → Q) ↔ R`, `P ↔ Q → R` is `P ↔ (Q → R)`: no premise here
+    // PaperFormalizer: `P → Q ↔ R` is `(P → Q) ↔ R`, `P ↔ Q → R` is `P ↔ (Q → R)`: no premise here
     if (c === "↔") return -1;
     if (c === "→") return iffAtLevel(text, i + 1) ? -1 : i;
     // Binders scope everything to their right: quantifiers, big operators, and
@@ -310,7 +310,7 @@ interface LetRun {
  * column zero while continuation lines remain indented. We only act on that
  * unambiguous shape; unusual inline/layout forms remain a single leaf.
  */
-// LeanSmith: `letI := inst` / `haveI := inst` are peeled like `let`.
+// PaperFormalizer: `letI := inst` / `haveI := inst` are peeled like `let`.
 const LET_KEYWORDS = ["let", "letI", "haveI"];
 
 function stripLetRun(text: string): LetRun | null {
@@ -398,8 +398,8 @@ function liftTelescope(raw: string, depth: number): Lift {
     }
     if (t.startsWith("∀")) {
       const q = stripLeadingQuantifier(t);
-      if (!q || bindsInside(q.header)) break; // LeanSmith: `∀ h : ∀ t, …` is not cut at the inner comma
-      hyps.push(...forallRows(q.header, depth, buildCard, MAX_CARD_DEPTH, forallChip)); // LeanSmith
+      if (!q || bindsInside(q.header)) break; // PaperFormalizer: `∀ h : ∀ t, …` is not cut at the inner comma
+      hyps.push(...forallRows(q.header, depth, buildCard, MAX_CARD_DEPTH, forallChip)); // PaperFormalizer
       prefix.push(q.header, ",");
       t = q.rest;
       continue;
@@ -407,7 +407,7 @@ function liftTelescope(raw: string, depth: number): Lift {
     const arrow = leadingImplicationIndex(t);
     if (arrow > 0) {
       const premise = t.slice(0, arrow).trim();
-      hyps.push(premiseRow(premise, depth, buildCard, MAX_CARD_DEPTH)); // LeanSmith
+      hyps.push(premiseRow(premise, depth, buildCard, MAX_CARD_DEPTH)); // PaperFormalizer
       prefix.push(premise, "→");
       t = t.slice(arrow + 1).trim();
       continue;
@@ -436,7 +436,7 @@ function buildCard(raw: string, depth: number): BuiltCard | null {
   const leaf = (): BuiltCard => ({
     card: { hyps: localHyps, code: dedent(inner) },
     recon: localPrefix + inner + lift.suffix,
-    lead: squash(localPrefix).length, // LeanSmith
+    lead: squash(localPrefix).length, // PaperFormalizer
   });
   if (depth >= MAX_CARD_DEPTH) return leaf();
 
@@ -445,7 +445,7 @@ function buildCard(raw: string, depth: number): BuiltCard | null {
   // split; otherwise the clause reads better whole, `∃` and all.
   const parts = conjunctsOf(ex ? ex.rest : inner);
   if (!parts) {
-    // LeanSmith: what the run scopes may have parts without being a conjunction (a telescope,
+    // PaperFormalizer: what the run scopes may have parts without being a conjunction (a telescope,
     // a case split), and a run of several quantifiers is a line of its own; a clause that is a
     // case split is one sub-card per branch.
     const scoped = ex ? buildCard(ex.rest, depth + 1) : null;
@@ -478,7 +478,7 @@ function buildCard(raw: string, depth: number): BuiltCard | null {
   return {
     card,
     recon: localPrefix + (ex?.intro ?? "") + subs.map((s) => s.recon).join("∧") + lift.suffix,
-    lead: squash(localPrefix + (ex?.intro ?? "")).length, // LeanSmith
+    lead: squash(localPrefix + (ex?.intro ?? "")).length, // PaperFormalizer
   };
 }
 
@@ -549,7 +549,7 @@ export function structureStatementView(
   for (const g of scan.groups) {
     const parsed = parseBinderGroup(g.raw);
     if (!parsed) return null; // one unparseable binder aborts the whole view
-    sharedHyps.push(namedRow(g.raw, parsed.chip, 0, buildCard, MAX_CARD_DEPTH)); // LeanSmith
+    sharedHyps.push(namedRow(g.raw, parsed.chip, 0, buildCard, MAX_CARD_DEPTH)); // PaperFormalizer
   }
 
   const goal = scan.cleaned.slice(
@@ -620,7 +620,7 @@ export function assignRowIds(view: StructuredView): Array<{ id: string; kind: Ro
   const hypKind: RowKind = isDef ? "param" : "hyp";
   const clauseKind: RowKind = isDef ? "value" : "conclusion";
   const hyp = (row: HypRow) => {
-    // LeanSmith: a premise cut into rows of its own is those rows (after its head line, for a
+    // PaperFormalizer: a premise cut into rows of its own is those rows (after its head line, for a
     // named one whose head states something)
     if (row.sub) {
       if (row.head && !bareHead(row.head)) {

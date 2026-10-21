@@ -4,7 +4,7 @@ import { fileURLToPath } from "node:url";
 import { TOOLKIT_RUNS_DIRNAME, toolkitConfigFileIn } from "./toolkit/config.js";
 
 /**
- * Path helpers for LeanSmith runs.
+ * Path helpers for PaperFormalizer runs.
  *
  * Two roots:
  *   TOOL_ROOT     this repository's `tools/` directory. Prompts and templates resolve here,
@@ -20,7 +20,7 @@ import { TOOLKIT_RUNS_DIRNAME, toolkitConfigFileIn } from "./toolkit/config.js";
  *   <papers_lib>/<Pascal>/             Lean output of the run (module `<papers_lib>.<Pascal>.*`)
  *   <papers_lib>/<Pascal>.lean         the run's barrel
  *
- * The run id IS the slug (`leansmith verify … --slug <slug>`, default from the file name).
+ * The run id IS the slug (`paperformalizer verify … --slug <slug>`, default from the file name).
  */
 
 /** This repository's `tools/` directory. */
@@ -287,7 +287,7 @@ export function toolPromptPath(name: string): string {
 }
 
 /**
- * An F-stage prompt. `root` is the run's toolkit root: when it holds `leansmith.json` the
+ * An F-stage prompt. `root` is the run's toolkit root: when it holds `paperformalizer.json` the
  * prompt resolves under TOOL_ROOT ({@link toolPromptPath}). Any
  * other `root` is a test fixture tree and resolves to `<root>/tools/src/formalization/prompts/…`,
  * so a fixture that writes a stub prompt there can never overwrite a real prompt of this repository.

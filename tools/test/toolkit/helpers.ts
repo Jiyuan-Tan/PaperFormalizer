@@ -27,7 +27,7 @@ export const BARREL = (name: string, imports: string[] = []): string =>
 export function skeletonFiles(root: string): Record<string, string> {
   const j = (...p: string[]) => path.join(root, ...p).split(path.sep).join("/");
   return {
-    [j("leansmith.json")]: JSON.stringify(TOOLKIT_JSON, null, 2),
+    [j("paperformalizer.json")]: JSON.stringify(TOOLKIT_JSON, null, 2),
     [j("lakefile.toml")]: 'name = "t"\n\n[[lean_lib]]\nname = "Toolkit"\n',
     [j("Toolkit.lean")]: BARREL("Toolkit", ["Toolkit.Foundations", "Toolkit.Tricks"]),
     [j("Toolkit", "Foundations.lean")]: BARREL("Toolkit.Foundations"),

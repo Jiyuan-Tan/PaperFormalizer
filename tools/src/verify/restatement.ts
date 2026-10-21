@@ -58,6 +58,8 @@ export interface RepairBody {
   /** The repair's operations on the paper's units (`ops.ts`). */
   ops?: ReadonlyArray<PatchOp>;
   proof_note?: string | null;
+  /** The side conditions it states beside the statement. */
+  conditions?: readonly string[] | null;
   /** The corollaries it splits off the result. */
   corollaries?: ReadonlyArray<{ statement: string; follows: string }> | null;
 }
@@ -87,6 +89,7 @@ export function repairTextProblems(body: RepairBody, explanation: unknown, ctx: 
   // With proof ops, the proof note is the printed proof as they amend it (`materializeReply`).
   const amended = revisesProof(body);
   if (body.proof_note?.trim()) out.push(...texMathProblems(body.proof_note, amended ? "amended proof (the printed proof with your proof ops applied: each op keeps math delimiters balanced)" : "proof_note", { reference: both }));
+  (body.conditions ?? []).forEach((c, k) => out.push(...texMathProblems(c, `conditions[${k}]`, { reference: ctx.printed })));
   (body.corollaries ?? []).forEach((c, k) => {
     out.push(...texMathProblems(c.statement, `corollaries[${k}].statement`, { reference: ctx.printed }), ...texMathProblems(c.follows, `corollaries[${k}].follows`, { reference: both }));
     // The runner sets a corollary's heading: its `statement` is the text under it.

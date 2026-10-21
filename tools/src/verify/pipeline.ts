@@ -1,5 +1,5 @@
 /**
- * `leansmith verify` runner.
+ * `paperformalizer verify` runner.
  *
  * Owns the V stages (V1 extract, V1.5 review, V6 report) and delegates F1–F5 to the F runner
  * (`runPipeline`). `state.verify.phase` says which runner owns the next step;
@@ -17,7 +17,7 @@
  *
  * TOOLKIT PROMOTION (`src/proposals/`). Round A (`proposals_A`), after F1 wrote the plan: the
  * results the paper cites without proving are proposed to the toolkit owner, and the run stops
- * until the owner decides (`leansmith propose <slug> --round A --apply`, which builds the
+ * until the owner decides (`paperformalizer propose <slug> --round A --apply`, which builds the
  * accepted ones with the study pipeline and points the plan at them); `--defer-proposals` skips it,
  * and a round with nothing proposed continues without stopping. Round B (`proposals_B`), after the
  * report of a full F run: the paper's proved results are proposed the same way. The decisions are
@@ -279,7 +279,7 @@ function reportTerminalPhase(verify: VerifyState): "done" | "failed" {
 function verifyBlock(state: StateJson, stateFile: string): VerifyState {
   if (!state.verify) {
     throw new Error(
-      `${stateFile} has no \`verify\` block — it was not seeded by \`leansmith verify\`.`,
+      `${stateFile} has no \`verify\` block — it was not seeded by \`paperformalizer verify\`.`,
     );
   }
   return state.verify;
@@ -296,15 +296,15 @@ async function loadVerifyState(repoRoot: string, qid: string): Promise<StateJson
   return state;
 }
 
-/** The stage `LEANSMITH_STOP_AFTER` names, as `--stop-after` takes it (a bare F stage number
+/** The stage `PAPERFORMALIZER_STOP_AFTER` names, as `--stop-after` takes it (a bare F stage number
  * too); null when unset. A value that is no stage, or one `--stop-after` refuses, is refused here. */
 function envStopAfter(): StageHaltId | null {
-  const raw = process.env.LEANSMITH_STOP_AFTER?.trim();
+  const raw = process.env.PAPERFORMALIZER_STOP_AFTER?.trim();
   if (!raw) return null;
   const id = resolveStageHaltId(raw) ?? resolveStageHaltId(`F${raw}`);
-  if (!id) throw new Error(`LEANSMITH_STOP_AFTER=${raw} is not a stage (expected one of ${STOP_AFTER_USAGE}).`);
+  if (!id) throw new Error(`PAPERFORMALIZER_STOP_AFTER=${raw} is not a stage (expected one of ${STOP_AFTER_USAGE}).`);
   const refusal = stopAfterRefusal(id);
-  if (refusal) throw new Error(refusal.replace("--stop-after ", () => "LEANSMITH_STOP_AFTER="));
+  if (refusal) throw new Error(refusal.replace("--stop-after ", () => "PAPERFORMALIZER_STOP_AFTER="));
   return id;
 }
 
@@ -313,7 +313,7 @@ function envStopAfter(): StageHaltId | null {
  * checkpoint, or a V-stage checkpoint. Returns the final `state.verify`.
  */
 export async function runVerifyPipeline(given: VerifyPipelineArgs): Promise<VerifyState> {
-  // `LEANSMITH_STOP_AFTER` is `--stop-after` (the flag wins), for every stage it takes.
+  // `PAPERFORMALIZER_STOP_AFTER` is `--stop-after` (the flag wins), for every stage it takes.
   // Resolved here, once: the F runner takes the stage it is passed and reads no variable. An invalid
   // value is refused even under the flag — it would be the next invocation's stop.
   const env = envStopAfter();
@@ -333,7 +333,7 @@ export async function runVerifyPipeline(given: VerifyPipelineArgs): Promise<Veri
   }
   if (args.fromStage && args.stopAfter && STAGE_HALT_IDS.indexOf(args.stopAfter as StageHaltId) < STAGE_HALT_IDS.indexOf(args.fromStage as StageHaltId)) {
     // Also for the variable: it used to save the re-entry, halt before F1 and lose the entry stage.
-    throw new Error(`${given.stopAfter ? "--stop-after " : "LEANSMITH_STOP_AFTER="}${args.stopAfter} precedes --from-stage ${args.fromStage}; nothing would run.`);
+    throw new Error(`${given.stopAfter ? "--stop-after " : "PAPERFORMALIZER_STOP_AFTER="}${args.stopAfter} precedes --from-stage ${args.fromStage}; nothing would run.`);
   }
   if (args.freshReview && args.fromStage !== "V1" && args.fromStage !== "V1.5") {
     throw new Error("--fresh-review re-grades every node at the next V1.5; it needs --from-stage V1 or V1.5.");
@@ -622,9 +622,9 @@ export async function runVerifyPipeline(given: VerifyPipelineArgs): Promise<Veri
         `render checkpoint: ${block}\n` +
           (fragments.length > 0 ? `  (and ${fragments.length} model-written fragment(s) that do not compile, routed to their producers once the renderer is fixed)\n` : "") +
           `  The annotated paper (written anyway): ${a.line}\n` +
-          `  A text from the run's record (transcription, reading, patch) is corrected there; a renderer defect is fixed with a test and recorded in pipeline_issues.md (leansmith SKILL §'When the pipeline itself fails'). Then continue with:\n` +
-          `    leansmith verify ${args.input} --resume   (renders the annotated paper again; the run continues where it stopped once it is clean)\n` +
-          `  (with the --toolkit / --slug / --dry-run the run was started with; \`leansmith lint-annotated <slug>\` re-checks a tree written by \`leansmith annotate <slug>\`)`,
+          `  A text from the run's record (transcription, reading, patch) is corrected there; a renderer defect is fixed with a test and recorded in pipeline_issues.md (paperformalizer SKILL §'When the pipeline itself fails'). Then continue with:\n` +
+          `    paperformalizer verify ${args.input} --resume   (renders the annotated paper again; the run continues where it stopped once it is clean)\n` +
+          `  (with the --toolkit / --slug / --dry-run the run was started with; \`paperformalizer lint-annotated <slug>\` re-checks a tree written by \`paperformalizer annotate <slug>\`)`,
       );
       log(renderCheckpointGuidance(autoMode()));
       return "halt";
@@ -639,7 +639,7 @@ export async function runVerifyPipeline(given: VerifyPipelineArgs): Promise<Veri
         `contract checkpoint: ${contractBlock(g.stuck)}\n` +
           `  The annotated paper (written anyway, these printed verbatim): ${a.line}\n` +
           `  Continue with:\n` +
-          `    leansmith verify ${args.input} --resume   (routes the fragments to their producers again; the run continues where it stopped once they compile)\n` +
+          `    paperformalizer verify ${args.input} --resume   (routes the fragments to their producers again; the run continues where it stopped once they compile)\n` +
           `  (with the --toolkit / --slug / --dry-run the run was started with)`,
       );
       log(contractCheckpointGuidance(autoMode()));
@@ -1450,7 +1450,7 @@ export async function runVerifyPipeline(given: VerifyPipelineArgs): Promise<Veri
           const why = userStopAfter !== undefined && userStopAfter === state.stage_completed ? `--stop-after ${args.stopAfter}` : "checkpoint";
           log(
             `F stages halted at stage ${state.stage_completed} (${why}) — inspect the run, ` +
-              "then continue with `leansmith verify <input> --resume`.",
+              "then continue with `paperformalizer verify <input> --resume`.",
           );
           return current;
         }

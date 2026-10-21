@@ -16,8 +16,8 @@ afterEach(async () => {
 
 describe("run heartbeat", () => {
   it("keeps same-qid ownership while the parallel flag permits different qids", async () => {
-    const previous = process.env.LEANSMITH_ALLOW_PARALLEL;
-    process.env.LEANSMITH_ALLOW_PARALLEL = "1";
+    const previous = process.env.PAPERFORMALIZER_ALLOW_PARALLEL;
+    process.env.PAPERFORMALIZER_ALLOW_PARALLEL = "1";
     const logsA = await mkdtemp(join(tmpdir(), "causalsmith-heartbeat-flag-a-"));
     const logsB = await mkdtemp(join(tmpdir(), "causalsmith-heartbeat-flag-b-"));
     dirs.push(logsA, logsB);
@@ -30,24 +30,24 @@ describe("run heartbeat", () => {
       await second;
       await expect(
         withRunHeartbeatAt(logsA, "qid-a", async () => undefined),
-      ).rejects.toMatchObject({ code: "leansmith_run_busy" });
+      ).rejects.toMatchObject({ code: "paperformalizer_run_busy" });
       release();
       await first;
     } finally {
-      if (previous === undefined) delete process.env.LEANSMITH_ALLOW_PARALLEL;
-      else process.env.LEANSMITH_ALLOW_PARALLEL = previous;
+      if (previous === undefined) delete process.env.PAPERFORMALIZER_ALLOW_PARALLEL;
+      else process.env.PAPERFORMALIZER_ALLOW_PARALLEL = previous;
     }
   });
 
   it("honours a fresh heartbeat written on another machine of the mount, and ignores a stale one", async () => {
-    const logs = await mkdtemp(join(tmpdir(), "leansmith-heartbeat-host-"));
+    const logs = await mkdtemp(join(tmpdir(), "paperformalizer-heartbeat-host-"));
     dirs.push(logs);
     const hb = join(logs, ".run.active");
     // a pid this host cannot see: the owner runs elsewhere, so the pid proves nothing
     await writeFile(hb, "0x3ffffffe 2026-01-01T00:00:00.000Z tok host=elsewhere\n");
     await expect(
       withRunHeartbeatAt(logs, "paper", async () => undefined),
-    ).rejects.toMatchObject({ code: "leansmith_run_busy", message: expect.stringContaining("on elsewhere") });
+    ).rejects.toMatchObject({ code: "paperformalizer_run_busy", message: expect.stringContaining("on elsewhere") });
     // the same file an hour old: its owner stopped refreshing it
     const old = new Date(Date.now() - 60 * 60 * 1000);
     await utimes(hb, old, old);
@@ -73,7 +73,7 @@ describe("run heartbeat", () => {
     const old = new Date("2000-01-01T00:00:00.000Z");
     await utimes(lock, old, old);
     await expect(withRunHeartbeatAt(logs, "paper", async () => undefined))
-      .rejects.toMatchObject({ code: "leansmith_run_busy" });
+      .rejects.toMatchObject({ code: "paperformalizer_run_busy" });
   });
 
   it("reclaims a heartbeat whose PID is dead", async () => {
@@ -122,7 +122,7 @@ describe("run heartbeat", () => {
     const first = wrap(run());
     const second = wrap(run());
     await oneEntered;
-    expect(await oneRejected).toMatchObject({ code: "leansmith_run_busy" });
+    expect(await oneRejected).toMatchObject({ code: "paperformalizer_run_busy" });
     expect(entered).toBe(1);
     release();
     const results = await Promise.all([first, second]);
@@ -130,7 +130,7 @@ describe("run heartbeat", () => {
   });
 
   it("the heartbeat names its host, its beat and its process's start; it is gone when the action ends", async () => {
-    const logs = await mkdtemp(join(tmpdir(), "leansmith-heartbeat-tokens-"));
+    const logs = await mkdtemp(join(tmpdir(), "paperformalizer-heartbeat-tokens-"));
     dirs.push(logs);
     const hb = join(logs, ".run.active");
     await withRunHeartbeatAt(logs, "paper", async () => {
@@ -143,7 +143,7 @@ describe("run heartbeat", () => {
   });
 
   it("a heartbeat of this host whose pid now belongs to a process started at another time is not its owner", async () => {
-    const logs = await mkdtemp(join(tmpdir(), "leansmith-heartbeat-reuse-"));
+    const logs = await mkdtemp(join(tmpdir(), "paperformalizer-heartbeat-reuse-"));
     dirs.push(logs);
     const hb = join(logs, ".run.active");
     await writeFile(hb, `${process.pid} 2026-01-01T00:00:00.000Z tok host=${hostname()} beat=15 start=1\n`);
@@ -156,7 +156,7 @@ describe("run heartbeat", () => {
 
 describe("run heartbeat: a runner that exits without unwinding", () => {
   it("takes its heartbeat with it (a stop ends the process from a signal handler: no finally runs)", async () => {
-    const logs = await mkdtemp(join(tmpdir(), "leansmith-heartbeat-exit-"));
+    const logs = await mkdtemp(join(tmpdir(), "paperformalizer-heartbeat-exit-"));
     dirs.push(logs);
     const script = join(logs, "runner.mts");
     await writeFile(script, `import { existsSync } from "node:fs";

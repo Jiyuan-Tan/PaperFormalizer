@@ -1,5 +1,5 @@
 /**
- * Per-run heartbeat for LeanSmith pipelines.
+ * Per-run heartbeat for PaperFormalizer pipelines.
  *
  * A per-qid concurrency lock. Two invocations on distinct runs
  * can run side by side; a second invocation on the same qid is refused.
@@ -221,13 +221,13 @@ export async function withRunHeartbeatAt<T>(
     const ageS = Math.round((Date.now() - existing.mtimeMs) / 1000);
     throw Object.assign(
       new Error(
-        `another leansmith run is active on qid ${qid} ` +
+        `another paperformalizer run is active on qid ${qid} ` +
           `(PID ${existing.pid}${existing.host ? ` on ${existing.host}` : ""}, ` +
           `heartbeat age ${ageS}s at ${hbPath}). ` +
           `Wait for it to finish, kill PID ${existing.pid} and remove the ` +
           `heartbeat if you are certain it is stale.`,
       ),
-      { code: "leansmith_run_busy" },
+      { code: "paperformalizer_run_busy" },
     );
   }
 
@@ -253,10 +253,10 @@ export async function withRunHeartbeatAt<T>(
       const winner = readHeartbeat(hbPath);
       throw Object.assign(
         new Error(
-          `another leansmith run just claimed qid ${qid}` +
+          `another paperformalizer run just claimed qid ${qid}` +
             `${winner ? ` (PID ${winner.pid})` : ""}.`,
         ),
-        { code: "leansmith_run_busy" },
+        { code: "paperformalizer_run_busy" },
       );
     }
     throw err;

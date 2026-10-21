@@ -19,8 +19,8 @@ import { sentenceSpans } from "./transcription_lint.js";
 // ---------------------------------------------------------------------------
 
 /** First line of the macro block; its presence makes the injection a no-op. */
-export const VS_BLOCK_MARKER = "% LeanSmith annotation macros";
-const VS_XCOLOR_LINE = "\\usepackage{xcolor}% added by LeanSmith";
+export const VS_BLOCK_MARKER = "% PaperFormalizer annotation macros";
+const VS_XCOLOR_LINE = "\\usepackage{xcolor}% added by PaperFormalizer";
 
 /**
  * Each part of an annotation is a BLOCK laid out for reading (user rule 2026-09-25): it starts on its
@@ -101,7 +101,7 @@ export const VS_PREAMBLE_BLOCK = [
   "\\newcommand{\\vsOriginal}[1]{\\vsBlock{vsRed}{}{Original:}{#1}}",
   "\\newcommand{\\vsCorrected}[1]{\\vsBlock{vsBlue}{}{Corrected:}{#1}}",
   "\\newcommand{\\vsClarified}[1]{\\vsBlock{vsBlue}{}{Clarified statement:}{#1}}",
-  "\\newcommand{\\vsNote}[1]{\\vsBlock{vsNote}{\\normalfont\\small}{LeanSmith:}{#1}}",
+  "\\newcommand{\\vsNote}[1]{\\vsBlock{vsNote}{\\normalfont\\small}{PaperFormalizer:}{#1}}",
   // A clarification: a reading pinned for formalization (the referee's, the owner's, a symbol's).
   "\\newcommand{\\vsReading}[1]{\\vsBlock{vsNote}{\\normalfont\\small}{Clarification:}{#1}}",
   "\\newcommand{\\vsReadingOwner}[1]{\\vsBlock{vsNote}{\\normalfont\\small}{Clarification (author):}{#1}}",
@@ -145,7 +145,7 @@ export const VS_PREAMBLE_BLOCK = [
   // Notes may use amssymb's `\mathbb` / `\mathfrak` / `\lesssim` / `\gtrsim`; a paper without amssymb
   // gets a plain fallback, at `\begin{document}`, after every package.
   "\\AtBeginDocument{\\providecommand{\\mathbb}{\\mathbf}\\providecommand{\\mathfrak}{\\mathrm}\\providecommand{\\lesssim}{\\mathrel{\\vcenter{\\offinterlineskip\\hbox{$<$}\\hbox{$\\sim$}}}}\\providecommand{\\gtrsim}{\\mathrel{\\vcenter{\\offinterlineskip\\hbox{$>$}\\hbox{$\\sim$}}}}}",
-  "% end of LeanSmith annotation macros",
+  "% end of PaperFormalizer annotation macros",
 ].join("\n");
 
 /** The macro for a blue part: a corrected statement or step, a clarification, a repair awaiting the
@@ -219,7 +219,7 @@ export function injectPreamble(tex: string, xcolorLoaded: boolean): { tex: strin
     // A paper loading `color` with a driver option (a dvips paper) asks for it again after our xcolor:
     // the driver is handed on first, so the two loads agree and LaTeX reports no option clash.
     const drivers = colorDriverOptions(preambleOf(out));
-    const pass = drivers.length > 0 ? `\\PassOptionsToPackage{${drivers.join(",")}}{color}% added by LeanSmith\n` : "";
+    const pass = drivers.length > 0 ? `\\PassOptionsToPackage{${drivers.join(",")}}{color}% added by PaperFormalizer\n` : "";
     out = `${out.slice(0, at)}\n${pass}${VS_XCOLOR_LINE}\n${out.slice(at)}`;
     addedXcolor = true;
   }
@@ -231,7 +231,7 @@ export function injectPreamble(tex: string, xcolorLoaded: boolean): { tex: strin
       let at = afterClass();
       // after our xcolor line (and the driver line that may precede it)
       const x = out.indexOf(VS_XCOLOR_LINE, at);
-      if (x >= 0 && !out.slice(at, x).replace(/\\PassOptionsToPackage\{[^}]*\}\{color\}% added by LeanSmith/, "").trim()) at = x + VS_XCOLOR_LINE.length;
+      if (x >= 0 && !out.slice(at, x).replace(/\\PassOptionsToPackage\{[^}]*\}\{color\}% added by PaperFormalizer/, "").trim()) at = x + VS_XCOLOR_LINE.length;
       out = `${out.slice(0, at)}\n${VS_PREAMBLE_BLOCK}\n${out.slice(at)}`;
     }
     addedBlock = true;

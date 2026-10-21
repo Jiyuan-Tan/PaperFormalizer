@@ -57,7 +57,7 @@ describe("checkpoint playbook", () => {
   });
 
   it("cites only SKILL sections that exist", () => {
-    const skill = read("../.claude/skills/leansmith/SKILL.md");
+    const skill = read("../.claude/skills/paperformalizer/SKILL.md");
     const headings = new Set([...skill.matchAll(/^## (.+)$/gm)].map((m) => m[1]!.trim()));
     // every runner text and the watcher's that points at a section, by either quoting style
     const sources = ["src/checkpoint_playbook.ts", "src/verify/pipeline.ts", "src/verify/stage_v1.ts", "src/verify/cross_stage_rewind.ts", "src/verify/caps.ts", "src/verify/weakening.ts", "scripts/orch.mjs"].map(read).join("\n");
@@ -67,7 +67,7 @@ describe("checkpoint playbook", () => {
   });
 
   it("the skill points only at headings the user manual has, and stays within its size", () => {
-    const skill = read("../.claude/skills/leansmith/SKILL.md");
+    const skill = read("../.claude/skills/paperformalizer/SKILL.md");
     const manual = new Set([...read("../doc/USER_MANUAL.md").matchAll(/^#{2,3} (.+)$/gm)].map((m) => m[1]!.trim()));
     // "→ manual: "A", "B"": every quoted name (a pointer may wrap over a line break)
     const pointers = [...skill.replace(/\s+/g, " ").matchAll(/→ manual:((?: ?,? ?"[^"]+")+)/g)].flatMap((m) => [...m[1]!.matchAll(/"([^"]+)"/g)].map((q) => q[1]!));

@@ -140,7 +140,7 @@ export async function treeSha(dir: string, opts: { renderedOnly?: boolean } = {}
  * Did a failed compile fail on the paper's own TeX? Yes when the log names at least one error
  * (`file:line:`, from `-file-line-error`) and none is ours: none mentions xcolor or a `\vs` macro,
  * and none lies on or up to two lines after anything the annotation inserted (a `\vs` macro or a
- * line marked LeanSmith) — TeX reports an error at or after the line causing it, so a block
+ * line marked PaperFormalizer) — TeX reports an error at or after the line causing it, so a block
  * inserted just after the paper's failing line is not the cause. A timeout or an error the log does
  * not locate is not paper-side.
  */
@@ -149,13 +149,13 @@ export function paperSideFailure(logText: string, files: Record<string, string>)
   if (errors.length === 0) return false;
   for (const m of errors) {
     const [, file, lineNo, msg] = m;
-    if (/xcolor|\\vs[A-Z]|LeanSmith/.test(msg!)) return false;
+    if (/xcolor|\\vs[A-Z]|PaperFormalizer/.test(msg!)) return false;
     const text = files[file!.replace(/^\.\//, "")];
     if (text === undefined) continue; // a package or class file of the paper
     const lines = text.split("\n");
     const at = Number(lineNo) - 1;
     const window = lines.slice(Math.max(0, at - 2), at + 1).join("\n");
-    if (/\\vs[A-Z]|LeanSmith/.test(window)) return false;
+    if (/\\vs[A-Z]|PaperFormalizer/.test(window)) return false;
   }
   return true;
 }

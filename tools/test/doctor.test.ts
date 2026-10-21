@@ -2,7 +2,7 @@ import { describe, expect, it, vi } from "vitest";
 import { existsSync } from "node:fs";
 import os from "node:os";
 import { doctorChecks, doctorReport, versionAtLeast, type Probe } from "../src/doctor.js";
-import { helpText, parseLeanSmithCommand, LEANSMITH_USAGE } from "../bin/leansmith.js";
+import { helpText, parsePaperFormalizerCommand, PAPERFORMALIZER_USAGE } from "../bin/paperformalizer.js";
 
 /** A machine on which only the programs in `have` work, and only the logins in `loggedIn`. */
 const machine = (have: string[], loggedIn: string[] = []): Probe => (bin, args) => {
@@ -13,7 +13,7 @@ const machine = (have: string[], loggedIn: string[] = []): Probe => (bin, args) 
 const HERE = { leanLspMcpBinary: "lean-lsp-mcp", codexSandbox: "danger-full-access", platform: "linux" as const };
 const byName = (checks: ReturnType<typeof doctorChecks>) => Object.fromEntries(checks.map((c) => [c.name, c]));
 
-describe("leansmith doctor", () => {
+describe("paperformalizer doctor", () => {
   it("checks the configured Git Bash on Windows and gives Windows prerequisite instructions", () => {
     const options = { ...HERE, platform: "win32" as const, gitBashPath: "E:/Git/bin/bash.exe" };
     const absent = byName(doctorChecks(machine([]), "18.0.0", options));
@@ -84,7 +84,7 @@ describe("leansmith doctor", () => {
   });
 
   it("an invalid `claudeRoles` value is a MISSING line naming the allowed values", () => {
-    vi.stubEnv("LEANSMITH_CLAUDE_ROLES", "gpt");
+    vi.stubEnv("PAPERFORMALIZER_CLAUDE_ROLES", "gpt");
     try {
       const checks = doctorChecks(machine(["git", "elan", "lean-lsp-mcp", "codex", "claude"], ["codex", "claude"]), "22.0.0", HERE);
       expect(byName(checks).claudeRoles).toMatchObject({ required: true, ok: false, detail: expect.stringContaining('must be "claude" or "codex"; got "gpt"') });
@@ -142,17 +142,17 @@ describe("leansmith doctor", () => {
   });
 
   it("--help prints a command's usage instead of running it, for every command", async () => {
-    expect(await helpText(["--help"])).toBe(LEANSMITH_USAGE);
-    const modes = /<([a-z|-]+)> <args/.exec(LEANSMITH_USAGE)![1]!.split("|");
+    expect(await helpText(["--help"])).toBe(PAPERFORMALIZER_USAGE);
+    const modes = /<([a-z|-]+)> <args/.exec(PAPERFORMALIZER_USAGE)![1]!.split("|");
     expect(modes.length).toBeGreaterThan(10);
     for (const mode of modes) {
-      for (const args of [["--help"], ["x", "-h"]]) expect(await helpText([mode, ...args])).toMatch(new RegExp(`^Usage: leansmith ${mode}\\b`));
+      for (const args of [["--help"], ["x", "-h"]]) expect(await helpText([mode, ...args])).toMatch(new RegExp(`^Usage: paperformalizer ${mode}\\b`));
       expect(await helpText([mode, "x"])).toBeNull();
     }
     expect(await helpText(["ui", "--help"])).toContain("--port N");
   }, 60_000);
 
   it("is a command of the CLI", () => {
-    expect(parseLeanSmithCommand(["doctor"]).mode).toBe("doctor");
+    expect(parsePaperFormalizerCommand(["doctor"]).mode).toBe("doctor");
   });
 });

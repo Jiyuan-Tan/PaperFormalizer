@@ -664,7 +664,7 @@ const SPLIT_BLOCKS: Record<string, { kind: "corollary" | "proposition"; pending:
 /** Where a corollary block's statement ends and its proof begins (`annotate_tex.ts` `COROLLARY_PROOF`). */
 const COROLLARY_PROOF = ["\\vsLine\\textit{Proof.}"];
 const ANNOTATION_NOTES: Record<string, { kind: string; label: string }> = {
-  vsNote: { kind: "note", label: "LeanSmith" },
+  vsNote: { kind: "note", label: "PaperFormalizer" },
   vsReading: { kind: "reading", label: "Clarification" },
   vsReadingOwner: { kind: "reading-owner", label: "Clarification (author)" },
   vsCondition: { kind: "condition", label: "Bookkeeping condition" },
@@ -1333,7 +1333,7 @@ function render(ctx: Ctx, s: string, inline = false): string {
       const key = earlier ? `${hash}-${earlier + 1}` : hash;
       ctx.comments.push({ id, key, excerpt: a.body.replace(/\s+/g, " ").trim().slice(0, 160), kind, label, html: render(ctx, a.body, true).replace(/<br>/g, '<span class="nl"></span>'), env });
       if (kind === "reading" || kind === "reading-owner") for (const node of readingsStated(ctx.pinned, a.body, env)) ctx.readings[node] ??= id;
-      out += `<span class="cmark k-${kind}" data-c="${id}" title="${kind.startsWith("reading") ? "clarification" : kind === "detail" ? "proof detail" : "LeanSmith comment"}"></span>`;
+      out += `<span class="cmark k-${kind}" data-c="${id}" title="${kind.startsWith("reading") ? "clarification" : kind === "detail" ? "proof detail" : "PaperFormalizer comment"}"></span>`;
       continue;
     }
     if (name === "tcAnchor") {

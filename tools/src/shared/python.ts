@@ -8,7 +8,7 @@
 // on Windows even with the model weights in place.
 //
 // Resolution order (first working candidate wins, cached for the process):
-//   1. LEANSMITH_PYTHON env var        — an explicit interpreter path
+//   1. PAPERFORMALIZER_PYTHON env var        — an explicit interpreter path
 //   2. `pythonPath` in config/local.json — the same, per machine
 //   3. platform candidates, probed       — POSIX: python3, python
 //                                          Windows: python, py -3, python3
@@ -63,7 +63,7 @@ let cached: PythonCommand | null | undefined;
  */
 export function tryPythonCommand(): PythonCommand | null {
   if (cached !== undefined) return cached;
-  const override = process.env.LEANSMITH_PYTHON?.trim() || localConfig().pythonPath?.trim();
+  const override = process.env.PAPERFORMALIZER_PYTHON?.trim() || localConfig().pythonPath?.trim();
   if (override && !probePython({ bin: override, prefixArgs: [] })) {
     // Never fall through to the platform defaults in silence: the override exists
     // precisely because the default interpreter is the wrong one (no torch), so a
@@ -89,7 +89,7 @@ export function pythonCommand(): PythonCommand {
   throw new Error(
     "No working Python 3 found for the retrieval scripts (tried: " +
       CANDIDATES.map((c) => [c.bin, ...c.prefixArgs].join(" ")).join(", ") +
-      "). Install Python 3 with torch + sentence-transformers, or set LEANSMITH_PYTHON " +
+      "). Install Python 3 with torch + sentence-transformers, or set PAPERFORMALIZER_PYTHON " +
       "(or `pythonPath` in tools/config/local.json) to the interpreter that has them.",
   );
 }

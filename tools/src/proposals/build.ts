@@ -149,7 +149,7 @@ export async function buildProposal(args: {
     throw new Error(
       `${p.id}: study ${studyRunId(studySlug)} stopped in phase ${study.phase}${study.terminalMessage ? ` (${study.terminalMessage})` : ""}. ` +
         `${studyExit(study, studySlug, cfg.toolkitRoot)} Then re-run ` +
-        `\`leansmith propose ${qid} --round ${p.round} --apply\`, or change this item's decision to decline/defer. Items already built stay built.`,
+        `\`paperformalizer propose ${qid} --round ${p.round} --apply\`, or change this item's decision to decline/defer. Items already built stay built.`,
     );
   }
   const ledger = await loadLedger(cfg.ledgerPath);

@@ -3,7 +3,7 @@ import childProcess from "node:child_process";
 import path from "node:path";
 import { syncBuiltinESMExports } from "node:module";
 
-const installed = Symbol.for("leansmith.test.model-cli-guard");
+const installed = Symbol.for("paperformalizer.test.model-cli-guard");
 const modelToken = /(?:^|[\s"'&|/\\])(?:codex|claude)(?:\.(?:exe|cmd|bat))?(?=$|[\s"'&|])/i;
 const shell = /^(?:cmd|bash|sh|powershell|pwsh)(?:\.exe)?$/i;
 if (!globalThis[installed]) {
@@ -13,7 +13,7 @@ if (!globalThis[installed]) {
     childProcess[method] = function (command, args, ...rest) {
       const name = path.basename(String(command)).replace(/\.(exe|cmd|bat)$/i, "");
       if (/^(codex|claude)$/i.test(name)) {
-        const mock = name.toLowerCase() === "codex" && process.env.LEANSMITH_TEST_CODEX_MOCK;
+        const mock = name.toLowerCase() === "codex" && process.env.PAPERFORMALIZER_TEST_CODEX_MOCK;
         if (!mock) throw new Error(`Tests refuse to launch the model CLI: ${command}`);
         return original.call(this, process.execPath, [mock, ...(args ?? [])], ...rest);
       }
@@ -21,7 +21,7 @@ if (!globalThis[installed]) {
         : shell.test(path.basename(String(command))) ? (args ?? []).join(" ") : "";
       if (modelToken.test(text)) {
         const options = rest.find((arg) => arg && typeof arg === "object") ?? {};
-        const shim = options.env?.LEANSMITH_TEST_MODEL_SHIM;
+        const shim = options.env?.PAPERFORMALIZER_TEST_MODEL_SHIM;
         // Only the explicitly supplied test shim and its fixed version/help flags may use cmd.exe.
         const line = Array.isArray(args) ? String(args.at(-1)).replace(/["^]/g, "").trim() : "";
         const tail = shim && line.startsWith(shim + " ") ? line.slice(shim.length + 1) : "";

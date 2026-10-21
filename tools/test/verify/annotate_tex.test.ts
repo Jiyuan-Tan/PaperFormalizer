@@ -141,7 +141,7 @@ describe("annotate_tex — a flagged fragment is printed verbatim, one defect na
     const dir = await mkdtemp(path.join(os.tmpdir(), "vs-drv-"));
     try {
       const doc = injectPreamble(["\\documentclass{article}", "\\usepackage[dvips]{graphicx,color}", "\\begin{document}", "Text \\vsNote{note}.", "\\end{document}", ""].join("\n"), false).tex;
-      expect(doc).toMatch(/\\PassOptionsToPackage\{dvips\}\{color\}% added by LeanSmith\n\\usepackage\{xcolor\}/);
+      expect(doc).toMatch(/\\PassOptionsToPackage\{dvips\}\{color\}% added by PaperFormalizer\n\\usepackage\{xcolor\}/);
       await writeFile(path.join(dir, "main.tex"), doc, "utf8");
       await compileTex({ dir, mainFile: "main.tex", timeoutMs: 120_000 });
       expect(await readFile(path.join(dir, "main.log"), "latin1")).not.toMatch(/Option clash/);

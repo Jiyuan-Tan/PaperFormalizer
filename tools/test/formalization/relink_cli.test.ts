@@ -1,4 +1,4 @@
-// `leansmith relink <slug>`: F5's link step alone on a finished run — the model stubbed here.
+// `paperformalizer relink <slug>`: F5's link step alone on a finished run — the model stubbed here.
 import { mkdir, mkdtemp, readFile, writeFile } from "node:fs/promises";
 import os from "node:os";
 import path from "node:path";
@@ -16,14 +16,14 @@ describe("relink", () => {
   it("parses a slug, --toolkit and --only", () => {
     expect(parseRelinkArgs(["p", "--only", "thm:a, thm:b", "--toolkit", "/tk"])).toEqual({ slug: "p", toolkit: "/tk", only: ["thm:a", "thm:b"], fresh: false });
     expect(parseRelinkArgs(["p", "--fresh"])).toEqual({ slug: "p", toolkit: null, only: null, fresh: true });
-    expect(() => parseRelinkArgs([])).toThrow(/Usage: leansmith relink/);
+    expect(() => parseRelinkArgs([])).toThrow(/Usage: paperformalizer relink/);
     expect(() => parseRelinkArgs(["p", "--only"])).toThrow(/--only needs a value/);
     expect(() => parseRelinkArgs(["p", "--bogus"])).toThrow(/unknown flag --bogus/);
   });
 
   it("links the run's results on its Lean as it stands and writes nl_links.json", async () => {
     const root = await mkdtemp(path.join(os.tmpdir(), "relink-"));
-    await writeFile(path.join(root, "leansmith.json"), JSON.stringify(TOOLKIT_JSON));
+    await writeFile(path.join(root, "paperformalizer.json"), JSON.stringify(TOOLKIT_JSON));
     const slug = "user_paper";
     const state = createVerifyInitialState(slug, {
       phase: "formalization", source: { input: "paper.tex", main_file: "paper.tex", sha256: "0".repeat(64) },

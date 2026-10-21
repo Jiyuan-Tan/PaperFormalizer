@@ -1,5 +1,5 @@
 /**
- * `leansmith verify` — materialise the user's paper source under `<runDir>/source/`.
+ * `paperformalizer verify` — materialise the user's paper source under `<runDir>/source/`.
  *
  * The input is whatever the user has: a single `.tex`, a directory, a `.zip`, a `.tar`,
  * a `.tar.gz`/`.tgz`, or one of arXiv's extensionless downloads (a bare gzip stream that
@@ -47,7 +47,7 @@ function gunzipCapped(data: Buffer, what: string): Buffer {
       const shown = max >= 1024 * 1024 ? `${Math.round(max / (1024 * 1024))} MiB` : `${max} bytes`;
       throw new Error(
         `${what} expands to more than ${shown} of data; refusing to unpack it. Unpack it ` +
-          `yourself and pass the directory to \`leansmith verify\`.`,
+          `yourself and pass the directory to \`paperformalizer verify\`.`,
       );
     }
     throw new Error(`${what} is not readable as a gzip stream: ${message}`);
@@ -96,7 +96,7 @@ async function requireTool(tool: string, why: string): Promise<void> {
     if (code === "ENOENT") {
       throw new Error(
         `\`${tool}\` is not installed but is required to ${why}. Install it, or unpack the ` +
-          `archive yourself and pass the directory to \`leansmith verify\`.`,
+          `archive yourself and pass the directory to \`paperformalizer verify\`.`,
       );
     }
     // A non-zero exit from `--help` (some `unzip` builds) still proves the binary runs.
@@ -476,7 +476,7 @@ export const prepareSource: PrepareSource = async ({
         const plain = gunzipCapped(await readFile(abs), path.basename(abs));
         if (isTar(plain)) {
           inputKind = "tar.gz";
-          scratch = await mkdtemp(path.join(os.tmpdir(), "leansmith-verify-"));
+          scratch = await mkdtemp(path.join(os.tmpdir(), "paperformalizer-verify-"));
           const tarPath = path.join(scratch, "source.tar");
           await writeFile(tarPath, plain);
           await extractTar(tarPath, sourceDir);

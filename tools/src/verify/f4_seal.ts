@@ -190,11 +190,11 @@ export function checkF4Seal(seal: unknown, beside?: SealedBundle): string[] {
 }
 
 export const SEAL_USAGE =
-  "Usage: leansmith seal <bundle dir | f4_seal.json>\n" +
+  "Usage: paperformalizer seal <bundle dir | f4_seal.json>\n" +
   "  check a bundle's F4 seal: the code is the hash of its contents, both reviewers passed every statement target,\n" +
   "  and f4_reviews.log and the files it names (lean/, corrected_paper/, page/) are the ones it was written with.";
 
-/** `leansmith seal <path>`: print the code and the verdict; throws when the seal does not hold. */
+/** `paperformalizer seal <path>`: print the code and the verdict; throws when the seal does not hold. */
 export async function runSealCli(argv: string[], deps: { log?: (m: string) => void } = {}): Promise<void> {
   const log = deps.log ?? ((m: string) => console.log(m));
   if (argv.length !== 1 || argv[0]!.startsWith("--")) throw new Error(SEAL_USAGE);

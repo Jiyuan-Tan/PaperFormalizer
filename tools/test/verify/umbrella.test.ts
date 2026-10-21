@@ -649,7 +649,7 @@ describe("the prompts say when a result is an umbrella", () => {
     expect(t).toContain("no `follows` cites the result itself, nor a result that rests on it");
     expect(t).toContain("A statement that has a main claim, with special cases or consequences beside it, is never an umbrella");
     expect(t).toContain("Never an umbrella for a single claim, for a further conclusion under the same assumptions, or for length.");
-    expect(t).toContain("`suggested_repair` is `{ops, drops, adds, readings, corollaries, umbrella, proof_note}` or null");
+    expect(t).toContain("`suggested_repair` is `{ops, drops, adds, readings, conditions, corollaries, umbrella, proof_note}` or null");
     expect(t).toContain("A `split` finding on an umbrella says the printed statement has a main claim of its own");
   });
 

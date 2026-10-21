@@ -219,7 +219,7 @@ describe("gardening", () => {
     await mkdir(path.dirname(p.md), { recursive: true });
     await writeFile(p.json, JSON.stringify(batch));
     const md = renderGardenChecklist(batch, { toolkitRoot: root });
-    expect(md).toContain(`leansmith garden --verify ${p.md}`);
+    expect(md).toContain(`paperformalizer garden --verify ${p.md}`);
     expect(md).toContain("Also reviewed and fine as they are (nothing to decide): Keep the pair formula — a textbook fact.");
     await writeFile(p.md, md);
     git(root, "init", "-q");

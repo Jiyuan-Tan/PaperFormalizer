@@ -1,8 +1,8 @@
 /**
- * `leansmith verify` — argument parsing and process entry.
+ * `paperformalizer verify` — argument parsing and process entry.
  *
  * Resolves the machine env + billing path, parses, loads the toolkit (`--toolkit`,
- * `LEANSMITH_TOOLKIT`, or the nearest ancestor holding `leansmith.json`), mints the run id
+ * `PAPERFORMALIZER_TOOLKIT`, or the nearest ancestor holding `paperformalizer.json`), mints the run id
  * (the slug), pays the lean-lsp cold start once, and hands off to `runVerifyPipeline`.
  */
 import { existsSync } from "node:fs";
@@ -22,7 +22,7 @@ import { FROM_STAGE_USAGE, fromStageRefusal, STAGE_HALT_IDS, STOP_AFTER_USAGE, s
 import { warmUpLeanOrThrow } from "../shared/lean_warmup.js";
 
 export const USAGE =
-  "Usage: leansmith verify <paper.tex|dir|archive> [--toolkit <path>] [--slug s] [--main relpath] " +
+  "Usage: paperformalizer verify <paper.tex|dir|archive> [--toolkit <path>] [--slug s] [--main relpath] " +
   "[--targets label,label] [--resume] " +
   "[--from-stage <stage>] [--fresh-review] [--from-transcript] [--stop-after <stage>] [--clear-gate <flag>]... [--defer-proposals] [--debug | --full-auto] [--dry-run]\n" +
   "  <paper.tex>: a .tex that includes files lying beside it is taken with its directory (the file the main one);\n" +
@@ -80,7 +80,7 @@ export const USAGE =
   "  V1.5 grades what changed and F1 re-plans.\n" +
   "  An annotated paper with a block that could not be set as TeX (escaped text, a code point, an odd $, a pdflatex\n" +
   "  error) halts the run as a RENDER CHECKPOINT, before any owner decision and F1 (every mode):\n" +
-  "  a tool defect with no owner waiver — correct a text from the run's record, else fix the renderer with a test; --resume renders again (`leansmith lint-annotated`).";
+  "  a tool defect with no owner waiver — correct a text from the run's record, else fix the renderer with a test; --resume renders again (`paperformalizer lint-annotated`).";
 
 /** Stages `--from-stage` and `--stop-after` accept: the two V stages the verify runner
  * owns, the F stages it delegates, and the report. (`--from-stage V1.5` re-runs the
@@ -356,7 +356,7 @@ function stageIndex(stage: VerifyFromStage): number {
   return VERIFY_FROM_STAGES.indexOf(stage);
 }
 
-/** Test-only access to the `leansmith verify` parser. */
+/** Test-only access to the `paperformalizer verify` parser. */
 export function parseVerifyArgsForTest(argv: string[]): VerifyArgs {
   return parseVerifyArgs(argv);
 }
@@ -385,7 +385,7 @@ export function deriveVerifyQid(input: string, slugOverride: string | null): str
   return assertQidSlug(slug);
 }
 
-/** Run the paper-verification pipeline behind `leansmith verify`. */
+/** Run the paper-verification pipeline behind `paperformalizer verify`. */
 export async function runVerifyCli(argv: string[]): Promise<void> {
   applyWorkerEnv();
   applyAuthEnv();
@@ -405,7 +405,7 @@ export async function runVerifyCli(argv: string[]): Promise<void> {
   // Fail closed before any work: F5 needs the `paper_index` exe, retrieval the `toolkit_index` one.
   assertToolkitLakefile(toolkit);
   const qid = deriveVerifyQid(parsed.input, parsed.slug);
-  console.log(`[leansmith] toolkit: ${toolkit.toolkitRoot} (from ${toolkit.source}); run: ${qid}`);
+  console.log(`[paperformalizer] toolkit: ${toolkit.toolkitRoot} (from ${toolkit.source}); run: ${qid}`);
 
   // Refuse a dry/live mode mismatch before the Lean warm-up or any model call (the runner
   // checks again; this only moves the refusal ahead of the expensive start-up).
@@ -474,7 +474,7 @@ async function runVerifyLocked(
       ...(parsed.umbrella ? { umbrella: parsed.umbrella } : {}),
     });
     console.log(
-      `LeanSmith verify ${parsed.dryRun ? "dry-run " : ""}${qid} finished in phase ${verify.phase}.`,
+      `PaperFormalizer verify ${parsed.dryRun ? "dry-run " : ""}${qid} finished in phase ${verify.phase}.`,
     );
     if (parsed.dryRun) console.log(dryRunLeftover(verifyRunDir(toolkit.toolkitRoot, qid)));
   } finally {

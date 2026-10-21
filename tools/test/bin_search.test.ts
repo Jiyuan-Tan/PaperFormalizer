@@ -25,7 +25,7 @@ function writeIndex(file: string, lib: string, name: string, doc: string): void 
 
 function search(args: string[], cwd: string, env: NodeJS.ProcessEnv = {}) {
   const e = { ...process.env, ...env };
-  delete e.LEANSMITH_TOOLKIT;
+  delete e.PAPERFORMALIZER_TOOLKIT;
   delete e.INIT_CWD;
   return exec(process.execPath, [TSX_CLI, SEARCH, ...args], { cwd, env: e });
 }
@@ -43,12 +43,12 @@ describe("bin/search.ts", () => {
     expect(stdout).toMatch(/scope: Alpha, Beta only/);
   });
 
-  it("derives the sources from a toolkit's leansmith.json (relative index path)", async () => {
+  it("derives the sources from a toolkit's paperformalizer.json (relative index path)", async () => {
     const dir = mkdtempSync(path.join(os.tmpdir(), "search-tk-"));
     writeIndex(path.join(dir, "base", "doc", "library_index.json"), "Base", "percentile_interval", "Bootstrap percentile interval.");
     const tk = path.join(dir, "tk");
     mkdirSync(tk, { recursive: true });
-    writeFileSync(path.join(tk, "leansmith.json"), JSON.stringify({
+    writeFileSync(path.join(tk, "paperformalizer.json"), JSON.stringify({
       version: 1, owner: { name: "T" },
       toolkit: { lib: "Toolkit", papers_lib: "Papers", divisions: ["Foundations"] },
       base: [{ name: "Base", kind: "path", path: "../base", index: "../base/doc/library_index.json" }],

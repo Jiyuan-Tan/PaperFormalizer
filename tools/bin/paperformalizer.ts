@@ -6,70 +6,70 @@ import { applyWorkerEnv } from "../src/local_config.js";
 import { applyAuthEnv, authSummary } from "../src/auth.js";
 import { installStopHandlers } from "../src/shared/child_registry.js";
 
-export type LeanSmithMode = "doctor" | "init" | "demo" | "ui" | "verify" | "propose" | "study" | "toolkit-health" | "garden" | "docstrings" | "annotate" | "lint-annotated" | "report" | "seal" | "share" | "relink";
+export type PaperFormalizerMode = "doctor" | "init" | "demo" | "ui" | "verify" | "propose" | "study" | "toolkit-health" | "garden" | "docstrings" | "annotate" | "lint-annotated" | "report" | "seal" | "share" | "relink";
 
-export const LEANSMITH_USAGE =
-  "Usage: leansmith <doctor|init|demo|ui|verify|propose|study|toolkit-health|garden|docstrings|annotate|lint-annotated|report|seal|share|relink> <args...>\n" +
-  "  leansmith doctor\n" +
+export const PAPERFORMALIZER_USAGE =
+  "Usage: paperformalizer <doctor|init|demo|ui|verify|propose|study|toolkit-health|garden|docstrings|annotate|lint-annotated|report|seal|share|relink> <args...>\n" +
+  "  paperformalizer doctor\n" +
   "      check this machine's prerequisites (programs, versions, logins) and print how to get what is missing\n" +
-  "  leansmith init <dir> [--domains id,id] [--libraries name,name] [--owner \"Name\"] [--email e] [--no-build]\n" +
+  "  paperformalizer init <dir> [--domains id,id] [--libraries name,name] [--owner \"Name\"] [--email e] [--no-build]\n" +
   "      create a personal toolkit (template, chosen domain libraries, git repo, Mathlib cache, build); --list prints the choices\n" +
-  "  leansmith demo [--dir <path>] [--port N] [--open] [--restart]\n" +
+  "  paperformalizer demo [--dir <path>] [--port N] [--open] [--restart]\n" +
   "      a guided tour of a run on the page, for a first-time user (recorded: no model, no Lean, no account)\n" +
-  "  leansmith ui [--toolkit <path>] [--port N] [--open] [--new]\n" +
+  "  paperformalizer ui [--toolkit <path>] [--port N] [--open] [--new]\n" +
   "      the local web UI (127.0.0.1 only): toolkit, library, and each paper's run, live; decisions run the CLI\n" +
-  "  leansmith verify <paper.tex|dir|archive> [--toolkit <path>] [--slug s] [--main relpath]\n" +
+  "  paperformalizer verify <paper.tex|dir|archive> [--toolkit <path>] [--slug s] [--main relpath]\n" +
   "                        [--targets label,label] [--resume] [--from-stage <stage>] [--fresh-review] [--from-transcript]\n" +
   "                        [--stop-after <stage>] [--clear-gate <flag>]... [--defer-proposals] [--debug | --full-auto] [--dry-run]\n" +
   "                        answering a halt (each with --resume): [--reject-rewind \"<reason>\"] [--clear-patch-cap] [--accept-cap]\n" +
   "                        [--accept-repair [<node>,…]] [--decline-repair \"[<node>,…: ]<reason>\"] [--redo-repair \"<node>: <guidance>\"]...\n" +
   "                        [--reject-finding \"[<node>: [bookkeeping: ]]<reading>\"]... [--add-condition \"<node>: <condition>\"]...\n" +
   "                        [--edit-reading \"<id>: <new text>\"]... [--remove-reading <id>]... [--umbrella <node>]...\n" +
-  "  leansmith verify --stop --slug <s> [--toolkit <path>]\n" +
+  "  paperformalizer verify --stop --slug <s> [--toolkit <path>]\n" +
   "      stop a run: its live runner and the codex/claude/lake children recorded in logs/children.json\n" +
   `      --from-stage ∈ ${FROM_STAGE_USAGE}; --stop-after ∈ ${STOP_AFTER_USAGE}; the run id is the slug (--slug, else the file name);\n` +
-  "      `leansmith verify` alone prints what each flag does\n" +
-  "  leansmith propose <slug> [--round A|B] [--apply [--recommended] | --reopen-deferred] [--toolkit <path>] [--dry-run]\n" +
+  "      `paperformalizer verify` alone prints what each flag does\n" +
+  "  paperformalizer propose <slug> [--round A|B] [--apply [--recommended] | --reopen-deferred] [--toolkit <path>] [--dry-run]\n" +
   "      a toolkit promotion round (A: cited results after F1; B: proved results after the report):\n" +
   "      re-render the checklist, --apply the owner's decisions (--recommended: the agent's recommendations), or re-propose the entries deferred in round B\n" +
   `  ${STUDY_SYNOPSIS}\n` +
   "      build a proved, reviewed toolkit module from runs/study_<slug>/requirement.md\n" +
-  "  leansmith toolkit-health [--toolkit <path>] [--all] [--json] [--no-rebuild]\n" +
+  "  paperformalizer toolkit-health [--toolkit <path>] [--all] [--json] [--no-rebuild]\n" +
   "      re-derive doc/toolkit_graph.json from the Lean and report the toolkit's health and reuse trend\n" +
-  "  leansmith garden [--toolkit <path>] [--no-rebuild] [--dry-run] [--verify <garden-….md> [--items g-1,…]]\n" +
+  "  paperformalizer garden [--toolkit <path>] [--no-rebuild] [--dry-run] [--verify <garden-….md> [--items g-1,…]]\n" +
   "      gardening suggestions from the toolkit's graph (the orchestrator decides each), or --verify the accepted items carried out by hand\n" +
-  "  leansmith docstrings [--toolkit <path>] [--modules M1,M2]\n" +
+  "  paperformalizer docstrings [--toolkit <path>] [--modules M1,M2]\n" +
   "      bring the toolkit's docstrings to the docstring contract (NL translation + crosslinks); docstring edits only\n" +
-  "  leansmith annotate <slug> [--toolkit <path>] [--compile-record <path>]\n" +
+  "  paperformalizer annotate <slug> [--toolkit <path>] [--compile-record <path>]\n" +
   "      rewrite the run's annotated paper as it stands (no model call); exits non-zero on a block that could not be set as TeX\n" +
-  "  leansmith lint-annotated <slug> [--toolkit <path>]\n" +
+  "  paperformalizer lint-annotated <slug> [--toolkit <path>]\n" +
   "      check the annotated paper as written (escaped TeX, code points, odd $ in a block, pdflatex errors)\n" +
-  "  leansmith report <slug> [--toolkit <path>] [--out <dir>] [--verify-public] [--arxiv <id>]\n" +
+  "  paperformalizer report <slug> [--toolkit <path>] [--out <dir>] [--verify-public] [--arxiv <id>]\n" +
   "      write the run's report and corrected-paper bundle again from its records (no stage, no model call, no lake)\n" +
-  "  leansmith relink <slug> [--toolkit <path>] [--only <node>,…] [--fresh]\n" +
+  "  paperformalizer relink <slug> [--toolkit <path>] [--only <node>,…] [--fresh]\n" +
   "      link the run's results to their Lean statements row by row again (F5's link step alone; calls its model)\n" +
-  "  leansmith seal <bundle dir | f4_seal.json>\n" +
+  "  paperformalizer seal <bundle dir | f4_seal.json>\n" +
   "      check a bundle's F4 seal: its code is its own, and both reviewers passed every statement target, the files beside it are the ones it was written with (no toolkit, no model call, no lake)\n" +
-  "  leansmith share <slug> [--toolkit <path>] [--dry-run]\n" +
+  "  paperformalizer share <slug> [--toolkit <path>] [--dry-run]\n" +
   "      publish the finished run's bundle (the corrected paper's TeX source and PDF, the findings, the Lean code, the report)\n" +
   "      on the public site of shared papers; it shows what is sent, sends only after you type the slug at a terminal, then you sign in to GitHub in your browser and confirm (no model call, no lake)\n" +
-  "  The toolkit is --toolkit <path>, else LEANSMITH_TOOLKIT, else the nearest ancestor of the cwd\n" +
-  "  holding leansmith.json.";
+  "  The toolkit is --toolkit <path>, else PAPERFORMALIZER_TOOLKIT, else the nearest ancestor of the cwd\n" +
+  "  holding paperformalizer.json.";
 
-export function parseLeanSmithCommand(argv: string[]): { mode: LeanSmithMode; args: string[] } {
+export function parsePaperFormalizerCommand(argv: string[]): { mode: PaperFormalizerMode; args: string[] } {
   const [mode, ...args] = argv;
   if (mode === "doctor" || mode === "init" || mode === "demo" || mode === "ui" || mode === "verify" || mode === "propose" || mode === "study" || mode === "toolkit-health" || mode === "garden" || mode === "docstrings" || mode === "annotate" || mode === "lint-annotated" || mode === "report" || mode === "seal" || mode === "share" || mode === "relink") {
     return { mode, args };
   }
-  throw new Error(LEANSMITH_USAGE);
+  throw new Error(PAPERFORMALIZER_USAGE);
 }
 
 /** The usage a `--help`/`-h` asks for (the command's own; the whole CLI's before a command), else null. */
 export async function helpText(argv: string[]): Promise<string | null> {
   const asks = (a: string | undefined): boolean => a === "--help" || a === "-h";
-  if (asks(argv[0])) return LEANSMITH_USAGE;
+  if (asks(argv[0])) return PAPERFORMALIZER_USAGE;
   if (!argv.slice(1).some(asks)) return null;
-  switch (parseLeanSmithCommand(argv).mode) {
+  switch (parsePaperFormalizerCommand(argv).mode) {
     case "doctor": return (await import("../src/doctor.js")).DOCTOR_USAGE;
     case "init": return (await import("../src/toolkit/init.js")).INIT_USAGE;
     case "demo": return (await import("../src/demo/cli.js")).DEMO_USAGE;
@@ -96,7 +96,7 @@ async function main(argv: string[]): Promise<void> {
     console.log(help);
     return;
   }
-  const { mode, args } = parseLeanSmithCommand(argv);
+  const { mode, args } = parsePaperFormalizerCommand(argv);
   if (mode === "doctor") {
     const { runDoctorCli } = await import("../src/doctor.js");
     runDoctorCli(args);
@@ -139,7 +139,7 @@ async function main(argv: string[]): Promise<void> {
   // misconfigured api mode fails before a run starts rather than mid-dispatch.
   applyWorkerEnv();
   applyAuthEnv();
-  console.log(`[leansmith] auth: ${authSummary()}`);
+  console.log(`[paperformalizer] auth: ${authSummary()}`);
   if (mode === "toolkit-health") {
     const { runToolkitHealthCli } = await import("../src/proposals/cli.js");
     await runToolkitHealthCli(args);
@@ -182,11 +182,11 @@ async function main(argv: string[]): Promise<void> {
 if (process.argv[1] && fileURLToPath(import.meta.url) === process.argv[1]) {
   main(process.argv.slice(2)).catch((err: unknown) => {
     const message = err instanceof Error ? err.message : String(err);
-    console.error(`leansmith: ${message}`);
+    console.error(`paperformalizer: ${message}`);
     // A deliberate user-facing error carries its own actionable message, so the default output
     // stays clean. An UNEXPECTED throw reduces to a bare line with no location; set
-    // `LEANSMITH_TRACE=1` to keep the stack on the first failure instead of re-running.
-    if (process.env.LEANSMITH_TRACE && err instanceof Error && err.stack) {
+    // `PAPERFORMALIZER_TRACE=1` to keep the stack on the first failure instead of re-running.
+    if (process.env.PAPERFORMALIZER_TRACE && err instanceof Error && err.stack) {
       console.error(err.stack);
     }
     process.exitCode = 1;

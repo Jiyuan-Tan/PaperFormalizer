@@ -144,7 +144,7 @@ const CONFIG_DIR = path.resolve(
  * Write a `--mcp-config` JSON exposing the `lean-lsp` server so a worker stage
  * (F1 feasibility gate; the study coordinator) actually gets the
  * `mcp__lean-lsp__*` tools instead of advertising tools no server provides.
- * Binary resolves from `LEANSMITH_LEAN_LSP_MCP` else PATH (`lean-lsp-mcp`);
+ * Binary resolves from `PAPERFORMALIZER_LEAN_LSP_MCP` else PATH (`lean-lsp-mcp`);
  * `leanProjectPath` is the toolkit's Lake project root (the run's repoRoot).
  * Returns the config path to feed `runClaude({ mcpConfigPath })`.
  */
@@ -176,7 +176,7 @@ export function writeLeanLspMcpConfig(repoRoot: string): string {
 /**
  * Write a `--mcp-config` that ATTACHES to a shared streamable-HTTP `lean-lsp-mcp`
  * (booted once per run via `startSharedLeanLsp`, URL in
- * `LEANSMITH_SHARED_LEAN_LSP_URL`) instead of spawning a per-call stdio server +
+ * `PAPERFORMALIZER_SHARED_LEAN_LSP_URL`) instead of spawning a per-call stdio server +
  * its own `lake serve`. Mirrors codex.ts's shared-server branch so claude stages
  * (planner, reviewer) share the ONE warm `lake serve` rather than each paying
  * the cold-start. Registered under the name `lean-lsp` so the `mcp__lean-lsp__*`
@@ -197,7 +197,7 @@ export function writeLeanLspSharedConfig(sharedUrl: string): string {
   } catch {
     /* malformed URL → fall back to a shared name; single-run case is unaffected */
   }
-  const out = path.join(os.tmpdir(), `leansmith_lean_mcp.shared.${port}.json`);
+  const out = path.join(os.tmpdir(), `paperformalizer_lean_mcp.shared.${port}.json`);
   fsSync.writeFileSync(out, JSON.stringify(config, null, 2));
   return out;
 }
@@ -242,7 +242,7 @@ export function claudeAuthArgs(mode: AuthMode): string[] {
  */
 export function claudeQuotaReason(text: string): string | null {
   if (/api_error_status[^\n]{0,40}\b429\b|hit your (?:weekly|daily|monthly|usage) limit|usage limit reached|rate limit/i.test(text)) {
-    return "claude usage limit reached — wait for the window to reset or switch the account (LEANSMITH_CLAUDE_CONFIG_DIR)";
+    return "claude usage limit reached — wait for the window to reset or switch the account (PAPERFORMALIZER_CLAUDE_CONFIG_DIR)";
   }
   if (/not logged in|invalid api key|authentication_error|api_error_status[^\n]{0,40}\b401\b/i.test(text)) {
     return "claude is not logged in (or the API key was rejected)";

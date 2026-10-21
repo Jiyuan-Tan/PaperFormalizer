@@ -1565,7 +1565,7 @@ export const runStageV1_5: VerifyStage = async (args) => {
   const { runDir, log } = args;
   const verify = args.state.verify;
   if (!verify) {
-    throw new Error("V1.5: state has no `verify` block — it was not seeded by `leansmith verify`.");
+    throw new Error("V1.5: state has no `verify` block — it was not seeded by `paperformalizer verify`.");
   }
   const corePath = path.join(runDir, VERIFY_FILES.coreJson);
   const flatPath = path.join(runDir, VERIFY_FILES.flatTex);
@@ -3047,16 +3047,19 @@ export function symbolsReadingDemoted(core: Core, demoted: ReadonlySet<string>, 
  */
 export function correctedStatements(
   transcribed: { statements: ReadonlyArray<{ id: string; statement: string }> },
-  patches: { patches?: ReadonlyArray<{ node: string; corrected_statement?: string | null; readings?: readonly string[] | null }> } | null | undefined,
+  patches: { patches?: ReadonlyArray<{ node: string; corrected_statement?: string | null; readings?: readonly string[] | null; conditions?: readonly string[] | null }> } | null | undefined,
 ): Map<string, { printed: string; text: string }> {
   return new Map(
     (patches?.patches ?? []).flatMap((x) => {
       const printed = transcribed.statements.find((st) => st.id === x.node)?.statement;
       const readings = (x.readings ?? []).filter((r) => r.trim());
-      if (!printed || (!x.corrected_statement?.trim() && readings.length === 0)) return [];
-      // The readings a repair states beside the statement say what its symbols mean as much as its
-      // text does: a symbol is read from both, so a sentence moved from one to the other moves nothing.
-      const text = `${x.corrected_statement?.trim() ? x.corrected_statement : printed}${readings.length > 0 ? `\n\n${REPAIR_READINGS_HEAD}\n${readings.map((r) => `- ${r}`).join("\n")}` : ""}`;
+      const conditions = (x.conditions ?? []).filter((r) => r.trim());
+      if (!printed || (!x.corrected_statement?.trim() && readings.length === 0 && conditions.length === 0)) return [];
+      // The readings and side conditions a repair states beside the statement say what its symbols mean
+      // as much as its text does: a symbol is read from all of them, so a sentence moved from one to
+      // another moves nothing.
+      const list = (head: string, xs: readonly string[]): string => (xs.length > 0 ? `\n\n${head}\n${xs.map((r) => `- ${r}`).join("\n")}` : "");
+      const text = `${x.corrected_statement?.trim() ? x.corrected_statement : printed}${list(REPAIR_READINGS_HEAD, readings)}${list(REPAIR_CONDITIONS_HEAD, conditions)}`;
       return [[x.node, { printed, text }] as const];
     }),
   );
@@ -3064,3 +3067,5 @@ export function correctedStatements(
 
 /** How the readings of a repair open under its corrected statement, where a symbol is read from it. */
 export const REPAIR_READINGS_HEAD = "Readings of this statement, stated by its repair (binding):";
+/** How the side conditions of a repair open there, after its readings. */
+export const REPAIR_CONDITIONS_HEAD = "Side conditions of this statement, stated by its repair (binding):";

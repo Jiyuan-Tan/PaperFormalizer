@@ -21,7 +21,7 @@ export function planGateOnDisk(
   const knownDecls = knownDeclsForContext(ctx);
   if (!knownDecls) {
     console.warn(
-      "[leansmith] no library index loaded — the P5 reuse-existence check is SKIPPED this pass; hallucinated reuse decls will surface only at compile.",
+      "[paperformalizer] no library index loaded — the P5 reuse-existence check is SKIPPED this pass; hallucinated reuse decls will surface only at compile.",
     );
   }
   const result = runPlanGate(input.planObj, input.core, { knownDecls: knownDecls?.names, ownedDeclPrefixes: knownDecls?.ownedPrefixes, hygiene: true });

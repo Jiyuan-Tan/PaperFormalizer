@@ -183,7 +183,7 @@ function environmentCheckpoint(worker: string, reply: string): VerifyStageResult
     status: "checkpoint",
     message:
       `ENVIRONMENT checkpoint: the ${worker} (a model worker) could not read or write the run's files — it said: ` +
-      `${said.split("\n")[0]!.slice(0, 300)}. This is the machine, not the paper: run \`leansmith doctor\` and settle what it ` +
+      `${said.split("\n")[0]!.slice(0, 300)}. This is the machine, not the paper: run \`paperformalizer doctor\` and settle what it ` +
       `reports (the workers' sandbox). Do not retry, and do not change the paper or --targets`,
   };
 }
@@ -237,7 +237,10 @@ const ReviseDirectiveSchema = z.object({
           drops: z.array(z.string()).optional(),
           adds: z.array(z.string()).optional(),
           readings: z.array(z.string()).optional(),
+          conditions: z.array(z.string()).optional(),
           supersedes: z.array(z.string()).optional(),
+          corollaries: z.array(z.object({ title: z.string().optional(), statement: z.string(), follows: z.string(), adds: z.array(z.string()).optional() })).optional(),
+          umbrella: z.boolean().optional(),
         })
         .optional(),
     }),
@@ -861,10 +864,10 @@ export const runStageV1: VerifyStage = async (args: VerifyStageArgs): Promise<Ve
   const sourceDir = path.join(runDir, VERIFY_FILES.sourceDir);
   // The authors' note macros are read away when a paper is read for the first time (a cold extraction);
   // a transcription on file is revised against the text it was cut from, read as its `envs.json` records.
-  const noteMacros = entry.mode === "revise" ? await recordedNoteMacros(runDir) : process.env.LEANSMITH_NOTE_MACROS !== "off";
+  const noteMacros = entry.mode === "revise" ? await recordedNoteMacros(runDir) : process.env.PAPERFORMALIZER_NOTE_MACROS !== "off";
   const parsed = await buildEnvsJson(sourceDir, verify.source.main_file, noteMacros, runDir);
   const { flat } = parsed;
-  if (entry.mode === "cold" && noteMacros === false) log("parser: authors' note macros are read as written (LEANSMITH_NOTE_MACROS=off)");
+  if (entry.mode === "cold" && noteMacros === false) log("parser: authors' note macros are read as written (PAPERFORMALIZER_NOTE_MACROS=off)");
   for (const m of flat.notes?.log ?? []) log(`parser: ${m}`);
   for (const w of parsed.warnings) log(`parser: ${w}`);
   const scopeOf = (e: EnvsJson): { scope: string[]; theoremLike: string[] } => {
@@ -923,7 +926,7 @@ export const runStageV1: VerifyStage = async (args: VerifyStageArgs): Promise<Ve
           `V1 refused the transcription: ${cut.length} parsed statement/proof text(s) are not balanced TeX (cut inside math, ` +
           `a display or an environment):\n` +
           cut.map((c) => `  - ${c}`).join("\n") +
-          `\nThis is a parser gap, not a transcription defect: re-cut these texts in discovery/segments.json, or make the smallest neutral edit in a COPY of the source and run it from V1 (leansmith SKILL §'When the pipeline itself fails').`,
+          `\nThis is a parser gap, not a transcription defect: re-cut these texts in discovery/segments.json, or make the smallest neutral edit in a COPY of the source and run it from V1 (paperformalizer SKILL §'When the pipeline itself fails').`,
       };
     }
   }
@@ -1283,7 +1286,7 @@ export function servesBlock(core: Core, file: { key_results: readonly string[]; 
 }
 
 /** The suggested repairs sent back to the fixer (`withdrawn_repair`), each op as its unit range and raw TeX. Pure. */
-export function withdrawnRepairBlock(findings: ReadonlyArray<{ id: string; withdrawn_repair?: { corrected_statement: string | null; ops?: PatchOp[]; drops?: string[]; adds?: string[]; corollaries?: ReadonlyArray<{ title?: string; statement: string; follows: string; adds?: string[] }>; umbrella?: boolean } }>): string {
+export function withdrawnRepairBlock(findings: ReadonlyArray<{ id: string; withdrawn_repair?: { corrected_statement: string | null; ops?: PatchOp[]; drops?: string[]; adds?: string[]; readings?: string[]; conditions?: string[]; corollaries?: ReadonlyArray<{ title?: string; statement: string; follows: string; adds?: string[] }>; umbrella?: boolean } }>): string {
   return findings
     .filter((f) => f.withdrawn_repair)
     .map((f) => {
@@ -1294,6 +1297,8 @@ export function withdrawnRepairBlock(findings: ReadonlyArray<{ id: string; withd
         ...(w.ops ?? []).map((o) => `  op: replace ${o.unit}${o.to ? ` … ${o.to}` : ""} by\n${indent(o.tex)}`),
         ...(w.drops?.length ? [`  drops: ${w.drops.join(", ")}`] : []),
         ...(w.adds?.length ? [`  adds: ${w.adds.join(", ")}`] : []),
+        ...(w.readings ?? []).map((r) => `  reading:\n${indent(r)}`),
+        ...(w.conditions ?? []).map((c) => `  condition:\n${indent(c)}`),
         ...(w.corollaries ?? []).map((c) => `  corollary${c.title ? ` (${c.title})` : ""}${c.adds?.length ? ` [adds: ${c.adds.join(", ")}]` : ""}:\n${indent(c.statement)}\n  follows:\n${indent(c.follows)}`),
       ].join("\n");
     })

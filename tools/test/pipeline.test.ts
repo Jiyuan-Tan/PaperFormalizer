@@ -41,7 +41,7 @@ async function seedAcceptedRun(
   name: string,
   mutate: (state: StateJson) => void = () => undefined,
 ): Promise<PipelineContext> {
-  const repoRoot = await mkdtemp(path.join(os.tmpdir(), `leansmith-runner-${name}-`));
+  const repoRoot = await mkdtemp(path.join(os.tmpdir(), `paperformalizer-runner-${name}-`));
   const qid = name.replace(/\W/g, "_");
   const ctx: PipelineContext = { repoRoot, toolkit: tk(repoRoot), qid, resume: true, dryRun: true };
   const corePath = coreJsonPath(ctx);

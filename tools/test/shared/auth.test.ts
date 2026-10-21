@@ -56,7 +56,7 @@ describe("resolveAuthMode", () => {
   it("lets the environment override the file", () => {
     expect(
       resolveAuthMode("anthropic", {
-        env: { LEANSMITH_AUTH_MODE: "api" },
+        env: { PAPERFORMALIZER_AUTH_MODE: "api" },
         config: { authMode: "subscription" },
       }),
     ).toBe("api");
@@ -64,7 +64,7 @@ describe("resolveAuthMode", () => {
 
   it("fails closed on an unrecognized mode", () => {
     expect(() =>
-      resolveAuthMode("anthropic", { env: { LEANSMITH_AUTH_MODE: "oauth" }, config: {} }),
+      resolveAuthMode("anthropic", { env: { PAPERFORMALIZER_AUTH_MODE: "oauth" }, config: {} }),
     ).toThrow(/must be "subscription" or "api"/);
   });
 });
@@ -72,7 +72,7 @@ describe("resolveAuthMode", () => {
 describe("resolveProviderAuth", () => {
   it("refuses api mode with no key rather than billing the subscription", () => {
     expect(() =>
-      resolveProviderAuth("anthropic", { env: { LEANSMITH_AUTH_MODE: "api" }, config: {} }),
+      resolveProviderAuth("anthropic", { env: { PAPERFORMALIZER_AUTH_MODE: "api" }, config: {} }),
     ).toThrow(/no API key is configured/);
   });
 
@@ -111,10 +111,10 @@ describe("local.json reaches the dispatchers (no-argument resolution)", () => {
 describe("codexHome", () => {
   it("uses a separate home in api mode so the ChatGPT login is not evicted", () => {
     const home = codexHome({
-      env: { LEANSMITH_OPENAI_AUTH: "api" },
+      env: { PAPERFORMALIZER_OPENAI_AUTH: "api" },
       config: { openaiApiKey: "sk-x" },
     });
-    expect(home).toBe(path.join(os.homedir(), ".codex-leansmith-api"));
+    expect(home).toBe(path.join(os.homedir(), ".codex-paperformalizer-api"));
     expect(home).not.toBe(path.join(os.homedir(), ".codex"));
   });
 });
@@ -127,7 +127,7 @@ describe("workerEnv", () => {
     });
     expect(out.ANTHROPIC_API_KEY).toBe("sk-ant");
     expect(out.OPENAI_API_KEY).toBe("sk-oai");
-    expect(out.CODEX_HOME).toBe(path.join(os.homedir(), ".codex-leansmith-api"));
+    expect(out.CODEX_HOME).toBe(path.join(os.homedir(), ".codex-paperformalizer-api"));
     expect(out.PATH).toBe("/usr/bin");
     const claudeOnly = workerEnv({
       env: { PATH: "/usr/bin" },

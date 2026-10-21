@@ -1,5 +1,5 @@
-// `leansmith init <dir>`: create a personal toolkit — a copy of `templates/toolkit/`, the domain
-// libraries the user picks from LeanSmith's catalog (`tools/data/libraries.json`: one pinned
+// `paperformalizer init <dir>`: create a personal toolkit — a copy of `templates/toolkit/`, the domain
+// libraries the user picks from PaperFormalizer's catalog (`tools/data/libraries.json`: one pinned
 // Lean toolchain and Mathlib, and per library a source that builds against them), a git repository,
 // and unless `--no-build` Mathlib's cache, each chosen library's own prebuilt cache, a build, and an
 // index of each library that ships none.
@@ -21,7 +21,7 @@ const LibrarySchema = z.object({
   provides: z.array(z.string()).optional(),
   /** Its declaration index, relative to the package root, when it ships one. */
   index: z.string().optional(),
-  /** Retrieval synonyms and prompt notes, relative to the LeanSmith repository. */
+  /** Retrieval synonyms and prompt notes, relative to the PaperFormalizer repository. */
   alias_file: z.string().optional(),
   prompt_notes: z.string().optional(),
   /** The script (and its arguments), relative to the package root, that downloads the library's
@@ -40,7 +40,7 @@ const CatalogSchema = z.object({
 export type Catalog = z.infer<typeof CatalogSchema>;
 type Library = z.infer<typeof LibrarySchema>;
 
-/** The LeanSmith repository root (the template's grandparent). */
+/** The PaperFormalizer repository root (the template's grandparent). */
 export function repoRoot(): string {
   return path.resolve(toolkitTemplateDir(), "..", "..");
 }
@@ -99,7 +99,7 @@ export function lakefileRequires(c: Catalog, libs: readonly string[], toolkit: s
 /** The index a toolkit generates for a library that ships none (`init` writes it after the build). */
 export const generatedIndex = (name: string): string => `doc/base_index/${name}.json`;
 
-/** The `base` entries of `leansmith.json`: Mathlib, then each domain library. */
+/** The `base` entries of `paperformalizer.json`: Mathlib, then each domain library. */
 export function baseEntries(c: Catalog, libs: readonly string[], toolkit: string): Array<Record<string, unknown>> {
   return [
     { name: "Mathlib", kind: "transitive", search: ["loogle", "leansearch"], summary: "the Lean mathematical library" },
@@ -177,7 +177,7 @@ export function initToolkit(o: InitOptions, c: Catalog = loadCatalog()): ReturnT
   git("add", "-A");
   // (the owner given is the first commit's author, whatever this machine's git identity is)
   const as = ["-c", `user.name=${o.owner.name}`, ...(o.owner.email ? ["-c", `user.email=${o.owner.email}`] : [])];
-  if (git(...as, "commit", "-q", "-m", "LeanSmith toolkit").status !== 0) {
+  if (git(...as, "commit", "-q", "-m", "PaperFormalizer toolkit").status !== 0) {
     log("[init] git commit failed (set git user.name / user.email, then commit the toolkit yourself)");
   }
 
@@ -251,7 +251,7 @@ async function askDomains(c: Catalog): Promise<string[]> {
 }
 
 export const INIT_USAGE =
-  "Usage: leansmith init <dir> [--domains id,id] [--libraries name,name] [--owner \"Name\"] [--email e] [--no-build]\n" +
+  "Usage: paperformalizer init <dir> [--domains id,id] [--libraries name,name] [--owner \"Name\"] [--email e] [--no-build]\n" +
   "  creates a personal toolkit at <dir>: the template, the optional domain libraries (asked for on a terminal\n" +
   "  unless --domains / --libraries is given; --domains general = Mathlib only), a git repository; then Mathlib's\n" +
   "  cache, the chosen libraries' prebuilt caches, a build and the library indexes (skipped with --no-build). `--list` prints the domains and libraries.";
@@ -280,7 +280,7 @@ export async function runInitCli(args: string[]): Promise<void> {
   const email = value("--email") ?? gitConfig("user.email");
   const sel = initToolkit({ dir, domains, libraries, owner: { name, ...(email ? { email } : {}) }, build: !args.includes("--no-build") }, c);
   console.log(
-    `[init] done. Use it with --toolkit ${path.resolve(dir)} (or LEANSMITH_TOOLKIT), and push it to a private repository of your own.` +
+    `[init] done. Use it with --toolkit ${path.resolve(dir)} (or PAPERFORMALIZER_TOOLKIT), and push it to a private repository of your own.` +
       (sel.skipped.length ? ` Not installed: ${sel.skipped.map((s) => s.name).join(", ")}.` : ""),
   );
 }

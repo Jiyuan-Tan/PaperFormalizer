@@ -25,12 +25,12 @@ describe("token ledger", () => {
   it("finds a session's marker however long the prompt before it (not just in the first 256KB)", async () => {
     const dir = mkdtempSync(path.join(tmpdir(), "tc-rollout-"));
     const file = path.join(dir, "rollout.jsonl");
-    writeFileSync(file, `${"x".repeat(700 * 1024)}[leansmith-session-marker:abc]\n`);
-    expect(await fileHeadContains(file, "leansmith-session-marker:abc", 256 * 1024)).toBe(false);
-    expect(await fileHeadContains(file, "leansmith-session-marker:abc", 2 * 1024 * 1024)).toBe(true);
+    writeFileSync(file, `${"x".repeat(700 * 1024)}[paperformalizer-session-marker:abc]\n`);
+    expect(await fileHeadContains(file, "paperformalizer-session-marker:abc", 256 * 1024)).toBe(false);
+    expect(await fileHeadContains(file, "paperformalizer-session-marker:abc", 2 * 1024 * 1024)).toBe(true);
     // a marker cut across two read chunks is still found
-    writeFileSync(file, `${"y".repeat(256 * 1024 - 10)}leansmith-session-marker:abc`);
-    expect(await fileHeadContains(file, "leansmith-session-marker:abc", 1024 * 1024)).toBe(true);
+    writeFileSync(file, `${"y".repeat(256 * 1024 - 10)}paperformalizer-session-marker:abc`);
+    expect(await fileHeadContains(file, "paperformalizer-session-marker:abc", 1024 * 1024)).toBe(true);
   });
 });
 

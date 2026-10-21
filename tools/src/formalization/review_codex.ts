@@ -144,7 +144,7 @@ export async function reviewWithCodex(
       });
     }
   } catch (err) {
-    console.warn(`[leansmith] F1.5: scoped re-plan review unavailable, reviewing the whole plan: ${err instanceof Error ? err.message : String(err)}`);
+    console.warn(`[paperformalizer] F1.5: scoped re-plan review unavailable, reviewing the whole plan: ${err instanceof Error ? err.message : String(err)}`);
   }
   if (opts.replan) {
     console.warn(
@@ -194,7 +194,7 @@ export async function reviewWithCodex(
       duration_ms: 0,
       message: `F1.5 re-plan review looked up ${beyond.length} node(s) beyond the affected set (${scoped!.affected}): ${beyond.join(", ")}`,
     });
-    console.warn(`[leansmith] F1.5 re-plan review looked up ${beyond.length} node(s) beyond the affected set: ${beyond.join(", ")}`);
+    console.warn(`[paperformalizer] F1.5 re-plan review looked up ${beyond.length} node(s) beyond the affected set: ${beyond.join(", ")}`);
   }
   // The plan and core that passed: the review of the next re-plan covers what moved since.
   if ((review.status === "pass" || review.status === "accept") && planRaw) {

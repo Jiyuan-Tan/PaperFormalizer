@@ -183,7 +183,7 @@ describe("the corrected-paper bundle (V6)", () => {
     const read = (rel: string): Promise<string> => readFile(path.join(run.runDir, "bundle", rel), "utf8");
     const main = await read("corrected_paper/main.tex");
     const sec = await read("corrected_paper/sec/results.tex");
-    for (const t of [main, sec]) expect(t).not.toMatch(/\\vs[A-Z]|LeanSmith|xcolor|Corrected:|Original:/u);
+    for (const t of [main, sec]) expect(t).not.toMatch(/\\vs[A-Z]|PaperFormalizer|xcolor|Corrected:|Original:/u);
     expect(main).toContain("The estimator converges at rate $n^{-1/3}$.");
     expect(main).not.toContain("$n^{-1/2}$");
     // the author's preamble, comment and layout stand
@@ -688,7 +688,7 @@ describe("lean/ and MATCH.md", () => {
     expect(readme).toContain("copied here (2 module(s)): `Toolkit.A`, `Toolkit.B`");
     expect(readme).toContain("`Mathlib` (2 module(s))");
     expect(readme).toContain("- `Toolkit.A.moved_lemma`");
-    // the bundle as written passes `leansmith seal`; a page snapshot changed afterwards does not
+    // the bundle as written passes `paperformalizer seal`; a page snapshot changed afterwards does not
     await runSealCli([path.join(runDir, "bundle")], { log: () => {} });
     const snapshot = path.join(runDir, "bundle", "page", "page.json");
     await writeFile(snapshot, (await readFile(snapshot, "utf8")).replace('"schema":1', '"schema":1,"verdict":"x"'), "utf8");
@@ -824,10 +824,10 @@ describe("the plain-language words", () => {
   });
 });
 
-describe("leansmith report", () => {
+describe("paperformalizer report", () => {
   it("parses its arguments", () => {
     expect(parseReportArgs(["my_paper", "--toolkit", "/t", "--out", "/tmp/o"])).toEqual({ slug: "my_paper", toolkit: "/t", out: path.resolve("/tmp/o") });
-    expect(() => parseReportArgs([])).toThrow(/Usage: leansmith report/u);
+    expect(() => parseReportArgs([])).toThrow(/Usage: paperformalizer report/u);
     expect(() => parseReportArgs(["a", "--out"])).toThrow(/--out needs a value/u);
     expect(() => parseReportArgs(["a", "--fast"])).toThrow(/unknown flag --fast/u);
   });

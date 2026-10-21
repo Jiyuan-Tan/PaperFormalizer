@@ -31,9 +31,9 @@ import lockfile from "proper-lockfile";
 export const CODEX_AUTH_FRESH_MS = 20 * 60_000;
 
 /** The file (in the codex home) holding the time of the last successful call. */
-export const CODEX_AUTH_OK_FILE = ".leansmith_auth_ok";
+export const CODEX_AUTH_OK_FILE = ".paperformalizer_auth_ok";
 /** Held by the warm probe and by every call made one at a time near expiry. */
-const WARM_LOCK_FILE = ".leansmith_warm.lock";
+const WARM_LOCK_FILE = ".paperformalizer_warm.lock";
 
 /** Below this much remaining life of the access token, codex calls under the home run one at a time. */
 export const CODEX_TOKEN_SERIALIZE_MS = 2 * 60 * 60_000;

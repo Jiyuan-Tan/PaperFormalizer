@@ -58,7 +58,7 @@ const REPO = path.dirname(TOOLS);
 const localSandbox = (() => { try { return JSON.parse(readFileSync(path.join(TOOLS, "config", "local.json"), "utf8")).codexSandbox; } catch { return undefined; } })();
 const sandbox = opt("--sandbox", localSandbox ?? "workspace-write");
 // the orchestrating agent's model: the pipeline's own judging tier unless given (`src/models.ts`)
-const model = opt("--model", process.env.LEANSMITH_MODEL_CODEX_VERIFY || "gpt-6.1-sol");
+const model = opt("--model", process.env.PAPERFORMALIZER_MODEL_CODEX_VERIFY || "gpt-6.1-sol");
 const effort = opt("--effort", "high");
 if (!toolkitArg || (args.length === 0 && !queueFile) || args.some((a) => a.startsWith("--"))) {
   console.error("usage: batch_orch.mjs --toolkit <path> [--queue <file>] [--runs <n>] [--batch] [--full-auto] [--hours <h>] [--grace-min <m>] [--brief <file>] [--sandbox <mode>] [--model <m>] [--effort <e>] [--max-agents <n>] [<slug>[=<source>[::<main>]] …]");
@@ -78,7 +78,7 @@ let brief = "";
 if (briefFile) { try { brief = readFileSync(briefFile, "utf8").trim(); } catch (e) { log(`--brief ${briefFile} not read (${e.code ?? e.message}): the agents get no standing instructions`); } }
 const deadline = hours > 0 ? Date.now() + hours * 3_600_000 - graceMin * 60_000 : Infinity;
 const ORCH = path.join(TOOLS, "scripts", "orch.mjs");
-const CLI = path.join(TOOLS, "bin", "leansmith.ts");
+const CLI = path.join(TOOLS, "bin", "paperformalizer.ts");
 const runDir = (slug) => path.join(toolkit, "runs", slug);
 const stamp = () => new Date().toISOString().replace(/[:.]/g, "-");
 const readJson = (f) => { try { return JSON.parse(readFileSync(f, "utf8")); } catch { return null; } };
@@ -126,10 +126,10 @@ const held = new Set();
 const pending = [...given];
 // every watch names this driver as the session (`orch.mjs` `session`); the agents and the runs get this job's
 // own environment (CODEX_HOME, the account the job bills): a watch an agent arms anyway is another session's
-const sessionEnv = { ...process.env, LEANSMITH_ORCH_SESSION_PID: String(process.pid), LEANSMITH_ORCH_AGENT: `batch job ${process.env.SLURM_JOB_ID ?? os.hostname()}`, LEANSMITH_ORCH_PARENT: String(process.pid) };
+const sessionEnv = { ...process.env, PAPERFORMALIZER_ORCH_SESSION_PID: String(process.pid), PAPERFORMALIZER_ORCH_AGENT: `batch job ${process.env.SLURM_JOB_ID ?? os.hostname()}`, PAPERFORMALIZER_ORCH_PARENT: String(process.pid) };
 let stopReason = null;
 
-/** `leansmith <argv>` started detached in this job, its output in the run's logs. */
+/** `paperformalizer <argv>` started detached in this job, its output in the run's logs. */
 function startCli(slug, argv, what) {
   const file = path.join(runDir(slug), "logs", `batch_${what}_${stamp()}.log`);
   mkdirSync(path.dirname(file), { recursive: true });
@@ -176,9 +176,9 @@ function takeStartRequest(slug) {
 
 // ─── agents: one conversation per run, at most --max-agents at once ─────────────
 const prompt = (slug, event) => [
-  `You are the orchestrating agent of the LeanSmith run \`${slug}\` (toolkit ${toolkit}), called by a driver script inside a batch job. Read ${path.join(REPO, "AGENTS.md")} and ${path.join(REPO, ".claude", "skills", "leansmith", "SKILL.md")} and follow them, with these differences of this mode:`,
+  `You are the orchestrating agent of the PaperFormalizer run \`${slug}\` (toolkit ${toolkit}), called by a driver script inside a batch job. Read ${path.join(REPO, "AGENTS.md")} and ${path.join(REPO, ".claude", "skills", "paperformalizer", "SKILL.md")} and follow them, with these differences of this mode:`,
   `- The driver watches the run and calls you once per event (below). Act on it as the skill says, then end your turn with one line saying what you did. Do not run \`orch.mjs watch\` or \`orch_watch_loop.mjs\`, do not wait for the run, and start no UI: the driver calls you again at the next event.`,
-  `- Start a run detached, so that it outlives your turn — a resume (with your ruling's flags): \`cd ${TOOLS} && source scripts/node_env.sh && setsid nohup npx tsx bin/leansmith.ts verify ${readJson(path.join(runDir(slug), "state.json"))?.verify?.source?.input ?? "<the run's source: verify.source.input in its state.json>"} --toolkit ${toolkit} --slug ${slug} --resume [flags] > ${path.join(runDir(slug), "logs")}/batch_agent_<time>.log 2>&1 < /dev/null &\`; an apply: the same with \`propose ${slug} --round <A|B> --apply --toolkit ${toolkit}\`. A minute later check that it started (a resume: \`${path.join(runDir(slug), "logs", ".run.active")}\` is fresh; an apply: its log), and fix and relaunch it if not. The environment of this job (CODEX_HOME and the rest) is inherited.`,
+  `- Start a run detached, so that it outlives your turn — a resume (with your ruling's flags): \`cd ${TOOLS} && source scripts/node_env.sh && setsid nohup npx tsx bin/paperformalizer.ts verify ${readJson(path.join(runDir(slug), "state.json"))?.verify?.source?.input ?? "<the run's source: verify.source.input in its state.json>"} --toolkit ${toolkit} --slug ${slug} --resume [flags] > ${path.join(runDir(slug), "logs")}/batch_agent_<time>.log 2>&1 < /dev/null &\`; an apply: the same with \`propose ${slug} --round <A|B> --apply --toolkit ${toolkit}\`. A minute later check that it started (a resume: \`${path.join(runDir(slug), "logs", ".run.active")}\` is fresh; an apply: its log), and fix and relaunch it if not. The environment of this job (CODEX_HOME and the rest) is inherited.`,
   `- Act on this run only; stop a process only by its PID.`,
   `- Talk to the owner on the paper's page (\`orch.mjs reply | ask | recommend | decided | handled\`, as the skill says); nobody reads this session.`,
   ...(brief ? ["", "The owner's standing instructions:", brief] : []),
@@ -261,7 +261,7 @@ const watches = new Set();
 const watchOnce = (slug, known, timeout = 600) => new Promise((resolve) => {
   if (Date.now() >= deadline || stopReason) { resolve({ code: 2, out: "" }); return; }
   const child = spawn(process.execPath, [ORCH, "watch", slug, "--toolkit", toolkit, "--starts", "--timeout", String(timeout), ...(known.size ? ["--known", [...known].join(",")] : [])], {
-    stdio: ["ignore", "pipe", "pipe"], env: { ...sessionEnv, LEANSMITH_ORCH_REPORTED: path.join(scratch, `${slug}.json`) },
+    stdio: ["ignore", "pipe", "pipe"], env: { ...sessionEnv, PAPERFORMALIZER_ORCH_REPORTED: path.join(scratch, `${slug}.json`) },
   });
   watches.add(child);
   let out = "";

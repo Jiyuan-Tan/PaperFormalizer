@@ -1084,7 +1084,7 @@ export async function runProofReviewLoop(args: {
   const restored = await restoreCarryoverProofs(leanDir);
   if (restored.count > 0) {
     console.warn(
-      `[leansmith] restored ${restored.count} signature-matched carry-over proof(s) before F3; ` +
+      `[paperformalizer] restored ${restored.count} signature-matched carry-over proof(s) before F3; ` +
         "the filler will see only changed/new obligations.",
     );
     state = await refresh();

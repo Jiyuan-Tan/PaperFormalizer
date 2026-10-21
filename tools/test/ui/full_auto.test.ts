@@ -25,7 +25,7 @@ function fixture(state: Record<string, unknown>) {
   const started = path.join(root, "started.json");
   const cli = path.join(root, "cli.mjs");
   writeFileSync(cli, `import { writeFileSync } from "node:fs"; writeFileSync(${JSON.stringify(started)}, JSON.stringify(process.argv.slice(2)));\n`);
-  const orch = (...args: string[]) => spawnSync(process.execPath, [script, args[0]!, "fa", "--toolkit", root, ...args.slice(1)], { encoding: "utf8", env: { ...process.env, LEANSMITH_ORCH_CLI: cli } });
+  const orch = (...args: string[]) => spawnSync(process.execPath, [script, args[0]!, "fa", "--toolkit", root, ...args.slice(1)], { encoding: "utf8", env: { ...process.env, PAPERFORMALIZER_ORCH_CLI: cli } });
   const startedArgv = async (): Promise<string[] | null> => {
     for (let i = 0; i < 100 && !existsSync(started); i++) await new Promise((r) => setTimeout(r, 50));
     return existsSync(started) ? JSON.parse(readFileSync(started, "utf8")) : null;
@@ -83,7 +83,7 @@ describe("orch.mjs on a full-auto run", () => {
     expect(r.stdout).toContain("1 of 3 repair(s) recommended");
     f.orch("recommend", "repair", "thm:b", "decline", "the bound is false");
     r = f.orch("recommend", "repair", "thm:c", "redo", "a better repair exists", "--guidance", "keep the rate, add $n>1$");
-    expect(r.stdout).toContain("full auto: every item is recommended — started leansmith verify");
+    expect(r.stdout).toContain("full auto: every item is recommended — started paperformalizer verify");
     expect(await f.startedArgv()).toEqual(["verify", "--toolkit", f.root, "--slug", "fa", "--resume", "--accept-repair", "thm:a", "--decline-repair", "thm:b: the bound is false", "--redo-repair", "thm:c: keep the rate, add $n>1$"]);
     const reviews = JSON.parse(readFileSync(path.join(f.run, "orch_decisions.json"), "utf8"));
     expect(reviews.map((d: { node: string }) => d.node)).toEqual(["thm:a", "thm:b", "thm:c"]);
@@ -102,7 +102,7 @@ describe("orch.mjs on a full-auto run", () => {
     const f = fixture({ full_auto: true, verify: { phase: "proposals_A", source: { input: "/p" }, promotion_a: { status: "pending_user" } } });
     writeFileSync(path.join(f.run, "proposals", "A.json"), JSON.stringify({ round: "A", proposals: [{ id: "a-one", verdict: "propose", content: "c" }, { id: "a-two", verdict: "propose", content: "d" }, { id: "a-skip", verdict: "skip" }] }));
     expect(f.orch("recommend", "A", "a-one", "accept", "used twice").stdout).toContain("1 of 2 item(s) of round A recommended");
-    expect(f.orch("recommend", "A", "a-two", "defer", "a one-line fact").stdout).toContain("started leansmith propose");
+    expect(f.orch("recommend", "A", "a-two", "defer", "a one-line fact").stdout).toContain("started paperformalizer propose");
     expect(await f.startedArgv()).toEqual(["propose", "fa", "--round", "A", "--apply", "--recommended", "--toolkit", f.root]);
     const reviews = JSON.parse(readFileSync(path.join(f.run, "orch_decisions.json"), "utf8"));
     expect(reviews).toMatchObject([{ node: "round A" }]);

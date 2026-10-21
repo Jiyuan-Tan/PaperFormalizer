@@ -1,13 +1,13 @@
-// LeanSmith toolkit configuration: the canonical loader.
+// PaperFormalizer toolkit configuration: the canonical loader.
 //
-// A toolkit is the owner's Lake project that LeanSmith writes into. Its root holds
-// `leansmith.json`, which names the toolkit library and its divisions, the papers library,
-// and the read-only base libraries. Every path LeanSmith needs inside a toolkit is derived
+// A toolkit is the owner's Lake project that PaperFormalizer writes into. Its root holds
+// `paperformalizer.json`, which names the toolkit library and its divisions, the papers library,
+// and the read-only base libraries. Every path PaperFormalizer needs inside a toolkit is derived
 // here, so no caller hand-joins `runs/`, `doc/ledger.json`, or a lock file.
 //
-// Root resolution, in order: an explicit `--toolkit <path>`, the `LEANSMITH_TOOLKIT` env
-// var, then the nearest ancestor of the cwd that contains `leansmith.json`. Each source
-// must name a directory that actually contains `leansmith.json`; there is no fallback to
+// Root resolution, in order: an explicit `--toolkit <path>`, the `PAPERFORMALIZER_TOOLKIT` env
+// var, then the nearest ancestor of the cwd that contains `paperformalizer.json`. Each source
+// must name a directory that actually contains `paperformalizer.json`; there is no fallback to
 // the cwd, because a wrong root would silently write run records into another tree.
 import { existsSync, readFileSync, statSync } from "node:fs";
 import path from "node:path";
@@ -15,8 +15,8 @@ import { fileURLToPath } from "node:url";
 import { z } from "zod";
 import { loadAliasFile } from "../formalization/aliases.js";
 
-export const TOOLKIT_CONFIG_FILE = "leansmith.json";
-export const TOOLKIT_ENV_VAR = "LEANSMITH_TOOLKIT";
+export const TOOLKIT_CONFIG_FILE = "paperformalizer.json";
+export const TOOLKIT_ENV_VAR = "PAPERFORMALIZER_TOOLKIT";
 export const TOOLKIT_RUNS_DIRNAME = "runs";
 export const TOOLKIT_STAGING_SEGMENT = "Staging";
 /** Held across a whole toolkit promotion (move + build + lint + index), so two never interleave. */
@@ -90,7 +90,7 @@ export const toolkitConfigFileSchema = z.object({
 });
 
 /** A base library with every path resolved to an absolute path (relative entries in
- *  `leansmith.json` are relative to the toolkit root). */
+ *  `paperformalizer.json` are relative to the toolkit root). */
 export interface BaseLibrary {
   name: string;
   kind: "path" | "transitive";
@@ -111,11 +111,11 @@ export interface BaseLibrary {
 export type ToolkitRootSource = "arg" | "env" | "cwd";
 
 export interface ToolkitConfig {
-  /** Absolute toolkit root (the directory holding `leansmith.json`). */
+  /** Absolute toolkit root (the directory holding `paperformalizer.json`). */
   readonly toolkitRoot: string;
   readonly source: ToolkitRootSource;
   readonly configPath: string;
-  /** The Lean/Lake project path LeanSmith builds and serves lean-lsp from (= the root). */
+  /** The Lean/Lake project path PaperFormalizer builds and serves lean-lsp from (= the root). */
   readonly leanProjectPath: string;
   readonly runsDir: string;
   /** Library name of the curated toolkit (e.g. `Toolkit`) and its source directory. */
@@ -143,7 +143,7 @@ function abs(root: string, p: string | null | undefined): string | undefined {
   return p ? path.resolve(root, p) : undefined;
 }
 
-/** Defaults of the V1.5 referee's `leansmith.json` `referee` keys. */
+/** Defaults of the V1.5 referee's `paperformalizer.json` `referee` keys. */
 export const DEFAULT_REFEREE_OPTIONS = Object.freeze({
   max_concurrent: 6,
   shard_bytes: 70_000,
@@ -156,7 +156,7 @@ export const DEFAULT_REFEREE_OPTIONS = Object.freeze({
 /** Codex reasoning effort of the V1.5 symbol referee (`referee.symbol_effort`). */
 export type SymbolEffort = "low" | "medium" | "high";
 
-/** `leansmith.json` `referee`, resolved (every key filled by `toolkitConfigFromJson`). */
+/** `paperformalizer.json` `referee`, resolved (every key filled by `toolkitConfigFromJson`). */
 export interface RefereeOptions {
   readonly max_concurrent?: number;
   readonly shard_bytes?: number;
@@ -166,7 +166,7 @@ export interface RefereeOptions {
   readonly symbol_effort?: SymbolEffort;
 }
 
-/** Build a config from an already-parsed `leansmith.json` value (no filesystem access). */
+/** Build a config from an already-parsed `paperformalizer.json` value (no filesystem access). */
 export function toolkitConfigFromJson(
   root: string,
   json: unknown,
@@ -222,7 +222,7 @@ function isFile(p: string): boolean {
   return existsSync(p) && statSync(p).isFile();
 }
 
-/** The toolkit config file in `dir` (`leansmith.json`), else null. */
+/** The toolkit config file in `dir` (`paperformalizer.json`), else null. */
 export function toolkitConfigFileIn(dir: string): string | null {
   const p = path.join(dir, TOOLKIT_CONFIG_FILE);
   return isFile(p) ? p : null;
@@ -240,7 +240,7 @@ export interface ResolveToolkitOptions {
 }
 
 /** Resolve the toolkit root (arg → env → cwd walk-up). Throws, naming all three ways, when
- *  no source yields a directory containing `leansmith.json`. */
+ *  no source yields a directory containing `paperformalizer.json`. */
 export function resolveToolkitRoot(opts: ResolveToolkitOptions = {}): { root: string; source: ToolkitRootSource } {
   const cwd = path.resolve(opts.cwd ?? process.cwd());
   const explicit = opts.explicit?.trim();
@@ -263,7 +263,7 @@ export function resolveToolkitRoot(opts: ResolveToolkitOptions = {}): { root: st
     if (hasConfig(cur)) return { root: cur, source: "cwd" };
     if (path.dirname(cur) === cur) break;
   }
-  throw new Error(`No LeanSmith toolkit found from ${cwd}. To select a toolkit, ${HOW_TO}.`);
+  throw new Error(`No PaperFormalizer toolkit found from ${cwd}. To select a toolkit, ${HOW_TO}.`);
 }
 
 /**
@@ -293,7 +293,7 @@ export function validateBaseLibraryFiles(cfg: ToolkitConfig): void {
   }
 }
 
-/** Resolve the toolkit root and parse its `leansmith.json`; every configured alias / notes
+/** Resolve the toolkit root and parse its `paperformalizer.json`; every configured alias / notes
  *  file is validated (`validateBaseLibraryFiles`). */
 export function loadToolkitConfig(opts: ResolveToolkitOptions = {}): ToolkitConfig {
   const { root, source } = resolveToolkitRoot(opts);
@@ -314,8 +314,8 @@ export function divisionBarrelPath(cfg: ToolkitConfig, division: string): string
   return path.join(cfg.toolkitLibDir, `${division}.lean`);
 }
 
-/** The LeanSmith `tools/` directory (holds the lint and search bins). */
-export function leanSmithToolsDir(): string {
+/** The PaperFormalizer `tools/` directory (holds the lint and search bins). */
+export function paperFormalizerToolsDir(): string {
   return path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..", "..");
 }
 

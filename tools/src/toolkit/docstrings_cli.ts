@@ -1,4 +1,4 @@
-// `leansmith docstrings`: bring the toolkit's docstrings to the docstring contract
+// `paperformalizer docstrings`: bring the toolkit's docstrings to the docstring contract
 // (shared/prompts/docstring_contract.txt) — the same batched codex pass F5 runs on a paper's
 // modules, pointed at the toolkit library. Docstring edits only; a build failure restores them.
 import { readdir } from "node:fs/promises";
@@ -11,7 +11,7 @@ import { loadToolkitConfig, type ToolkitConfig } from "./config.js";
 import { assertToolkitLakefile } from "./lakefile.js";
 
 export const DOCSTRINGS_USAGE =
-  "Usage: leansmith docstrings [--toolkit <path>] [--modules M1,M2,…]\n" +
+  "Usage: paperformalizer docstrings [--toolkit <path>] [--modules M1,M2,…]\n" +
   "  document the toolkit's declarations to the docstring contract (NL translation + crosslinks);\n" +
   "  default: every module of the toolkit's divisions. Records under runs/toolkit_docstrings/.";
 

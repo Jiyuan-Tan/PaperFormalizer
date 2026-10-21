@@ -12,7 +12,7 @@ describe("correctedTex — the corrected paper's source", () => {
       `${at("thm:a", "error (repaired)")}\\vsNote{\\vsLine\\textbf{Claim:} the rate. \\vsLine\\textbf{What is wrong:} it is slower.}\n\\end{theorem}\nNext.`;
     const r = correctedTex(tagged, OPTS);
     expect(r.tex).toBe("\\begin{theorem}\\label{thm:a} The rate is $n^{-1/3}$.\n\\end{theorem}\nNext.");
-    expect(r.tex).not.toMatch(/\\vs[A-Z]|Claim|LeanSmith/u);
+    expect(r.tex).not.toMatch(/\\vs[A-Z]|Claim|PaperFormalizer/u);
     expect(r.items).toEqual([]);
   });
 

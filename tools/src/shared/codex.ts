@@ -94,7 +94,7 @@ export interface CodexRunInput {
    *      parks in `futex_wait` forever while pinging liveness, defeating the
    *      inactivity timeout, so the whole run hangs). The concurrent reviewer/
    *      filler waves must therefore leave this OFF.
-   * `LEANSMITH_CODEX_MULTI_AGENT=1` forces it on globally (escape hatch / debug).
+   * `PAPERFORMALIZER_CODEX_MULTI_AGENT=1` forces it on globally (escape hatch / debug).
    */
   multiAgent?: boolean;
   /**
@@ -136,11 +136,11 @@ const CODEX_REASONING_EFFORTS = new Set<CodexRunInput["reasoningEffort"]>([
 export function resolveCodexReasoningEffort(
   requested: CodexRunInput["reasoningEffort"],
 ): NonNullable<CodexRunInput["reasoningEffort"]> {
-  const override = process.env.LEANSMITH_CODEX_EFFORT_OVERRIDE?.trim();
+  const override = process.env.PAPERFORMALIZER_CODEX_EFFORT_OVERRIDE?.trim();
   if (!override) return requested ?? "high";
   if (!CODEX_REASONING_EFFORTS.has(override as CodexRunInput["reasoningEffort"])) {
     throw new Error(
-      `invalid LEANSMITH_CODEX_EFFORT_OVERRIDE=${JSON.stringify(override)}; ` +
+      `invalid PAPERFORMALIZER_CODEX_EFFORT_OVERRIDE=${JSON.stringify(override)}; ` +
         "expected minimal, low, medium, high, or xhigh",
     );
   }
@@ -161,7 +161,7 @@ export type CodexSandboxMode = LocalConfig["codexSandbox"];
  *
  * An operator who has verified an outer sandbox may explicitly opt into Codex's
  * non-bypass `danger-full-access` mode in `tools/config/local.json` or with
- * `LEANSMITH_CODEX_SANDBOX`. The environment overrides the file. Invalid
+ * `PAPERFORMALIZER_CODEX_SANDBOX`. The environment overrides the file. Invalid
  * values fail closed.
  */
 export function resolveCodexSandboxMode(args: {
@@ -169,13 +169,13 @@ export function resolveCodexSandboxMode(args: {
   configured?: string;
 } = {}): CodexSandboxMode {
   const env = args.env ?? process.env;
-  const configured = (env.LEANSMITH_CODEX_SANDBOX ?? args.configured)?.trim();
+  const configured = (env.PAPERFORMALIZER_CODEX_SANDBOX ?? args.configured)?.trim();
   if (configured) {
     if (configured === "workspace-write" || configured === "danger-full-access") {
       return configured;
     }
     throw new Error(
-      `LEANSMITH_CODEX_SANDBOX must be workspace-write or danger-full-access; got ${configured}`,
+      `PAPERFORMALIZER_CODEX_SANDBOX must be workspace-write or danger-full-access; got ${configured}`,
     );
   }
   return "workspace-write";
@@ -204,7 +204,7 @@ export function effectiveSandboxMode(
  * Forward slashes avoid TOML backslash-escaping on Windows; the Python lean-lsp
  * server accepts them.
  *
- * SHARED-SERVER MODE: when `LEANSMITH_SHARED_LEAN_LSP_URL` is set (a launcher —
+ * SHARED-SERVER MODE: when `PAPERFORMALIZER_SHARED_LEAN_LSP_URL` is set (a launcher —
  * e.g. the F3 loop — booted one streamable-HTTP `lean-lsp-mcp` via
  * `startSharedLeanLsp` and exported its URL), every codex run attaches to that
  * ONE server instead of spawning its own stdio `lean-lsp-mcp`/`lake serve`. This
@@ -285,7 +285,7 @@ async function codexApiHomeBootstrapped(home: string, fingerprint: string): Prom
 }
 
 function codexApiHomeStamp(home: string): string {
-  return path.join(home, ".leansmith_api_key.sha256");
+  return path.join(home, ".paperformalizer_api_key.sha256");
 }
 
 /** Strip the key out of child output before it can reach a run log. */
@@ -308,7 +308,7 @@ async function bootstrapCodexApiHome(
   // but concurrent sessions share this tree (and this home). Without it two
   // `codex login` calls race on the same `auth.json` while a third worker is
   // reading it.
-  await withCodexHomeLock(home, ".leansmith_bootstrap.lock", async () => {
+  await withCodexHomeLock(home, ".paperformalizer_bootstrap.lock", async () => {
     // Re-check inside the lock: the process we queued behind may have just done it.
     if (await codexApiHomeBootstrapped(home, fingerprint)) return;
     const configPath = path.join(home, "config.toml");
@@ -542,7 +542,7 @@ async function runCodexOnce(input: CodexRunInput): Promise<{ stdout: string; std
     await ensureCodexApiHome(codexHome(), auth.apiKey);
   }
   const schemaPath = input.outputSchema
-    ? path.join(os.tmpdir(), `leansmith-output-schema-${process.pid}-${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 8)}.json`)
+    ? path.join(os.tmpdir(), `paperformalizer-output-schema-${process.pid}-${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 8)}.json`)
     : null;
   if (schemaPath) await writeFile(schemaPath, JSON.stringify(input.outputSchema), "utf8");
   const spawnedAt = Date.now();
@@ -558,7 +558,7 @@ async function runCodexOnce(input: CodexRunInput): Promise<{ stdout: string; std
   // two pipeline runs in flight the OTHER run's session satisfied it and the
   // stuck-startup detector never fired. The marker scopes the check to THIS
   // call; codex records the submitted prompt in the rollout's first records.
-  const marker = `leansmith-session-marker:${spawnedAt.toString(36)}-${Math.random()
+  const marker = `paperformalizer-session-marker:${spawnedAt.toString(36)}-${Math.random()
     .toString(36)
     .slice(2, 10)}`;
   // how far into the rollout the marker can sit: the base instructions, then the prompt (with the
@@ -622,7 +622,7 @@ async function runCodexOnce(input: CodexRunInput): Promise<{ stdout: string; std
     // proof fillers, …) must NOT also let each codex spawn server-side sub-agents. Enable PER CALL
     // with `multiAgent: true` (see CodexRunInput for the two preconditions — the prompt must use
     // `spawn_agent` AND the call must run at low concurrency), or globally with
-    // LEANSMITH_CODEX_MULTI_AGENT=1 (escape hatch). NOTE: the v2 concurrency knob is
+    // PAPERFORMALIZER_CODEX_MULTI_AGENT=1 (escape hatch). NOTE: the v2 concurrency knob is
     // `multi_agent.max_concurrent_threads_per_session` — the legacy `agents.max_threads`
     // ERRORS when `multi_agent_v2` is enabled.
     ...(input.multiAgent === false
@@ -630,7 +630,7 @@ async function runCodexOnce(input: CodexRunInput): Promise<{ stdout: string; std
           "-c features.multi_agent_v2=false",
           "-c multi_agent.non_code_mode_only=true",
         ]
-      : input.multiAgent === true || process.env.LEANSMITH_CODEX_MULTI_AGENT === "1"
+      : input.multiAgent === true || process.env.PAPERFORMALIZER_CODEX_MULTI_AGENT === "1"
       ? [
           "-c features.multi_agent_v2=true",
           "-c multi_agent.non_code_mode_only=false",

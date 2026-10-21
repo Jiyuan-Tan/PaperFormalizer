@@ -284,7 +284,7 @@ describe("a worker that could not reach the run's files: the machine's halt, not
     const result = await runStageV1(stageArgs(run, { runCodex: d.runCodex }));
     expect(result.status).toBe("checkpoint");
     expect(result.message).toMatch(/^ENVIRONMENT checkpoint: the segmenter \(a model worker\) could not read or write the run's files — it said: I cannot access the supplied source/);
-    expect(result.message).toMatch(/This is the machine, not the paper: run `leansmith doctor`[\s\S]*Do not retry, and do not change the paper or --targets/);
+    expect(result.message).toMatch(/This is the machine, not the paper: run `paperformalizer doctor`[\s\S]*Do not retry, and do not change the paper or --targets/);
     expect(result.message).not.toMatch(/could not transcribe|fix the source/);
     expect(d.seen).toEqual({ segmenter: 1, builder: 0 });
   });
@@ -579,11 +579,11 @@ describe("authors' note macros and a run on file", () => {
   it("a cold extraction reads them away and records it; a revise of a run read as written leaves its flat text alone", async () => {
     // a run from before the reading existed: flattened as written, no table in envs.json
     const old = await prepareRun(null, wrapped);
-    process.env.LEANSMITH_NOTE_MACROS = "off";
+    process.env.PAPERFORMALIZER_NOTE_MACROS = "off";
     try {
       expect((await runStageV1(stageArgs(old, { runCodex: forbidden }, true))).status).toBe("completed");
     } finally {
-      delete process.env.LEANSMITH_NOTE_MACROS;
+      delete process.env.PAPERFORMALIZER_NOTE_MACROS;
     }
     const before = await flatOf(old);
     expect(before).toContain("\\lp{An edited sentence. And another.}");

@@ -120,7 +120,7 @@ describe("statement fingerprints", () => {
       // no lakefile, no exe: nothing is spawned
       expect(await takeStatementFingerprints(root, leanDir, exec(0))).toBeNull();
       expect(calls).toEqual([]);
-      await writeFile(join(root, "leansmith.json"), JSON.stringify(TOOLKIT_JSON));
+      await writeFile(join(root, "paperformalizer.json"), JSON.stringify(TOOLKIT_JSON));
       await writeFile(join(root, "lakefile.toml"), 'name = "t"\n\n[[lean_lib]]\nname = "Toolkit"\n\n[[lean_lib]]\nname = "Papers"\n\n[[lean_exe]]\nname = "candidate_scan"\nroot = "CandidateScan"\n');
       const fp = await takeStatementFingerprints(root, leanDir, exec(0));
       expect(fp?.byShort.get("mainThm")?.[0].hash).toBe("c");

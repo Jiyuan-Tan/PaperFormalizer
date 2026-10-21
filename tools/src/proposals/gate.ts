@@ -101,7 +101,7 @@ export const realApplyDeps: ApplyDeps = {
       const env = { ...process.env };
       // Nested tsx subcommands open an IPC pipe under TMPDIR and collide on a per-run TMPDIR.
       delete env.TMPDIR;
-      const maxTotalMs = Number(process.env.LEANSMITH_VERIFY_MAX_MS ?? 60 * 60 * 1000);
+      const maxTotalMs = Number(process.env.PAPERFORMALIZER_VERIFY_MAX_MS ?? 60 * 60 * 1000);
       const r = await spawnWithInactivityTimeout(bashBinary(), ["-c", cmd], {
         cwd, env, inactivityTimeoutMs: 30 * 60 * 1000, maxTotalMs,
       });

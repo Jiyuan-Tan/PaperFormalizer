@@ -18,7 +18,7 @@ export type { ClaudeRolesRunner };
 
 export interface ClaudeRoles {
   runner: ClaudeRolesRunner;
-  /** True when the operator set it (`claudeRoles` / `LEANSMITH_CLAUDE_ROLES`). */
+  /** True when the operator set it (`claudeRoles` / `PAPERFORMALIZER_CLAUDE_ROLES`). */
   explicit: boolean;
   /** True when it is the runner the run recorded at its first decision (`state.json` `claude_roles`). */
   recorded?: boolean;
@@ -100,11 +100,11 @@ let decided: ClaudeRoles | null = null;
 export function claudeRoles(recorded?: ClaudeRolesRunner): ClaudeRoles {
   if (!decided) {
     decided = decideClaudeRoles(probe, {}, recorded);
-    const line = `[leansmith] ${describeClaudeRoles(decided)}`;
+    const line = `[paperformalizer] ${describeClaudeRoles(decided)}`;
     if (decided.runner === "codex" && !decided.explicit) console.warn(line);
     else console.log(line);
     if (recorded && recorded !== decided.runner) {
-      console.warn(`[leansmith] WARN this run's claude roles ran on ${recorded} so far: from now on they run on ${decided.runner} (${decided.reason}).`);
+      console.warn(`[paperformalizer] WARN this run's claude roles ran on ${recorded} so far: from now on they run on ${decided.runner} (${decided.reason}).`);
     }
   }
   return decided;

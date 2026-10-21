@@ -1,4 +1,4 @@
-// `leansmith doctor`: what this machine needs before `init` and `verify`, each checked, with
+// `paperformalizer doctor`: what this machine needs before `init` and `verify`, each checked, with
 // how to get what is missing. It reads versions and login states only: no model call, no build.
 import { existsSync, mkdtempSync, readFileSync, rmSync } from "node:fs";
 import os from "node:os";
@@ -7,7 +7,7 @@ import { claudeRolesSetting, resolveAuth, workerEnv, type ClaudeRolesRunner } fr
 import { codexRoleModel, decideClaudeRoles } from "./claude_roles.js";
 import { localConfig } from "./local_config.js";
 import { MODELS } from "./models.js";
-import { leanSmithToolsDir } from "./toolkit/config.js";
+import { paperFormalizerToolsDir } from "./toolkit/config.js";
 import { probeProgram } from "./shared/program.js";
 
 export interface DoctorCheck {
@@ -48,7 +48,7 @@ function codexSandboxCheck(run: Probe, env: NodeJS.ProcessEnv, platform: NodeJS.
   const subcommands = [...(help.all ?? "").matchAll(/^\s+(macos|linux|windows)\b/gm)].map((m) => m[1]!);
   const mine = platform === "darwin" ? "macos" : "linux";
   if (subcommands.length > 0 && !subcommands.includes(mine)) return null;
-  const scratch = mkdtempSync(path.join(os.tmpdir(), "leansmith-doctor-"));
+  const scratch = mkdtempSync(path.join(os.tmpdir(), "paperformalizer-doctor-"));
   try {
     const r = run("codex", ["sandbox", ...(subcommands.length > 0 ? [mine] : []), "--", "/bin/sh", "-c", "echo ok"], env, scratch);
     if (r.ok) return { ok: true, detail: "starts (a command ran in a scratch directory)" };
@@ -77,7 +77,7 @@ export function doctorChecks(
 ): DoctorCheck[] {
   const platform = machine.platform ?? process.platform;
   const windows = platform === "win32";
-  const tools = leanSmithToolsDir();
+  const tools = paperFormalizerToolsDir();
   const floor = /">=\s*([0-9.]+)"/.exec(readFileSync(path.join(tools, "package.json"), "utf8"))?.[1] ?? "20.20.2";
   const out: DoctorCheck[] = [];
   const program = (name: string, required: boolean, bin: string, args: string[], fix: string, absent = ""): boolean => {
@@ -140,7 +140,7 @@ export function doctorChecks(
     try {
       pinned = claudeRolesSetting()?.runner ?? null;
     } catch (err) {
-      out.push({ name: "claudeRoles", required: true, ok: false, detail: err instanceof Error ? err.message : String(err), fix: "set `claudeRoles` (config/local.json) or LEANSMITH_CLAUDE_ROLES to \"claude\" or \"codex\", or remove it" });
+      out.push({ name: "claudeRoles", required: true, ok: false, detail: err instanceof Error ? err.message : String(err), fix: "set `claudeRoles` (config/local.json) or PAPERFORMALIZER_CLAUDE_ROLES to \"claude\" or \"codex\", or remove it" });
     }
   }
   if (pinned === "codex") {
@@ -169,14 +169,14 @@ export function doctorReport(checks: readonly DoctorCheck[], claudeRoles: Claude
   });
   const missing = checks.filter((c) => c.required && !c.ok).map((c) => c.name);
   return [
-    "LeanSmith prerequisites:",
+    "PaperFormalizer prerequisites:",
     ...lines,
     `Models called (the accounts need access; tools/src/models.ts): codex ${[...new Set([MODELS.codexKernel, MODELS.codexVerify, MODELS.codexMechanical])].join(", ")}; ${claudeRoles === "codex" ? `the claude roles run on codex ${codexRoleModel()}` : `claude ${MODELS.claudeMain}`}.`,
     missing.length ? `Not ready: ${missing.join(", ")}.` : "Ready: every required item is present.",
   ].join("\n");
 }
 
-export const DOCTOR_USAGE = "Usage: leansmith doctor\n  check this machine's prerequisites (programs, versions, logins); exit 1 when a required one is missing.";
+export const DOCTOR_USAGE = "Usage: paperformalizer doctor\n  check this machine's prerequisites (programs, versions, logins); exit 1 when a required one is missing.";
 
 export function runDoctorCli(args: string[]): void {
   if (args.length > 0) throw new Error(DOCTOR_USAGE);

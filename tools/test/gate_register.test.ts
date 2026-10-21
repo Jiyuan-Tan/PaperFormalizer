@@ -38,9 +38,9 @@ const node = (id: string, kind: GraphNode["kind"]): GraphNode => ({
 });
 
 function gate(args: string[]): Promise<{ stdout: string; stderr: string }> {
-  // The toolkit is found by walking up from the cwd to `leansmith.json`.
+  // The toolkit is found by walking up from the cwd to `paperformalizer.json`.
   const env = { ...process.env };
-  delete env.LEANSMITH_TOOLKIT;
+  delete env.PAPERFORMALIZER_TOOLKIT;
   return exec(process.execPath, [TSX_CLI, GATE, QID, ...args], { cwd: repoRoot, env });
 }
 
@@ -61,7 +61,7 @@ async function seedLeanDecl(
 
 beforeEach(async () => {
   repoRoot = await mkdtemp(path.join(os.tmpdir(), "gate-reg-"));
-  await writeFile(path.join(repoRoot, "leansmith.json"), JSON.stringify(TOOLKIT_JSON));
+  await writeFile(path.join(repoRoot, "paperformalizer.json"), JSON.stringify(TOOLKIT_JSON));
 
   const st = createInitialState(QID);
   st.added_assumptions = [

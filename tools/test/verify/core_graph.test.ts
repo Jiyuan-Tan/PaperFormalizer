@@ -11,7 +11,9 @@ import {
   PIN_REASON_PREFIX,
   applyEdits,
   bindingReadings,
+  conditionsOn,
   isReadingAddition,
+  patchConditionId,
   patchReadingId,
   renderBindingReadings,
   buildCore,
@@ -446,6 +448,26 @@ describe("buildCore", () => {
     // the same reading re-typeset keeps its id; without readings nothing is added
     expect(patchReadingId("lem:rate", "the  rate is uniform over the class")).toBe(id);
     expect(buildCore(core(), { patches: file() }).core.assumptions.some((x) => x.id.startsWith("ass:pin-fix-"))).toBe(false);
+  });
+
+  it("a repair's side conditions are bookkeeping conditions beside the statement, never pins, never in its text", () => {
+    const f = file();
+    f.patches[0]!.conditions = ["the fitted nuisances are measurable with respect to the training split"];
+    const { core: built } = buildCore(core(), { patches: f });
+    const id = patchConditionId("lem:rate", "the fitted nuisances are measurable with respect to the training split");
+    expect(id).toMatch(/^ass:bk-fix-[0-9a-f]{8}$/);
+    const bk = built.assumptions.find((x) => x.id === id)!;
+    expect(isReadingAddition(bk)).toBe(true);
+    expect(bk.bookkeeping?.reason.startsWith(PIN_REASON_PREFIX)).toBe(false);
+    const rate = built.statements.find((x) => x.id === "lem:rate")!;
+    expect(rate.depends_on).toContain(id);
+    expect(rate.statement).not.toContain("measurable");
+    // the annotated paper's "Bookkeeping condition:" note, written by the fixer; not a pinned reading
+    expect(conditionsOn(built, "lem:rate")).toEqual([{ id, condition: bk.condition, by: "repair" }]);
+    expect(pinsOn(built, "lem:rate")).toEqual([]);
+    expect(renderBindingReadings(bindingReadings(built, "lem:rate"))).toContain(`${id} (condition of lem:rate, stated by its repair): ${bk.condition}`);
+    // the fixer's reply: null reads as absent
+    expect(PatchFileSchema.parse({ patches: [{ node: "lem:rate", corrected_statement: null, proof_note: "p", conditions: null }] }).patches[0]!.conditions).toBeUndefined();
   });
 
   it("tells an operator's input mistake (CoreGraphInputError, names the file) from a runner bug (plain Error)", () => {

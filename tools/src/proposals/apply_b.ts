@@ -28,7 +28,7 @@ import { crosswalkFullJsonPath, leanModulePrefix, leanTheoremDir, PAPER_TMP_DIR 
 import { withPromotionLock } from "../shared/build_mutex.js";
 import { writeJsonAtomic } from "../shared/json_atomic.js";
 import { loadState } from "../state.js";
-import { leanSmithToolsDir, type ToolkitConfig } from "../toolkit/config.js";
+import { paperFormalizerToolsDir, type ToolkitConfig } from "../toolkit/config.js";
 import { appendDecisionRecords, loadLedger, type LedgerDeclaration } from "../toolkit/ledger.js";
 import { parseAxiomReport } from "../verify/lean_evidence.js";
 import { writeReportToolkitSection, loadRunReuse } from "../verify/report_toolkit.js";
@@ -69,7 +69,7 @@ import { healthRegressions, refreshToolkitGraph, toolkitHealth, type ToolkitGrap
  *  (`defer` is a decision). */
 export async function readOwnerDecisions(cfg: ToolkitConfig, qid: string, batch: ProposalBatch, dryRun = false): Promise<Record<string, Decision>> {
   const cp = checklistPath(cfg, qid, dryRun, batch.round);
-  if (!existsSync(cp)) throw new Error(`no checklist at ${cp}; re-render it with \`leansmith propose ${qid} --round ${batch.round}${dryRun ? " --dry-run" : ""}\``);
+  if (!existsSync(cp)) throw new Error(`no checklist at ${cp}; re-render it with \`paperformalizer propose ${qid} --round ${batch.round}${dryRun ? " --dry-run" : ""}\``);
   const parsed: Record<string, ChecklistDecision> = parseChecklist(await readFile(cp, "utf8"), batch);
   const pending = pendingIds(parsed, batch);
   if (pending.length > 0) {
@@ -316,7 +316,7 @@ export async function applyRoundB(args: ApplyRoundBArgs): Promise<ApplyRoundBRes
     const state = await loadState(cfg.toolkitRoot, qid);
     const paperModule = leanModulePrefix(state.lean_subdir);
     const leanDir = leanTheoremDir(cfg.toolkitRoot, state.lean_subdir);
-    const toolsDir = args.toolsDir ?? leanSmithToolsDir();
+    const toolsDir = args.toolsDir ?? paperFormalizerToolsDir();
     const indexStep = args.indexStep !== undefined ? args.indexStep : await detectToolkitIndexStep(cfg, d);
     const withLock = args.withLock ?? (<T,>(fn: () => Promise<T>) => withPromotionLock(cfg.toolkitRoot, fn, cfg.lockPath));
     const journal = moveJournalPath(cfg, qid);
@@ -348,7 +348,7 @@ export async function applyRoundB(args: ApplyRoundBArgs): Promise<ApplyRoundBRes
     const escalation = (id: string, logFile: string, tail: string) =>
       `${id}: the move did not pass its gate and nothing was restored — every file is as the move wrote it (log: ${logFile}):\n${tail}\n` +
         `This is the orchestrator's to settle. Repair the Lean by hand (the target toolkit module, the paper files that used the result), then re-run ` +
-        `\`leansmith propose ${qid} --round B --apply\`: it runs the gate again on the files as they stand and goes on with the rest. ` +
+        `\`paperformalizer propose ${qid} --round B --apply\`: it runs the gate again on the files as they stand and goes on with the rest. ` +
         `To give the move up instead, put back by hand the files it wrote (${journal} holds each one's original bytes), delete that journal and ${pendingFile}, and change the entry's decision. ` +
         `Items applied before it stay applied and recorded.`;
     // A move a previous apply left as written: the gate again, on the files as they stand.
@@ -397,7 +397,7 @@ export async function applyRoundB(args: ApplyRoundBArgs): Promise<ApplyRoundBRes
     }
     for (const p of build) {
       const c = freshByName.get(p.source.ref);
-      if (!c) throw new Error(`${p.id}: ${p.source.ref} is no longer a clean round-B candidate in the paper as it stands; re-propose with \`leansmith verify … --from-stage V6\``);
+      if (!c) throw new Error(`${p.id}: ${p.source.ref} is no longer a clean round-B candidate in the paper as it stands; re-propose with \`paperformalizer verify … --from-stage V6\``);
       // A result stated over the paper's own setting never moves into the toolkit as is.
       const shaped = paperShapedReasons(c, scan);
       if (shaped.length) {

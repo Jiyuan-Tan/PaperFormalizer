@@ -1,5 +1,5 @@
 #!/usr/bin/env node
-// The states behind `leansmith demo`: a dry run of the demo paper, its halts written in by hand
+// The states behind `paperformalizer demo`: a dry run of the demo paper, its halts written in by hand
 // (`tools/scripts/demo_author.mjs`), each state as the page shows it, kept so that the demo plays them
 // back with no model call. Plain Node, no build step:
 //

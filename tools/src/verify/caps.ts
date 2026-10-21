@@ -187,8 +187,8 @@ export function capMessage(cap: CapReached, slug: string, at: { rewind?: boolean
   // What says "the finding misreads the paper" here: at a cap the approved round of a proposed
   // rewind ran into, the rewind's own answers (its nodes are items of that receipt); else per node.
   const misreads = at.rewind
-    ? `    leansmith verify ${slug} --resume --reject-rewind "<where the paper grants it>"  (the finding is ruled out: no round is due, the F stages continue)\n` +
-      `    leansmith verify ${slug} --resume --reject-finding "<reading>"  (the finding misreads the paper: withdrawn, the statement stands under the reading; no round is due)\n`
+    ? `    paperformalizer verify ${slug} --resume --reject-rewind "<where the paper grants it>"  (the finding is ruled out: no round is due, the F stages continue)\n` +
+      `    paperformalizer verify ${slug} --resume --reject-finding "<reading>"  (the finding misreads the paper: withdrawn, the statement stands under the reading; no round is due)\n`
     : null;
   const findings = cap.findings.map((f) => `    - ${f.id} [${f.axis}] ${f.detail.replace(/\s+/g, " ").slice(0, 400)}`).join("\n");
   const proposed = cap.proposed.length
@@ -200,9 +200,9 @@ export function capMessage(cap: CapReached, slug: string, at: { rewind?: boolean
     return (
       `SUGGESTION LIMIT: ${rejected} (due at ${cap.origin}). The run halts for the orchestrator (in every mode, auto mode included).\n` +
       `  The round would carry:\n${findings || "    (none)"}\n  Continue with one of:\n` +
-      `    leansmith verify ${slug} --resume --clear-patch-cap   (the fixer answers these nodes again)\n` +
-      `    leansmith verify ${slug} --resume --accept-cap        (end the loop; V6 reports)\n` +
-      `    leansmith verify ${slug} --resume --reject-finding "<node>: <reading>"  (the finding misreads the paper: it is withdrawn on that result, which stands under the reading; repeatable)\n` +
+      `    paperformalizer verify ${slug} --resume --clear-patch-cap   (the fixer answers these nodes again)\n` +
+      `    paperformalizer verify ${slug} --resume --accept-cap        (end the loop; V6 reports)\n` +
+      `    paperformalizer verify ${slug} --resume --reject-finding "<node>: <reading>"  (the finding misreads the paper: it is withdrawn on that result, which stands under the reading; repeatable)\n` +
       `  (with the --toolkit / --slug / --dry-run the run was started with)`
     );
   }
@@ -221,9 +221,9 @@ export function capMessage(cap: CapReached, slug: string, at: { rewind?: boolean
     `(${cap.rounds}/${cap.cap}; due at ${cap.origin}). The run halts for the orchestrator (in every mode, auto mode included).\n` +
     `  The round would carry:\n${findings || "    (none)"}\n  The fixer's patch file proposes:\n${proposed}\n` +
     `  Continue with one of:\n` +
-    `    leansmith verify ${slug} --resume --clear-patch-cap   (${window})\n` +
-    `    leansmith verify ${slug} --resume --accept-cap        (end the loop: a refinement cap keeps the repair and goes to F1; otherwise V6 reports)\n` +
-    (misreads ?? `    leansmith verify ${slug} --resume --reject-finding "<node>: <reading>"  (the finding misreads the paper: it is withdrawn on that result, its applied repair included; repeatable)\n`) +
+    `    paperformalizer verify ${slug} --resume --clear-patch-cap   (${window})\n` +
+    `    paperformalizer verify ${slug} --resume --accept-cap        (end the loop: a refinement cap keeps the repair and goes to F1; otherwise V6 reports)\n` +
+    (misreads ?? `    paperformalizer verify ${slug} --resume --reject-finding "<node>: <reading>"  (the finding misreads the paper: it is withdrawn on that result, its applied repair included; repeatable)\n`) +
     `  (with the --toolkit / --slug / --dry-run the run was started with)`
   );
 }

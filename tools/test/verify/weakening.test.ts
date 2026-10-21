@@ -140,7 +140,7 @@ describe("the fixer's contract", () => {
   it("the reply schema requires a suggested_repair (patch body: replacement ops and the proof) on every unfixable entry; one whose note gives nothing up is recorded as it is", async () => {
     const items = ((PATCH_REPLY_JSON_SCHEMA.properties as Record<string, { items: { required: string[]; properties: Record<string, { anyOf: Array<{ required?: string[] }> }> } }>).unfixable).items;
     expect(items.required).toEqual(["node", "reason", "suggested_repair", "owner_explanation"]);
-    expect(items.properties.suggested_repair.anyOf[0]!.required).toEqual(["ops", "drops", "adds", "readings", "corollaries", "umbrella", "proof_note"]);
+    expect(items.properties.suggested_repair.anyOf[0]!.required).toEqual(["ops", "drops", "adds", "readings", "conditions", "corollaries", "umbrella", "proof_note"]);
     const r = await setup();
     await r.directive([finding]);
     const silent = file({ unfixable: [{ ...unfix("lem:rate", SUGGESTION), owner_explanation: cannedExplanation("lem:rate") }] });

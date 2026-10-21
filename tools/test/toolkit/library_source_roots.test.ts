@@ -15,12 +15,12 @@ describe("librarySourceRootsLine", () => {
     expect(line).not.toContain("Mathlib");
   });
   it("is empty when no toolkit resolves", () => {
-    const saved = process.env.LEANSMITH_TOOLKIT;
-    delete process.env.LEANSMITH_TOOLKIT;
+    const saved = process.env.PAPERFORMALIZER_TOOLKIT;
+    delete process.env.PAPERFORMALIZER_TOOLKIT;
     try {
       expect(librarySourceRootsLine({ repoRoot: "/nonexistent-toolkit-root" })).toBe("");
     } finally {
-      if (saved !== undefined) process.env.LEANSMITH_TOOLKIT = saved;
+      if (saved !== undefined) process.env.PAPERFORMALIZER_TOOLKIT = saved;
     }
   });
 });

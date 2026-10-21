@@ -1,7 +1,7 @@
-/- LeanSmith's copy of Causalean's `LibraryIndexCore.lean` (the declaration-index extractor), so a
+/- PaperFormalizer's copy of Causalean's `LibraryIndexCore.lean` (the declaration-index extractor), so a
 toolkit builds its indexes without Causalean. Keep it identical to the upstream file below this
 header: `tools/test/toolkit/index_core_sync.test.ts` compares the two when a Causalean checkout is
-found. Renamed module (`LeanSmithIndexCore`) so a toolkit that also requires Causalean has no
+found. Renamed module (`PaperFormalizerIndexCore`) so a toolkit that also requires Causalean has no
 two modules of one name. -/
 
 import Lean

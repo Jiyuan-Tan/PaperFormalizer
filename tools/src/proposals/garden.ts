@@ -10,7 +10,7 @@
 // last list and of every module a finding names; the rest it sees as the one-line main view. The
 // orchestrator decides each item — one that retires or removes a result goes to the owner (the
 // toolkit would no longer hold it) — and carries out each ACCEPTED item by editing the Lean by
-// hand (the toolkit committed first), and `leansmith garden --verify <file>` (`garden_verify.ts`)
+// hand (the toolkit committed first), and `paperformalizer garden --verify <file>` (`garden_verify.ts`)
 // checks the edits against the committed toolkit and records them in the ledger. Nothing is ever
 // changed without a decision on its item.
 //
@@ -474,7 +474,7 @@ export async function runGardener(args: {
   sources?: ReturnType<typeof gardenerSources>;
   dryRun?: boolean;
   runClaude?: (o: ClaudeRunInput) => Promise<string>;
-  /** The run's token ledger the call is recorded in (none from `leansmith garden`). */
+  /** The run's token ledger the call is recorded in (none from `paperformalizer garden`). */
   ledger?: TokenLedger;
   log: (m: string) => void;
 }): Promise<{ findings: GardenFinding[]; items: GardenItem[] }> {
@@ -553,7 +553,7 @@ export function renderGardenChecklist(batch: GardenBatch, opts: { toolkitRoot: s
     "",
     "Once the accepted items are carried out:",
     "",
-    `    leansmith garden --verify ${md} --toolkit ${opts.toolkitRoot}`,
+    `    paperformalizer garden --verify ${md} --toolkit ${opts.toolkitRoot}`,
     "",
   ];
   const body = batch.items.map((it) => {
@@ -729,9 +729,9 @@ export async function runGardenRound(args: {
   return { path: p.md, items: items.length };
 }
 
-/** The scan `refreshToolkitGraph` last wrote (`.lake/build/leansmith/graph_scan.json`), or null. */
+/** The scan `refreshToolkitGraph` last wrote (`.lake/build/paperformalizer/graph_scan.json`), or null. */
 export async function readGraphScan(cfg: Pick<ToolkitConfig, "toolkitRoot">): Promise<CandidateScan | null> {
-  const p = path.join(cfg.toolkitRoot, ".lake", "build", "leansmith", "graph_scan.json");
+  const p = path.join(cfg.toolkitRoot, ".lake", "build", "paperformalizer", "graph_scan.json");
   return existsSync(p) ? (JSON.parse(await readFile(p, "utf8")) as CandidateScan) : null;
 }
 

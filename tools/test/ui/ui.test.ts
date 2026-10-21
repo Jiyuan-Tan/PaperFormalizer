@@ -106,7 +106,7 @@ describe("tex_html: the paper page renderer", () => {
     // a mark says what it is: only a reading's is a clarification
     const marks = renderPaper({ files: { "m.tex": String.raw`\begin{document}A.\vsNote{n}\vsRewind{r}\vsCap{c}\vsReading{x}\vsReadingOwner{y}\vsReadingSymbol{$a$}{z}\end{document}` }, main: "m.tex" }).html;
     expect([...marks.matchAll(/class="cmark k-([\w-]+)" data-c="c\d" title="([^"]*)"/g)].map((m) => [m[1], m[2]])).toEqual([
-      ["note", "LeanSmith comment"], ["rewind", "LeanSmith comment"], ["cap", "LeanSmith comment"],
+      ["note", "PaperFormalizer comment"], ["rewind", "PaperFormalizer comment"], ["cap", "PaperFormalizer comment"],
       ["reading", "clarification"], ["reading-owner", "clarification"], ["reading-symbol", "clarification"],
     ]);
   });
@@ -600,7 +600,7 @@ describe("actions: decisions → the CLI call", () => {
   const ctx = { toolkitRoot: "/tk", slug: "paper_a", source: "/papers/a" };
   it("resumes a run (its rulings are the agent's, at the CLI) and refuses a run without a source", () => {
     expect(buildArgv({ kind: "resume" }, ctx)).toEqual(["verify", "/papers/a", "--toolkit", "/tk", "--slug", "paper_a", "--resume"]);
-    expect(displayCommand(["verify", "a b"])).toBe(`leansmith verify "a b"`);
+    expect(displayCommand(["verify", "a b"])).toBe(`paperformalizer verify "a b"`);
     expect(() => buildArgv({ kind: "resume" }, { ...ctx, source: null })).toThrow(/no source/);
   });
   it("the owner's ruling on weakening repairs becomes the resume that carries it", () => {
@@ -1312,7 +1312,7 @@ describe("server: 127.0.0.1, a session key, the Host header", () => {
   let ui: UiServer;
   const root = mkdtempSync(path.join(tmpdir(), "tc-ui-"));
   mkdirSync(path.join(root, "runs", "r1", "source"), { recursive: true });
-  writeFileSync(path.join(root, "leansmith.json"), "{}");
+  writeFileSync(path.join(root, "paperformalizer.json"), "{}");
   writeFileSync(path.join(root, "runs", "r1", "state.json"), "{}");
   writeFileSync(path.join(root, "runs", "r1", "source", "Fig.SVG"), "<svg xmlns='http://www.w3.org/2000/svg'><script>alert(1)</script></svg>");
   const cfg = { toolkitRoot: root, runsDir: path.join(root, "runs"), lib: "Toolkit", papersLib: "Papers", divisions: ["Foundations"], baseLibraries: [], owner: { name: "Owner" }, leanToolchain: "leanprover/lean4:v4.33.0" } as unknown as ToolkitConfig;
@@ -1349,7 +1349,7 @@ describe("server: 127.0.0.1, a session key, the Host header", () => {
     expect(await viaHost("localhost:9999")).toBe(200);
     expect(await viaHost(`evil.example:${new URL(base).port}`)).toBe(421);
   });
-  it("one UI per toolkit: a second `leansmith ui` finds the running one, and not after it stops", async () => {
+  it("one UI per toolkit: a second `paperformalizer ui` finds the running one, and not after it stops", async () => {
     writeUiState(cfg, ui);
     expect(await runningUi(cfg)).toBe(ui.url);
     await ui.close();
@@ -1428,7 +1428,7 @@ describe("orch.mjs: a run that is not there yet, and --help", () => {
   const script = path.join(__dirname, "..", "..", "scripts", "orch.mjs");
   it("watch waits for a run launched a moment ago; a run that never appears is exit 66", async () => {
     const root = mkdtempSync(path.join(tmpdir(), "tc-orch0-"));
-    const env = { ...process.env, LEANSMITH_ORCH_APPEAR_MS: "20000" };
+    const env = { ...process.env, PAPERFORMALIZER_ORCH_APPEAR_MS: "20000" };
     const c = spawn(process.execPath, [script, "watch", "late", "--toolkit", root, "--timeout", "1"], { env });
     const exit = new Promise<number | null>((resolve) => c.on("exit", resolve));
     await new Promise((r) => setTimeout(r, 1200));
@@ -1436,7 +1436,7 @@ describe("orch.mjs: a run that is not there yet, and --help", () => {
     mkdirSync(path.join(root, "runs", "late"), { recursive: true });
     writeFileSync(path.join(root, "runs", "late", "state.json"), "{}");
     expect(await exit).toBe(2);
-    const never = spawnSync(process.execPath, [script, "watch", "none", "--toolkit", root], { encoding: "utf8", env: { ...env, LEANSMITH_ORCH_APPEAR_MS: "600" } });
+    const never = spawnSync(process.execPath, [script, "watch", "none", "--toolkit", root], { encoding: "utf8", env: { ...env, PAPERFORMALIZER_ORCH_APPEAR_MS: "600" } });
     expect([never.status, never.stderr]).toEqual([66, expect.stringContaining("no run none under")]);
     // another verb does not wait
     const t0 = Date.now();
@@ -1528,7 +1528,7 @@ describe("orch.mjs: when the watcher wakes, and who holds a run", () => {
     writeFileSync(path.join(run, "pipeline.jsonl"), JSON.stringify({ stage: "3", status: "dispatch", message: "F3 proof filler" }) + "\n");
     return { root, run };
   };
-  const env = { ...process.env, LEANSMITH_ORCH_TICK_MS: "200" };
+  const env = { ...process.env, PAPERFORMALIZER_ORCH_TICK_MS: "200" };
   const watch = (root: string, ...extra: string[]) => {
     const c = spawn(process.execPath, [script, "watch", "w1", "--toolkit", root, ...extra], { env });
     let out = ""; c.stdout.on("data", (d) => { out += d; }); c.stderr.on("data", (d) => { out += d; });
@@ -1555,7 +1555,7 @@ if (process.platform === "win32") {
 process.send("ready");
 setTimeout(() => {}, 60_000);
 `;
-    const child = spawn(process.execPath, ["-e", code, "bin/leansmith.ts", "verify", "/x", ...args], { cwd: path.join(__dirname, "..", ".."), stdio: ["ignore", "pipe", "pipe", "ipc"] });
+    const child = spawn(process.execPath, ["-e", code, "bin/paperformalizer.ts", "verify", "/x", ...args], { cwd: path.join(__dirname, "..", ".."), stdio: ["ignore", "pipe", "pipe", "ipc"] });
     ready.set(child, new Promise<void>((resolve, reject) => {
       child.once("message", () => resolve());
       child.once("error", reject);
@@ -1570,7 +1570,7 @@ setTimeout(() => {}, 60_000);
       if (pending) await pending;
       else {
         // The Linux-only discovery case also creates raw decoys outside runner().
-        for (let k = 0; !readFileSync(`/proc/${child.pid}/cmdline`, "utf8").includes("leansmith.ts"); k++) {
+        for (let k = 0; !readFileSync(`/proc/${child.pid}/cmdline`, "utf8").includes("paperformalizer.ts"); k++) {
           if (k > 300) throw new Error("the stand-in never started");
           await new Promise((r) => setTimeout(r, 20));
         }
@@ -1663,11 +1663,11 @@ setTimeout(() => {}, 60_000);
   it.skipIf(process.platform !== "linux")("takes for the run's runner only a verify of its slug on its toolkit, not another toolkit's or a shell's that names one", async () => {
     const { root, run } = fresh();
     const other = mkdtempSync(path.join(tmpdir(), "tc-orch2-other-"));
-    writeFileSync(path.join(other, "leansmith.json"), "{}");
+    writeFileSync(path.join(other, "paperformalizer.json"), "{}");
     const decoys = [
       runner("--toolkit", other, "--slug", "w1"), // the same slug on another toolkit
-      spawn(process.execPath, ["-e", "setTimeout(() => {}, 60_000)", "bin/leansmith.ts", "verify", "/x", "--slug", "w1"], { cwd: other }), // its toolkit by its cwd
-      spawn("bash", ["-c", `sleep 30; echo bin/leansmith.ts verify /x --toolkit ${root} --slug w1`]), // a shell naming one
+      spawn(process.execPath, ["-e", "setTimeout(() => {}, 60_000)", "bin/paperformalizer.ts", "verify", "/x", "--slug", "w1"], { cwd: other }), // its toolkit by its cwd
+      spawn("bash", ["-c", `sleep 30; echo bin/paperformalizer.ts verify /x --toolkit ${root} --slug w1`]), // a shell naming one
       runner("--toolkit", root, "--slug", "w10"), // another slug
     ];
     try {
@@ -1676,10 +1676,10 @@ setTimeout(() => {}, 60_000);
       expect(r.code).toBe(2);
       expect(r.out).toContain("waiting for the owner");
       // a verify of this slug whose toolkit is found from its cwd, under the toolkit, is the run's
-      writeFileSync(path.join(root, "leansmith.json"), "{}");
+      writeFileSync(path.join(root, "paperformalizer.json"), "{}");
       const pending = watch(root, "--timeout", "20");
       await armed(root, pending.pid);
-      decoys.push(spawn(process.execPath, ["-e", "setTimeout(() => {}, 60_000)", "bin/leansmith.ts", "verify", "/x", "--slug", "w1"], { cwd: run, env: { ...process.env, LEANSMITH_TOOLKIT: "" } }));
+      decoys.push(spawn(process.execPath, ["-e", "setTimeout(() => {}, 60_000)", "bin/paperformalizer.ts", "verify", "/x", "--slug", "w1"], { cwd: run, env: { ...process.env, PAPERFORMALIZER_TOOLKIT: "" } }));
       expect((await pending).out).toContain("the run is running again (resumed on the page, or by a session)");
     } finally { for (const d of decoys) d.kill(); }
   }, 30_000);
@@ -1979,7 +1979,7 @@ describe("server: the owner writes to the agent on the page", () => {
       writeFileSync(path.join(run, "orch_messages.json"), good);
       // the owner clears the conversation: not while the agent has not acted on a message of theirs …
       const archive = path.join(run, "orch_messages.archive.json");
-      const orch = (...args: string[]) => spawnSync(process.execPath, [script, args[0]!, "p1", "--toolkit", root, ...args.slice(1)], { encoding: "utf8", env: { ...process.env, LEANSMITH_ORCH_TICK_MS: "200" } });
+      const orch = (...args: string[]) => spawnSync(process.execPath, [script, args[0]!, "p1", "--toolkit", root, ...args.slice(1)], { encoding: "utf8", env: { ...process.env, PAPERFORMALIZER_ORCH_TICK_MS: "200" } });
       const top = (ms: Array<Record<string, unknown>>) => Math.max(...ms.map((m) => Number(String(m.id).slice(1))));
       expect((await send("message-clear", {}, { Cookie })).status).toBe(403);
       const waiting = after.filter((m) => m.from === "user" && !m.handled).length;
@@ -2087,7 +2087,7 @@ describe("server: the owner reports an issue with a margin comment that asks no 
     const cardHTML = new Function("esc", "envOf", `const SNAP = null;\n${line("const KIND_TAG")}\n${line("const CHIP")}\n${js.slice(js.indexOf("function cardHTML("), js.indexOf("/* Edit / Save / Cancel / Remove"))}; return cardHTML;`)(
       (x: string) => String(x).replace(/&/g, "&amp;").replace(/</g, "&lt;"), () => null,
     ) as (c: unknown, r: unknown, o?: unknown) => string;
-    const c = { id: "c1", key: "k", kind: "note", label: "LeanSmith", html: "x" };
+    const c = { id: "c1", key: "k", kind: "note", label: "PaperFormalizer", html: "x" };
     for (const kind of ["note", "reading", "reading-owner", "reading-symbol"]) expect(cardHTML({ ...c, kind }, null)).toContain(`data-flag="open">Report an issue</button>`);
     for (const kind of ["rewind", "cap"]) expect(cardHTML({ ...c, kind }, null)).not.toContain("data-flag");
     // an owner's reading being edited shows its editor alone

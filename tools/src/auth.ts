@@ -26,9 +26,9 @@
 //                      second F4 reviewer, curation). Unset: claude when it is usable
 //                      on this machine, else codex (`claude_roles.ts`).
 //
-//   LEANSMITH_AUTH_MODE, LEANSMITH_ANTHROPIC_AUTH, LEANSMITH_OPENAI_AUTH,
-//   ANTHROPIC_API_KEY, OPENAI_API_KEY, LEANSMITH_CODEX_HOME_API,
-//   LEANSMITH_CLAUDE_CONFIG_DIR, LEANSMITH_CLAUDE_ROLES
+//   PAPERFORMALIZER_AUTH_MODE, PAPERFORMALIZER_ANTHROPIC_AUTH, PAPERFORMALIZER_OPENAI_AUTH,
+//   ANTHROPIC_API_KEY, OPENAI_API_KEY, PAPERFORMALIZER_CODEX_HOME_API,
+//   PAPERFORMALIZER_CLAUDE_CONFIG_DIR, PAPERFORMALIZER_CLAUDE_ROLES
 //
 // Mixed modes are legitimate and supported: `anthropicAuth: "api"` with
 // `openaiAuth: "subscription"` runs the claude workers on an API key while codex
@@ -45,7 +45,7 @@
 //    method per CODEX_HOME: pointing the SHARED `~/.codex` at api auth makes it
 //    DELETE the stored ChatGPT credentials ("API key login is required, but
 //    ChatGPT is currently being used. Logging out."). So codex api mode gets its
-//    OWN CODEX_HOME (`codexApiHome`, default `~/.codex-leansmith-api`), leaving
+//    OWN CODEX_HOME (`codexApiHome`, default `~/.codex-paperformalizer-api`), leaving
 //    `~/.codex` untouched. `claude` needs no such trick: `--bare` restricts that
 //    process to ANTHROPIC_API_KEY without disturbing the stored OAuth.
 
@@ -77,7 +77,7 @@ export interface AuthInputs {
 const PROVIDER_SPEC = {
   anthropic: {
     label: "claude (Anthropic)",
-    modeEnv: "LEANSMITH_ANTHROPIC_AUTH",
+    modeEnv: "PAPERFORMALIZER_ANTHROPIC_AUTH",
     modeField: "anthropicAuth",
     keyEnv: "ANTHROPIC_API_KEY",
     keyField: "anthropicApiKey",
@@ -85,7 +85,7 @@ const PROVIDER_SPEC = {
   },
   openai: {
     label: "codex (OpenAI)",
-    modeEnv: "LEANSMITH_OPENAI_AUTH",
+    modeEnv: "PAPERFORMALIZER_OPENAI_AUTH",
     modeField: "openaiAuth",
     keyEnv: "OPENAI_API_KEY",
     keyField: "openaiApiKey",
@@ -124,8 +124,8 @@ export function resolveAuthMode(provider: Provider, inputs: AuthInputs = {}): Au
   const spec = PROVIDER_SPEC[provider];
   const perProviderEnv = env[spec.modeEnv]?.trim();
   if (perProviderEnv) return parseMode(spec.modeEnv, perProviderEnv);
-  const globalEnv = env.LEANSMITH_AUTH_MODE?.trim();
-  if (globalEnv) return parseMode("LEANSMITH_AUTH_MODE", globalEnv);
+  const globalEnv = env.PAPERFORMALIZER_AUTH_MODE?.trim();
+  if (globalEnv) return parseMode("PAPERFORMALIZER_AUTH_MODE", globalEnv);
   const perProviderFile = (config as Record<string, unknown>)[spec.modeField];
   if (typeof perProviderFile === "string" && perProviderFile.trim()) {
     return parseMode(`local.json ${spec.modeField}`, perProviderFile);
@@ -203,7 +203,7 @@ export function resolveProviderAuth(provider: Provider, inputs: AuthInputs = {})
       `Auth mode "api" is selected for ${spec.label}, but no API key is configured. ` +
         `Set one of: env ${spec.keyEnv}; "${spec.keyField}" in tools/config/local.json; ` +
         `or "${spec.keyFileField}" in local.json pointing at a file holding the key. ` +
-        `(To go back to the subscription login, unset LEANSMITH_AUTH_MODE/${spec.modeEnv} ` +
+        `(To go back to the subscription login, unset PAPERFORMALIZER_AUTH_MODE/${spec.modeEnv} ` +
         `and set "${spec.modeField}": "subscription" — or drop "authMode" — in local.json.)`,
     );
   }
@@ -215,14 +215,14 @@ export type ClaudeRolesRunner = "claude" | "codex";
 /**
  * The operator's explicit choice of the CLI that runs the claude roles, with where it was set;
  * undefined when there is none (the choice is then made from what this machine has,
- * `claude_roles.ts`). `LEANSMITH_CLAUDE_ROLES` wins over `claudeRoles` in `local.json`.
+ * `claude_roles.ts`). `PAPERFORMALIZER_CLAUDE_ROLES` wins over `claudeRoles` in `local.json`.
  */
 export function claudeRolesSetting(inputs: AuthInputs = {}): { runner: ClaudeRolesRunner; source: string } | undefined {
   const env = inputs.env ?? process.env;
   const config = inputs.config ?? localConfig();
-  const fromEnv = env.LEANSMITH_CLAUDE_ROLES?.trim();
+  const fromEnv = env.PAPERFORMALIZER_CLAUDE_ROLES?.trim();
   const fromFile = typeof config.claudeRoles === "string" ? config.claudeRoles.trim() : "";
-  const [value, source] = fromEnv ? [fromEnv, "LEANSMITH_CLAUDE_ROLES"] : [fromFile, "local.json claudeRoles"];
+  const [value, source] = fromEnv ? [fromEnv, "PAPERFORMALIZER_CLAUDE_ROLES"] : [fromFile, "local.json claudeRoles"];
   if (!value) return undefined;
   if (value === "claude" || value === "codex") return { runner: value, source };
   throw new AuthConfigError(`${source} must be "claude" or "codex"; got ${JSON.stringify(value)}.`);
@@ -262,8 +262,8 @@ export function codexHome(inputs: AuthInputs = {}): string {
   if (resolveAuthMode("openai", { env, config }) === "subscription") {
     return env.CODEX_HOME?.trim() || path.join(os.homedir(), ".codex");
   }
-  const configured = env.LEANSMITH_CODEX_HOME_API?.trim() || config.codexApiHome?.trim();
-  const home = (configured || path.join(os.homedir(), ".codex-leansmith-api")).replace(
+  const configured = env.PAPERFORMALIZER_CODEX_HOME_API?.trim() || config.codexApiHome?.trim();
+  const home = (configured || path.join(os.homedir(), ".codex-paperformalizer-api")).replace(
     /^~(?=\/|\\|$)/,
     () => os.homedir(),
   );
@@ -278,7 +278,7 @@ export function codexHome(inputs: AuthInputs = {}): string {
       `codexApiHome must NOT be the operator's codex home (${operatorHome}). ` +
         `Bootstrapping an api home logs into it with an API key, and codex deletes any ` +
         `stored ChatGPT credentials when the login method changes. Point codexApiHome / ` +
-        `LEANSMITH_CODEX_HOME_API at a separate directory (default ~/.codex-leansmith-api).`,
+        `PAPERFORMALIZER_CODEX_HOME_API at a separate directory (default ~/.codex-paperformalizer-api).`,
     );
   }
   return home;
@@ -304,13 +304,13 @@ export function codexHome(inputs: AuthInputs = {}): string {
  * one-login-per-home eviction rule, so pointing this at `~/.claude` is merely a
  * no-op rather than destructive, and needs no guard.
  *
- * `LEANSMITH_CLAUDE_CONFIG_DIR` wins over the config file, as everywhere else.
+ * `PAPERFORMALIZER_CLAUDE_CONFIG_DIR` wins over the config file, as everywhere else.
  */
 export function claudeConfigDir(inputs: AuthInputs = {}): string | undefined {
   const env = inputs.env ?? process.env;
   const config = inputs.config ?? localConfig();
   const configured =
-    env.LEANSMITH_CLAUDE_CONFIG_DIR?.trim() || config.claudeConfigDir?.trim();
+    env.PAPERFORMALIZER_CLAUDE_CONFIG_DIR?.trim() || config.claudeConfigDir?.trim();
   if (!configured) return undefined;
   const dir = configured.replace(/^~(?=\/|\\|$)/, () => os.homedir());
   // Fail loudly at the dispatch boundary rather than letting every worker die on
@@ -345,7 +345,7 @@ export function workerEnv(inputs: AuthInputs = {}): NodeJS.ProcessEnv {
  * every worker spawned later inherits it and any misconfiguration (api mode, no
  * key) fails before a run begins rather than at the first dispatch. Idempotent.
  * The dispatchers still call `workerEnv()` themselves, which covers the `bin/`
- * entry points that never route through `bin/leansmith.ts`.
+ * entry points that never route through `bin/paperformalizer.ts`.
  */
 export function applyAuthEnv(): void {
   const resolved = workerEnv();

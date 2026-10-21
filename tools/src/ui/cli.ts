@@ -1,4 +1,4 @@
-// `leansmith ui`: start the local UI for a toolkit and print its link.
+// `paperformalizer ui`: start the local UI for a toolkit and print its link.
 import { randomBytes } from "node:crypto";
 import { spawn } from "node:child_process";
 import { mkdirSync, readFileSync, rmSync, writeFileSync } from "node:fs";
@@ -7,20 +7,20 @@ import { loadToolkitConfig, type ToolkitConfig } from "../toolkit/config.js";
 import { startUiServer, type UiServer } from "./server.js";
 
 export const UI_USAGE =
-  "Usage: leansmith ui [--toolkit <path>] [--port N] [--open] [--new]\n" +
+  "Usage: paperformalizer ui [--toolkit <path>] [--port N] [--open] [--new]\n" +
   "  the local web UI: your toolkit, its library, and each paper's run (live; decisions run the CLI).\n" +
   "  Listens on 127.0.0.1 only; open the printed link (it carries this session's key). One UI per\n" +
   "  toolkit: when one is already running this prints its link and exits (--new starts another).";
 
 /** Where the running UI of a toolkit records itself (`.lake/` is ignored by every Lean project's git). */
-export const uiStateFile = (cfg: ToolkitConfig): string => path.join(cfg.toolkitRoot, ".lake", "leansmith-ui.json");
+export const uiStateFile = (cfg: ToolkitConfig): string => path.join(cfg.toolkitRoot, ".lake", "paperformalizer-ui.json");
 
 /**
  * The toolkit's UI token, kept across restarts (readable by the owner only): the link the owner has
  * open, and the tab behind it, go on working when the UI is started again.
  */
 export function uiToken(cfg: ToolkitConfig): string {
-  const file = path.join(cfg.toolkitRoot, ".lake", "leansmith-ui.token");
+  const file = path.join(cfg.toolkitRoot, ".lake", "paperformalizer-ui.token");
   try {
     const t = readFileSync(file, "utf8").trim();
     if (/^[A-Za-z0-9_-]{20,}$/.test(t)) return t;
@@ -59,7 +59,7 @@ export async function runningUi(cfg: ToolkitConfig): Promise<string | null> {
   try {
     const r = await fetch(`http://127.0.0.1:${st.port}/api/toolkit`, { signal: AbortSignal.timeout(2000) });
     const body = await r.text();
-    return r.status === 403 && body.includes("leansmith ui") ? st.url : null;
+    return r.status === 403 && body.includes("paperformalizer ui") ? st.url : null;
   } catch {
     return null;
   }

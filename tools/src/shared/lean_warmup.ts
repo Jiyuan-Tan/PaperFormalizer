@@ -2,7 +2,7 @@
 import process from "node:process";
 
 /** Env var holding the warm-up wall-clock cap in ms (default 10 min; 0 disables the guard). */
-export const LEANLSP_WARMUP_ENV = "LEANSMITH_LEANLSP_WARMUP_MS";
+export const LEANLSP_WARMUP_ENV = "PAPERFORMALIZER_LEANLSP_WARMUP_MS";
 
 /**
  * Run `lake build` in the Lean project with a wall-clock cap, so a cold `.lake` is detected up
@@ -32,7 +32,7 @@ export async function warmUpLeanOrThrow(projectPath: string, mode: "verify" | "s
     throw new Error(
       `lean-lsp cold-start guard: \`lake build\` in ${projectPath} exceeded ` +
         `${Math.round(capMs / 60_000)} min — the toolkit's .lake is COLD (a from-scratch compile). ` +
-        `Warm it first (\`lake build\` to completion), then rerun \`leansmith ${mode}\`. ` +
+        `Warm it first (\`lake build\` to completion), then rerun \`paperformalizer ${mode}\`. ` +
         `Set ${LEANLSP_WARMUP_ENV} to raise the cap, or 0 to disable this guard.`,
     );
   }

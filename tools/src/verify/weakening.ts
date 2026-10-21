@@ -345,10 +345,10 @@ export function weakeningMessage(rec: WeakeningRepair, slug: string, ledger?: Re
     `WEAKENED REPAIR: no repair keeps ${rec.items.length} main theorem(s) at full strength; the strongest true version is suggested. ` +
     "The run halts for the paper's owner (in every mode, auto mode included).\n" +
     `${items}\n  Continue with one of:\n` +
-    `    leansmith verify ${slug} --resume --accept-repair              (apply them; a V1.5 pass confirms them; reported repaired, contribution narrowed)\n` +
-    `    leansmith verify ${slug} --resume --decline-repair "<reason>"  (report them ${unrepairedWord(rec.items.map((i) => i.node), ledger)}; they and what rests on them leave Lean; the run goes on)\n` +
-    `    leansmith verify ${slug} --resume --reject-finding "<reading>" (the finding is wrong: the printed statement stands under your reading, which binds the formalization)\n` +
-    `    leansmith verify ${slug} --resume --redo-repair "<node>: <guidance>" (discard the suggestion; the fixer repairs that result again along your guidance, and a V1.5 pass confirms it)\n` +
+    `    paperformalizer verify ${slug} --resume --accept-repair              (apply them; a V1.5 pass confirms them; reported repaired, contribution narrowed)\n` +
+    `    paperformalizer verify ${slug} --resume --decline-repair "<reason>"  (report them ${unrepairedWord(rec.items.map((i) => i.node), ledger)}; they and what rests on them leave Lean; the run goes on)\n` +
+    `    paperformalizer verify ${slug} --resume --reject-finding "<reading>" (the finding is wrong: the printed statement stands under your reading, which binds the formalization)\n` +
+    `    paperformalizer verify ${slug} --resume --redo-repair "<node>: <guidance>" (discard the suggestion; the fixer repairs that result again along your guidance, and a V1.5 pass confirms it)\n` +
     "  A bare answer covers the batch. To rule item by item in one resume, name nodes: --accept-repair <node>[,<node>], --decline-repair \"<node>[,<node>]: <reason>\", " +
     "--reject-finding \"<node>: <reading>\", --redo-repair \"<node>: <guidance>\" (--reject-finding and --redo-repair repeatable; --accept-repair and --decline-repair once each, several nodes separated by commas); a bare answer alongside them covers the items not named, and items no answer names are presented again.\n" +
     "  (with the --toolkit / --slug / --dry-run the run was started with)"
@@ -359,7 +359,7 @@ export function weakeningMessage(rec: WeakeningRepair, slug: string, ledger?: Re
  * reason). The colon is read as every other node-scoped answer reads it, with or without a space. */
 export const DECLINE_NODES = /^\s*([A-Za-z]+:[A-Za-z0-9._-]+(?:\s*,\s*[A-Za-z]+:[A-Za-z0-9._-]+)*)\s*:\s*(\S[\s\S]*)$/;
 
-/** The answers to a halt an invocation may carry (`leansmith verify … --resume <answer>`): the
+/** The answers to a halt an invocation may carry (`paperformalizer verify … --resume <answer>`): the
  * parser and the runner share this shape and the one rule on how they combine (`haltAnswerConflict`). */
 export interface HaltAnswers {
   rejectRewind?: string | null;

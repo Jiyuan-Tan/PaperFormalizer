@@ -1,5 +1,5 @@
 // Small text primitives over Lean source shared by the statement structurer (`lean_structure.ts`,
-// its LeanSmith additions `lean_structure_tc.ts`) and the rows F5 links (`formalization/
+// its PaperFormalizer additions `lean_structure_tc.ts`) and the rows F5 links (`formalization/
 // lean_rows.ts`, `nl_links.ts`): ONE set of bracket characters, one whitespace squash, one matcher.
 
 import { normAwareDepths } from "./lean_statement.js";

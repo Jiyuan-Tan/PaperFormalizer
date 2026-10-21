@@ -9,7 +9,7 @@ import { z } from "zod";
 import type { Core, CoreAssumption, CoreSymbol } from "../core/schema.js";
 import { normalizeSymbol } from "../core/symbol_names.js";
 import { symbolAppears, symbolPattern } from "./symbol_match.js";
-import { PATCH_PIN_PREFIX, PROOF_CHANGE_MARKER, bindingReadingItem, isReadingAddition, bindingReadings, symbolEntryShown, symbolEntryView, symbolUsers, symbolsUsedByNode, hostParts } from "./core_graph.js";
+import { PATCH_BK_PREFIX, PATCH_PIN_PREFIX, PROOF_CHANGE_MARKER, bindingReadingItem, isReadingAddition, bindingReadings, symbolEntryShown, symbolEntryView, symbolUsers, symbolsUsedByNode, hostParts } from "./core_graph.js";
 import { DRIFT_FIX_JSON_SCHEMA, DriftFixSchema } from "./directive_edits.js";
 import {
   bibliographyEntries,
@@ -705,7 +705,7 @@ export function readingsSection(core: Core, sr: SymbolReadings | undefined, ids:
       ? "Readings settled before this pass (by the symbol referees, an earlier pass, or the paper's owner), each once with the " +
         "nodes it binds. They are BINDING: judge those nodes under them, and do not grade a node for a defect that only " +
         "another reading has." +
-        ([...shown.keys()].some((id) => id.startsWith(PATCH_PIN_PREFIX)) ? " A reading stated by a repair is part of that patch: grade it with the patch (the PATCHES rule), then judge the node under it." : "") +
+        ([...shown.keys()].some((id) => id.startsWith(PATCH_PIN_PREFIX) || id.startsWith(PATCH_BK_PREFIX)) ? " A reading or side condition stated by a repair is part of that patch: grade it with the patch (the PATCHES rule), then judge the node under it." : "") +
         "\n\n" +
         [...shown.values()].map(({ r, binds }) => `- ${bindingReadingItem(r)} — binds ${binds.join(", ")}`).join("\n")
       : "",

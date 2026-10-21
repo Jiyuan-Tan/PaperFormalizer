@@ -1,6 +1,6 @@
 /*!
  * Alias lexicons for concept retrieval, loaded as DATA from each base library's `alias_file`
- * (`leansmith.json`). A lexicon bridges the vocabulary-mismatch failure of pure keyword
+ * (`paperformalizer.json`). A lexicon bridges the vocabulary-mismatch failure of pure keyword
  * retrieval: a plan may say "ignorability" while the library declaration is named
  * `ConditionalExchangeability` — zero shared tokens, so keyword match alone never surfaces it.
  * Each entry maps a canonical concept to its synonyms and to the library module/file path

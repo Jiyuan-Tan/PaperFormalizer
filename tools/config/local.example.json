@@ -4,11 +4,11 @@
   "leanProjectPath": null,
   "mcpTimeoutMs": 600000,
 
-  "_pythonPath_comment": "Interpreter for the Python retrieval scripts (needs numpy + sentence-transformers, which brings torch). Null probes the platform defaults: python3/python on Linux+macOS, python then `py -3` on Windows, where `python3` is not a program name. Set it explicitly when the right venv is not first on PATH. Forward slashes on Windows. Env LEANSMITH_PYTHON overrides.",
+  "_pythonPath_comment": "Interpreter for the Python retrieval scripts (needs numpy + sentence-transformers, which brings torch). Null probes the platform defaults: python3/python on Linux+macOS, python then `py -3` on Windows, where `python3` is not a program name. Set it explicitly when the right venv is not first on PATH. Forward slashes on Windows. Env PAPERFORMALIZER_PYTHON overrides.",
   "pythonPath": null,
   "codexSandbox": "workspace-write",
 
-  "_authMode_comment": "Who pays for the model calls. 'subscription' (default) uses the interactive claude/codex logins already on this machine. 'api' bills an API key you supply below. Per-provider overrides: anthropicAuth (claude workers), openaiAuth (codex workers) — a mix is fine. Env always wins: LEANSMITH_AUTH_MODE, LEANSMITH_ANTHROPIC_AUTH, LEANSMITH_OPENAI_AUTH.",
+  "_authMode_comment": "Who pays for the model calls. 'subscription' (default) uses the interactive claude/codex logins already on this machine. 'api' bills an API key you supply below. Per-provider overrides: anthropicAuth (claude workers), openaiAuth (codex workers) — a mix is fine. Env always wins: PAPERFORMALIZER_AUTH_MODE, PAPERFORMALIZER_ANTHROPIC_AUTH, PAPERFORMALIZER_OPENAI_AUTH.",
   "authMode": "subscription",
   "anthropicAuth": null,
   "openaiAuth": null,
@@ -19,12 +19,12 @@
   "openaiApiKey": null,
   "openaiApiKeyFile": null,
 
-  "_codexApiHome_comment": "CODEX_HOME for codex api mode. Deliberately NOT ~/.codex: codex permits one login method per home and would delete the stored ChatGPT credentials. Default ~/.codex-leansmith-api; override with LEANSMITH_CODEX_HOME_API.",
+  "_codexApiHome_comment": "CODEX_HOME for codex api mode. Deliberately NOT ~/.codex: codex permits one login method per home and would delete the stored ChatGPT credentials. Default ~/.codex-paperformalizer-api; override with PAPERFORMALIZER_CODEX_HOME_API.",
   "codexApiHome": null,
 
-  "_claudeConfigDir_comment": "CLAUDE_CONFIG_DIR for the claude workers. An ACCOUNT switch, not a billing one: set it to run the pipeline on a different Anthropic subscription while your own interactive login keeps using ~/.claude. Create the directory and run `CLAUDE_CONFIG_DIR=<dir> claude` then /login once. Null = workers use ~/.claude. Override with LEANSMITH_CLAUDE_CONFIG_DIR.",
+  "_claudeConfigDir_comment": "CLAUDE_CONFIG_DIR for the claude workers. An ACCOUNT switch, not a billing one: set it to run the pipeline on a different Anthropic subscription while your own interactive login keeps using ~/.claude. Create the directory and run `CLAUDE_CONFIG_DIR=<dir> claude` then /login once. Null = workers use ~/.claude. Override with PAPERFORMALIZER_CLAUDE_CONFIG_DIR.",
   "claudeConfigDir": null,
 
-  "_claudeRoles_comment": "Which CLI runs the claude roles (the F1 plan, the second F4 reviewer, toolkit curation). Null (default): claude when it is installed and usable on this machine (logged in, or an Anthropic key in api mode), else codex. 'claude' requires it; 'codex' runs those roles on codex (the kernel model, high effort) even when claude is present. Env LEANSMITH_CLAUDE_ROLES overrides.",
+  "_claudeRoles_comment": "Which CLI runs the claude roles (the F1 plan, the second F4 reviewer, toolkit curation). Null (default): claude when it is installed and usable on this machine (logged in, or an Anthropic key in api mode), else codex. 'claude' requires it; 'codex' runs those roles on codex (the kernel model, high effort) even when claude is present. Env PAPERFORMALIZER_CLAUDE_ROLES overrides.",
   "claudeRoles": null
 }

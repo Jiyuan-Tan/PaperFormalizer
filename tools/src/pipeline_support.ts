@@ -336,7 +336,7 @@ export function parseReview(stdout: string): ReviewResult {
   } catch (err) {
     const reason = err instanceof Error ? err.message : String(err);
     console.warn(
-      `[leansmith] parseReview fallback: ${reason}. stdout-tail=${stdout.trim().slice(-300)}`,
+      `[paperformalizer] parseReview fallback: ${reason}. stdout-tail=${stdout.trim().slice(-300)}`,
     );
     // Synthesize a reject so the boundary halts for the orchestrator instead of
     // crashing. The raw model output is preserved in verbatim_critique so the
@@ -356,7 +356,7 @@ export function parseStageOutput(stdout: string) {
   } catch (err) {
     const reason = err instanceof Error ? err.message : String(err);
     console.warn(
-      `[leansmith] parseStageOutput fallback: ${reason}. stdout-tail=${stdout.trim().slice(-300)}`,
+      `[paperformalizer] parseStageOutput fallback: ${reason}. stdout-tail=${stdout.trim().slice(-300)}`,
     );
     // why: malformed worker stdout is a hard parse result; never fabricate completion.
     return { status: "parse_failed", message: stdout.trim().slice(0, 500) };
@@ -407,7 +407,7 @@ async function persistReviewBoundaryJson(
   } catch (err) {
     const reason = err instanceof Error ? err.message : String(err);
     console.warn(
-      `[leansmith] persistReviewBoundaryJson failed for ${boundary} attempt ${attempt}: ${reason}`,
+      `[paperformalizer] persistReviewBoundaryJson failed for ${boundary} attempt ${attempt}: ${reason}`,
     );
   }
 }
@@ -429,7 +429,7 @@ export async function listLeanFiles(dir: string): Promise<string[]> {
   return out;
 }
 
-/** Where the run's Lean may come from: the base libraries and the toolkit, from `leansmith.json`. */
+/** Where the run's Lean may come from: the base libraries and the toolkit, from `paperformalizer.json`. */
 function libraryContextBlock(ctx: PipelineContext): string {
   const t = ctx.toolkit;
   const bases = t.baseLibraries.map((b) =>

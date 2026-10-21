@@ -305,7 +305,7 @@ function runPage(slug: string, payloads: Record<string, unknown>, more: Record<s
   const window = { katex, EventSource, addEventListener: () => {}, scrollTo: () => {}, scrollBy: () => {}, scrollY: 0, matchMedia: () => ({ matches: true }), focus: () => {}, ...more };
   const fetch = async (url: string, init?: { method?: string; body?: string; headers?: Record<string, string> }) => {
     // (a POST is answered as a started action is, unless `payloads["POST <url>"]` says otherwise)
-    if (init?.method === "POST") { posts.push([url, JSON.parse(init.body ?? "{}")]); const reply = payloads[`POST ${url}`] ?? { command: "leansmith verify …", log: "ui.log" }; return { status: 200, ok: true, statusText: "", headers: { get: () => "" }, json: async () => reply }; }
+    if (init?.method === "POST") { posts.push([url, JSON.parse(init.body ?? "{}")]); const reply = payloads[`POST ${url}`] ?? { command: "paperformalizer verify …", log: "ui.log" }; return { status: 200, ok: true, statusText: "", headers: { get: () => "" }, json: async () => reply }; }
     const data = payloads[url], etag = JSON.stringify(data).length + ":" + JSON.stringify(data).slice(-40);
     if (init?.headers?.["If-None-Match"] === etag) return { status: 304, ok: false, headers: { get: () => etag }, json: async () => ({}) };
     return { status: data === undefined ? 404 : 200, ok: data !== undefined, statusText: "", headers: { get: () => etag }, json: async () => data ?? { error: `no ${url}` } };
@@ -376,7 +376,7 @@ describe("page: what waits for the owner is counted in the tab's title and, when
     const { page, location } = runPage("p1", payloads, { Notification, isSecureContext: true, localStorage: store(true) });
     const title = () => page.title!();
     await page.refreshInbox!();
-    expect(title()).toBe("(1) LeanSmith");
+    expect(title()).toBe("(1) PaperFormalizer");
     expect(shown).toEqual([]);
     // the same picture again: nothing new
     payloads["/api/toolkit"] = { runs: [paper({ slug: "p0", status: "needs-you", requests: [{ id: "q1" }] }), paper({ headline: "V1.5 · working" })] };
@@ -385,20 +385,20 @@ describe("page: what waits for the owner is counted in the tab's title and, when
     // a repair to decide on p1, and a second request on p0: one notification each
     payloads["/api/toolkit"] = { runs: [paper({ slug: "p0", title: "Other", status: "needs-you", requests: [{ id: "q1" }, { id: "q2" }] }), paper({ status: "needs-you", pending: { weakening: 1, promotion: null } })] };
     await page.refreshInbox!();
-    expect(title()).toBe("(2) LeanSmith");
+    expect(title()).toBe("(2) PaperFormalizer");
     expect(shown.map((n) => [n.title, n.body])).toEqual([["Other", "The agent asks you something."], ["A Paper", "A repair that would weaken a result waits for your decision."]]);
     await page.refreshInbox!();
     expect(shown).toHaveLength(2);
     // the agent writes; a promotion round waits
     payloads["/api/toolkit"] = { runs: [paper({ status: "needs-you", pending: { weakening: 0, promotion: "A" }, unread: 1 })] };
     await page.refreshInbox!();
-    expect(title()).toBe("(1) LeanSmith");
-    expect(shown.slice(2).map((n) => [n.title, n.body])).toEqual([["A Paper", "Results proposed for your toolkit wait for your decision."], ["LeanSmith", "The agent replied on A Paper"]]);
+    expect(title()).toBe("(1) PaperFormalizer");
+    expect(shown.slice(2).map((n) => [n.title, n.body])).toEqual([["A Paper", "Results proposed for your toolkit wait for your decision."], ["PaperFormalizer", "The agent replied on A Paper"]]);
     // an answer of the agent's alone is announced as a message, and counted nowhere: not in the title, not in the inbox
     payloads["/api/toolkit"] = { runs: [paper({ unread: 2 })] };
     await page.refreshInbox!();
-    expect(title()).toBe("LeanSmith");
-    expect(shown.at(-1)).toMatchObject({ title: "LeanSmith", body: "The agent replied on A Paper" });
+    expect(title()).toBe("PaperFormalizer");
+    expect(shown.at(-1)).toMatchObject({ title: "PaperFormalizer", body: "The agent replied on A Paper" });
     expect(shown).toHaveLength(5);
     location.hash = "#/";
     shown[2]!.onclick!();
@@ -406,7 +406,7 @@ describe("page: what waits for the owner is counted in the tab's title and, when
     // nothing waits: the bare title
     payloads["/api/toolkit"] = { runs: [paper({})] };
     await page.refreshInbox!();
-    expect(title()).toBe("LeanSmith");
+    expect(title()).toBe("PaperFormalizer");
   });
   it("turned off, or with no notifications in the browser: the title's count alone", async () => {
     shown.length = 0;
@@ -416,7 +416,7 @@ describe("page: what waits for the owner is counted in the tab's title and, when
       await page.refreshInbox!();
       payloads["/api/toolkit"] = { runs: [paper({ status: "needs-you", requests: [{ id: "q1" }] })] };
       await page.refreshInbox!();
-      expect(page.title!()).toBe("(1) LeanSmith");
+      expect(page.title!()).toBe("(1) PaperFormalizer");
     }
     expect(shown).toEqual([]);
   });
@@ -835,7 +835,7 @@ describe("page: the whole script draws a run from what the server sends", () => 
     Object.assign(shown, { lean: { decl: "X.a", file: "T.lean", line: 1 }, rows: [{ id: "r1", kind: "binder", names: "P", lean: "Law", segments: [], unstated: false }], leanView, linksStale: "changed", segments: null });
     page.openDrawer!("thm:a");
     // the notice says how links return: F5 again, or `relink` for this result
-    expect(last("#d-body")).toContain(`<p class="stmt-note">The links on file were written for an earlier version of this statement, so none is shown. They return when F5 runs again, or with <code>leansmith relink p1 --toolkit &lt;toolkit&gt; --only thm:a</code>.</p>`);
+    expect(last("#d-body")).toContain(`<p class="stmt-note">The links on file were written for an earlier version of this statement, so none is shown. They return when F5 runs again, or with <code>paperformalizer relink p1 --toolkit &lt;toolkit&gt; --only thm:a</code>.</p>`);
     expect(last("#d-body")).toContain(`<div class="srow ds-concl" data-binder=""><span class="ds-chip ds-chip-concl" title="what the result concludes">then</span><div class="ds-code">Good P</div></div>`);
     expect(last("#d-body")).not.toMatch(/rtag|F5 links these rows/);
     // … and says which refusal it is: links against the statement cut short, or for another cut of it
@@ -848,7 +848,7 @@ describe("page: the whole script draws a run from what the server sends", () => 
     // a result no call answered; a declaration the file no longer holds
     Object.assign(shown, { linksStale: undefined, linksUnanswered: true, segments: [{ id: "s1", text: "The rate." }] });
     page.openDrawer!("thm:a");
-    expect(last("#d-body")).toContain("F5 asked these rows, but no answer came back: none is linked. <code>leansmith relink p1 --toolkit &lt;toolkit&gt; --only thm:a</code> asks again.");
+    expect(last("#d-body")).toContain("F5 asked these rows, but no answer came back: none is linked. <code>paperformalizer relink p1 --toolkit &lt;toolkit&gt; --only thm:a</code> asks again.");
     Object.assign(shown, { linksUnanswered: undefined, rows: null, leanView: null, leanMissing: true, segments: null });
     page.openDrawer!("thm:a");
     expect(last("#d-body")).toContain("The file no longer holds this declaration");
@@ -1032,7 +1032,7 @@ describe("page: the whole script draws a run from what the server sends", () => 
 
   it("a sent decision says where it went: a started run names its log; the demo's stand-in run, which writes none, says it was sent", async () => {
     const repairs = [{ ...item, recommendation: { kind: "accept", why: "true and enough" } }];
-    for (const [reply, said] of [[undefined, "Started — log: ui.log"], [{ pid: 0, command: "leansmith verify …", demo: true }, "Sent to the demo run"]] as const) {
+    for (const [reply, said] of [[undefined, "Started — log: ui.log"], [{ pid: 0, command: "paperformalizer verify …", demo: true }, "Sent to the demo run"]] as const) {
       const p = await served({ repairs }, reply ? { "POST /api/runs/p1/action": reply } : {});
       const sent = p.page.acceptRepairRecs!() as Promise<boolean>;
       await p.confirm(true);

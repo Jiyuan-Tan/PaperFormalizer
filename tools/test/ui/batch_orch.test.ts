@@ -27,7 +27,7 @@ describe("batch jobs: what the owner starts on the page is started by the job at
     const run = run1(root, "b1", "v1_5");
     // the job's driver is the session: here, this test's process
     const watch = spawn(process.execPath, [path.join(SCRIPTS, "orch.mjs"), "watch", "b1", "--toolkit", root, "--starts", "--timeout", "20"], {
-      env: { ...process.env, LEANSMITH_ORCH_TICK_MS: "200", LEANSMITH_ORCH_SESSION_PID: String(process.pid), LEANSMITH_ORCH_AGENT: "batch job t" },
+      env: { ...process.env, PAPERFORMALIZER_ORCH_TICK_MS: "200", PAPERFORMALIZER_ORCH_SESSION_PID: String(process.pid), PAPERFORMALIZER_ORCH_AGENT: "batch job t" },
     });
     const done = exited(watch);
     for (let k = 0; k < 200 && !existsSync(path.join(run, "orch.json")); k++) await new Promise((r) => setTimeout(r, 50));
@@ -50,7 +50,7 @@ describe("batch jobs: what the owner starts on the page is started by the job at
       expect((await act()).status).toBe(409);
       const w = await done;
       expect(w.code).toBe(0);
-      expect(w.out).toContain("the owner asked the page to start the run (resume): start `leansmith verify /papers/b1");
+      expect(w.out).toContain("the owner asked the page to start the run (resume): start `paperformalizer verify /papers/b1");
     } finally {
       watch.kill();
       await ui.close();
@@ -85,7 +85,7 @@ process.exit(${code});
   // one run at work: a paper behind it in the queue is not taken (it would start a real run)
   const driver = (root: string, queue: string, codexDir: string, ...extra: string[]) =>
     exited(spawn(process.execPath, [path.join(SCRIPTS, "batch_orch.mjs"), "--toolkit", root, "--queue", queue, "--runs", "1", "--sandbox", "read-only", ...extra], {
-      env: { ...process.env, LEANSMITH_TEST_CODEX_MOCK: path.join(codexDir, "codex.cjs"), LEANSMITH_ORCH_TICK_MS: "200" },
+      env: { ...process.env, PAPERFORMALIZER_TEST_CODEX_MOCK: path.join(codexDir, "codex.cjs"), PAPERFORMALIZER_ORCH_TICK_MS: "200" },
     }));
 
   it("takes a run off the queue and gives its agent the guide and the event; words in a transcript are not the account's", async () => {
@@ -98,11 +98,11 @@ process.exit(${code});
     expect(r.code).toBe(0);
     expect(readFileSync(queue, "utf8")).toBe("# papers\n");
     const prompt = readFileSync(path.join(codex, "prompt"), "utf8");
-    expect(prompt).toContain("orchestrating agent of the LeanSmith run `d1`");
-    expect(prompt).toContain(path.join(".claude", "skills", "leansmith", "SKILL.md"));
+    expect(prompt).toContain("orchestrating agent of the PaperFormalizer run `d1`");
+    expect(prompt).toContain(path.join(".claude", "skills", "paperformalizer", "SKILL.md"));
     expect(prompt).toContain("session start");
     // the resume it is told to start names the run's own source
-    expect(prompt).toContain(`bin/leansmith.ts verify /papers/d1 --toolkit ${root} --slug d1 --resume`);
+    expect(prompt).toContain(`bin/paperformalizer.ts verify /papers/d1 --toolkit ${root} --slug d1 --resume`);
     expect(calls(codex)[0]).toMatch(/^exec --json -m gpt-6\.1-sol -c model_reasoning_effort="high" --sandbox read-only -C \S+ --skip-git-repo-check -o \S+ -$/);
   }, 60_000);
 

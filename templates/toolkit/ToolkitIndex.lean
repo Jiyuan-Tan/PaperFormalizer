@@ -1,10 +1,10 @@
-import LeanSmithIndexCore
+import PaperFormalizerIndexCore
 
 /-! # Toolkit-index exe
 
 Walks the elaborated environment of `import Toolkit` and writes `doc/toolkit_index.json`, one
 record per `Toolkit.*` declaration, in the same JSON shape as Causalean's
-`doc/library_index.json` (`LeanSmithIndexCore.runIndex`, a copy of its extractor). LeanSmith's
+`doc/library_index.json` (`PaperFormalizerIndexCore.runIndex`, a copy of its extractor). PaperFormalizer's
 retrieval reads it as the toolkit's index source, and `npm run search -- --index` accepts it.
 Run `lake exe toolkit_index` from the toolkit root after `lake build Toolkit`.
 

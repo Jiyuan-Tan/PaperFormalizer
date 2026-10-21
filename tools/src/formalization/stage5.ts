@@ -78,7 +78,7 @@ async function emitCompleteCrosswalk(args: {
     );
   }
   console.warn(
-    `[leansmith] F5 complete crosswalk: ${full.length} object(s) anchored → ${paths.crosswalkFullJson}`,
+    `[paperformalizer] F5 complete crosswalk: ${full.length} object(s) anchored → ${paths.crosswalkFullJson}`,
   );
   const contradictions = crosswalkVerifiedWithoutAnchor(full);
   if (contradictions.length > 0) {
@@ -277,9 +277,9 @@ export async function runStage5(args: {
   // Paper ↔ Lean links row by row (advisory: the report and the paper page read them; a
   // failure is logged and F5 goes on).
   try {
-    console.log(`[leansmith] F5 nl-links: ${await emitNlLinks(args)}`);
+    console.log(`[paperformalizer] F5 nl-links: ${await emitNlLinks(args)}`);
   } catch (err) {
-    console.warn(`[leansmith] F5 nl-links skipped: ${err instanceof Error ? err.message : String(err)}`);
+    console.warn(`[paperformalizer] F5 nl-links skipped: ${err instanceof Error ? err.message : String(err)}`);
   }
   // Everything above IS the deliverable (docstring coverage, soundness scan, note sync, full
   // tex↔Lean crosswalk).

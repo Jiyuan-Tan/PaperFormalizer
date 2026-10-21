@@ -19,6 +19,7 @@ import { contractBlock, splitRenderDefects, type FragmentProducer, type RenderDe
 import { VERIFY_FILES } from "../../src/verify/types.js";
 import { restateAllPatches } from "../../src/verify/weakening.js";
 import { withdrawnRepairBlock } from "../../src/verify/stage_v1.js";
+import { patchFileTexFields } from "../../src/verify/tex_fragment_check.js";
 
 const tmpDirs: string[] = [];
 afterEach(async () => {
@@ -226,5 +227,17 @@ describe("withdrawnRepairBlock", () => {
       { id: "lem:rate" },
     ]);
     expect(block).toBe(["- thm:main", "  the statement it gave:", "    S", "  op: replace thm:main/1/1 … thm:main/1/2 by", "    Then $\\kappa<\\infty$.", "  drops: ass:a", "  adds: ass:b"].join("\n"));
+  });
+
+  it("keeps the readings and side conditions the repair stated beside its statement", () => {
+    const block = withdrawnRepairBlock([{ id: "thm:main", withdrawn_repair: { corrected_statement: null, readings: ["$h$ is fixed"], conditions: ["$Y$ is integrable"] } }]);
+    expect(block).toBe(["- thm:main", "  reading:", "    $h$ is fixed", "  condition:", "    $Y$ is integrable"].join("\n"));
+  });
+});
+
+describe("patchFileTexFields", () => {
+  it("compiles each side condition of a repair as a hypothesis", () => {
+    const fields = patchFileTexFields({ patches: [{ node: "thm:main", corrected_statement: null, proof_note: "p", conditions: ["$Y$ is integrable"] }], unfixable: [] } as never);
+    expect(fields.filter((f) => f.where.includes("conditions"))).toEqual([{ where: 'the patch for "thm:main": conditions[0]', text: "$Y$ is integrable", kind: "hypothesis" }]);
   });
 });

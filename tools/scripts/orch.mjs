@@ -26,8 +26,9 @@
 //           nothing); it changes nothing in the run by itself.
 //       A run that is not live waits for the owner (a resume or a review on the page). Exit 2 after
 //       --timeout seconds with nothing to act on (for a harness that polls). Another live session
-//       attached to the run: exit 3, unless --take. Armed right after a launch, it waits up to a
-//       minute for the run to appear (runs/<slug>/state.json) before it exits 66.
+//       attached to the run: exit 3, unless --take. Armed right after a launch, it waits for the run
+//       to appear (runs/<slug>/state.json) while its runner is live (the Lean warm-up comes first),
+//       and a minute when none is, before it exits 66.
 //   node tools/scripts/orch.mjs decided <slug> --toolkit <path> <node> "<what you decided and why>"
 //       Record a ruling you made at a halt, for the owner's review on the page; prints the id.
 //   node tools/scripts/orch.mjs handled <slug> --toolkit <path> <id>
@@ -93,11 +94,6 @@ if ([cmd, slug].some((a) => a === "--help" || a === "-h")) {
 const toolkit = opt("--toolkit");
 if (!cmd || !slug || !toolkit || !/^[A-Za-z0-9][A-Za-z0-9_.-]{0,120}$/.test(slug)) { console.error(usage); process.exit(64); }
 const run = path.join(path.resolve(toolkit), "runs", slug);
-// A watcher armed right after a launch: the runner seeds the run a few seconds in.
-for (const until = Date.now() + (cmd === "watch" ? Number(process.env.LEANSMITH_ORCH_APPEAR_MS ?? 60_000) : 0); !existsSync(path.join(run, "state.json")); ) {
-  if (Date.now() >= until) { console.error(`no run ${slug} under ${toolkit}${cmd === "watch" ? " (waited for runs/<slug>/state.json: a wrong slug or toolkit, or the launch was refused — read its log)" : ""}`); process.exit(66); }
-  await new Promise((r) => setTimeout(r, 500));
-}
 const ORCH = path.join(run, "orch.json");
 const REQUESTS = path.join(run, "orch_requests.json");
 /** What the owner asked the page to start while this session starts runs itself (`ui/run_model.ts` `START_REQUEST_FILE`). */
@@ -159,8 +155,8 @@ const sessionAlive = (o) => {
  */
 function session() {
   // a driver that is the session itself (`batch_orch.mjs`): it names itself
-  const own = Number(process.env.LEANSMITH_ORCH_SESSION_PID) || 0;
-  if (own) return { agent: process.env.LEANSMITH_ORCH_AGENT || "agent", pid: own, started: started(own), host: os.hostname() };
+  const own = Number(process.env.PAPERFORMALIZER_ORCH_SESSION_PID) || 0;
+  if (own) return { agent: process.env.PAPERFORMALIZER_ORCH_AGENT || "agent", pid: own, started: started(own), host: os.hostname() };
   let pid = process.ppid;
   for (let i = 0; i < 10 && pid > 1; i++) {
     let line = "";
@@ -177,16 +173,16 @@ function session() {
 
 const real = (p) => { try { return realpathSync(p); } catch { return p; } };
 
-/** The toolkit a process's `verify` runs on, as the CLI resolves it: `--toolkit`, else LEANSMITH_TOOLKIT, else the nearest ancestor of its cwd holding leansmith.json. */
+/** The toolkit a process's `verify` runs on, as the CLI resolves it: `--toolkit`, else PAPERFORMALIZER_TOOLKIT, else the nearest ancestor of its cwd holding paperformalizer.json. */
 function toolkitOf(pid, argv) {
   let cwd;
   try { cwd = readlinkSync(`/proc/${pid}/cwd`); } catch { return null; }
   const k = argv.indexOf("--toolkit");
   let root = k >= 0 ? argv[k + 1] : undefined;
-  if (!root) try { root = readFileSync(`/proc/${pid}/environ`, "utf8").split("\0").find((e) => e.startsWith("LEANSMITH_TOOLKIT="))?.slice(23).trim() || undefined; } catch { /* not ours to read */ }
+  if (!root) try { root = readFileSync(`/proc/${pid}/environ`, "utf8").split("\0").find((e) => e.startsWith("PAPERFORMALIZER_TOOLKIT="))?.slice("PAPERFORMALIZER_TOOLKIT=".length).trim() || undefined; } catch { /* not ours to read */ }
   if (root) return real(path.resolve(cwd, root));
   for (let d = cwd; ; d = path.dirname(d)) {
-    if (existsSync(path.join(d, "leansmith.json"))) return real(d);
+    if (existsSync(path.join(d, "paperformalizer.json"))) return real(d);
     if (path.dirname(d) === d) return null;
   }
 }
@@ -217,7 +213,7 @@ function runnerLive() {
   try { pids = readdirSync("/proc").filter((e) => /^\d+$/.test(e)); } catch {
     // no /proc (not Linux): the slug alone, by the command line
     try {
-      const re = new RegExp(`leansmith\\.ts verify .*--slug ${slug.replace(/[.]/g, "\\.")}( |$)`);
+      const re = new RegExp(`paperformalizer\\.ts verify .*--slug ${slug.replace(/[.]/g, "\\.")}( |$)`);
       return execFileSync("ps", ["-eo", "args="], { encoding: "utf8" }).split("\n").some((l) => re.test(l));
     } catch { return false; }
   }
@@ -225,7 +221,7 @@ function runnerLive() {
   return pids.some((pid) => {
     let argv;
     try { argv = readFileSync(`/proc/${pid}/cmdline`, "utf8").split("\0"); } catch { return false; }
-    const v = argv.findIndex((a, i) => /(^|\/)leansmith\.ts$/.test(a) && argv[i + 1] === "verify");
+    const v = argv.findIndex((a, i) => /(^|\/)paperformalizer\.ts$/.test(a) && argv[i + 1] === "verify");
     const s = argv.indexOf("--slug", v);
     return v >= 0 && s > v && argv[s + 1] === slug && toolkitOf(pid, argv) === mine;
   });
@@ -356,24 +352,36 @@ async function fullAutoApply(round) {
   try {
     const tools = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..");
     const tsx = createRequire(path.join(tools, "package.json")).resolve("tsx/cli");
-    const cli = process.env.LEANSMITH_ORCH_CLI ?? path.join(tools, "bin", "leansmith.ts");
+    const cli = process.env.PAPERFORMALIZER_ORCH_CLI ?? path.join(tools, "bin", "paperformalizer.ts");
     child = spawn(process.execPath, [tsx, cli, ...argv], { cwd: tools, detached: true, stdio: ["ignore", fd, fd], env: process.env });
   } finally { closeSync(fd); }
   // it counts as carried out once it is at work (or done): one refused at once is reported, not recorded
   let exited = null;
   child.on("exit", (code) => { exited = code ?? 1; });
-  for (const until = Date.now() + Number(process.env.LEANSMITH_FULL_AUTO_WAIT_MS ?? 60_000); exited === null && !runnerLive() && !applyLive() && Date.now() < until; ) await new Promise((r) => setTimeout(r, 300));
+  for (const until = Date.now() + Number(process.env.PAPERFORMALIZER_FULL_AUTO_WAIT_MS ?? 60_000); exited === null && !runnerLive() && !applyLive() && Date.now() < until; ) await new Promise((r) => setTimeout(r, 300));
   child.unref();
   rmSync(lock, { force: true });
   if (exited !== null && exited !== 0) {
-    console.error(`full auto: leansmith ${argv.join(" ")} failed (exit ${exited}) — nothing was carried out; read ${log}, settle what it says, and recommend again`);
+    console.error(`full auto: paperformalizer ${argv.join(" ")} failed (exit ${exited}) — nothing was carried out; read ${log}, settle what it says, and recommend again`);
     process.exit(1);
   }
   const all = readJson(DECISIONS, []);
   let n = Math.max(0, ...all.map((d) => num(d.id)));
   const ids = reviews.map(([node, text]) => { const id = `d${++n}`; all.push({ id, node, at: new Date().toISOString(), text }); return id; });
   writeJson(DECISIONS, all);
-  console.log(`full auto: every item is recommended — started leansmith ${argv.join(" ")} (output: ${log}); listed for the owner's review as ${ids.join(", ")}`);
+  console.log(`full auto: every item is recommended — started paperformalizer ${argv.join(" ")} (output: ${log}); listed for the owner's review as ${ids.join(", ")}`);
+}
+
+// A watcher armed right after a launch: the runner seeds the run (state.json) only after its Lean
+// warm-up (`lake build`, up to PAPERFORMALIZER_LEANLSP_WARMUP_MS), so the watch waits while a runner of the
+// run is live, and a minute when none is (a wrong slug or toolkit, or a launch refused at once).
+for (let until = Date.now() + (cmd === "watch" ? Number(process.env.PAPERFORMALIZER_ORCH_APPEAR_MS ?? 60_000) : 0), seen = 0; !existsSync(path.join(run, "state.json")); ) {
+  if (Date.now() >= until) {
+    if (cmd === "watch" && runnerLive()) { if (!seen++) console.error(`[orch] ${slug}: the runner is starting (its Lean warm-up) — waiting for runs/<slug>/state.json`); until = Date.now() + 5_000; continue; }
+    console.error(`no run ${slug} under ${toolkit}${cmd === "watch" ? " (waited for runs/<slug>/state.json, and no runner of it is live: a wrong slug or toolkit, or the launch was refused — read its log)" : ""}`);
+    process.exit(66);
+  }
+  await new Promise((r) => setTimeout(r, 500));
 }
 
 if (cmd === "watch") {
@@ -383,12 +391,12 @@ if (cmd === "watch") {
   // what the caller already reported and the owner has not yet answered (`orch_watch_loop.mjs`), each as
   // `<id>@<when the owner wrote it>` (an issue withdrawn and reported anew, or edited, is new): no return
   // for these alone — a further one returns with all of them. The keys a report names are written to
-  // LEANSMITH_ORCH_REPORTED when it is set.
+  // PAPERFORMALIZER_ORCH_REPORTED when it is set.
   const known = new Set((opt("--known") ?? "").split(",").filter(Boolean));
   const keyOf = (x) => `${x.id}@${x.review?.at ?? x.at ?? ""}`;
   // armed by a loop (`orch_watch_loop.mjs`): once the loop is gone, nobody reads this watch — it ends
   // without handing anything over, so the next watch reports it
-  const parent = Number(process.env.LEANSMITH_ORCH_PARENT) || 0;
+  const parent = Number(process.env.PAPERFORMALIZER_ORCH_PARENT) || 0;
   const orphaned = () => parent > 0 && process.ppid !== parent;
   const me = session();
   const cur = readJson(ORCH, null);
@@ -491,7 +499,7 @@ if (cmd === "watch") {
     const said = onFile.filter((m) => m?.from === "user" && !m.handled);
     const items = [...rejected, ...objected, ...said];
     const standing = items.some((x) => !known.has(keyOf(x)));
-    if (standing && process.env.LEANSMITH_ORCH_REPORTED) { if (orphaned()) process.exit(0); writeFileSync(process.env.LEANSMITH_ORCH_REPORTED, JSON.stringify(items.map(keyOf))); }
+    if (standing && process.env.PAPERFORMALIZER_ORCH_REPORTED) { if (orphaned()) process.exit(0); writeFileSync(process.env.PAPERFORMALIZER_ORCH_REPORTED, JSON.stringify(items.map(keyOf))); }
     if (standing) for (const d of rejected) console.log(`[orch] ${slug}: the owner rejected your ruling ${d.id} on ${d.node} — "${d.text}" — and says: ${d.review.guidance}`);
     if (standing) for (const o of objected) console.log(`[orch] ${slug}: the owner reports an issue (${o.id}) with the ${o.kind} comment${o.node ? ` on ${o.node}` : ""} — "${o.excerpt}" — and says: ${o.text}`);
     if (standing) for (const m of said) {
@@ -533,7 +541,7 @@ if (cmd === "watch") {
     if (todo && todo.sig !== todo.told) {
       if (orphaned()) process.exit(0);
       writeFileSync(todo.toldFile, todo.sig);
-      report(`the run's bundle has ${todo.n} blocking item(s) in bundle/corrected_paper/TODO.md — settle each before the run counts as finished: what the pipeline caused, in the run's files, then \`leansmith report ${slug}\`; what is the author's own TeX, tell the owner (skill: "V6 and the promotion rounds")`, false);
+      report(`the run's bundle has ${todo.n} blocking item(s) in bundle/corrected_paper/TODO.md — settle each before the run counts as finished: what the pipeline caused, in the run's files, then \`paperformalizer report ${slug}\`; what is the author's own TeX, tell the owner (skill: "V6 and the promotion rounds")`, false);
     }
     if (live && atRest && !sawLive) report(`the run is running again (resumed on the page, or by a session)${parent ? "" : " — arm the watcher again to follow it"}`, false);
     if (live) sawLive = true;
@@ -549,14 +557,14 @@ if (cmd === "watch") {
       const batchOf = failedOnFile?.round ?? sawApply ?? "B";
       const failed = failedOnFile && !(Date.parse(failedOnFile.at ?? "") < Date.parse(readJson(path.join(run, "proposals", `${batchOf}.json`), {}).created ?? "")) ? failedOnFile : null;
       const said = failed?.message ? `\n  it said: ${String(failed.message).split("\n").join("\n  ")}` : "";
-      if (round) report(`the apply of promotion round ${round} ended without completing it — read its output (the latest runs/${slug}/logs/ui_*.log, or your own log of it) and proposals/move_pending.json, settle what it names, then apply the round again (\`leansmith propose ${slug} --round ${round} --apply --toolkit ${toolkit}\`)${said}`);
+      if (round) report(`the apply of promotion round ${round} ended without completing it — read its output (the latest runs/${slug}/logs/ui_*.log, or your own log of it) and proposals/move_pending.json, settle what it names, then apply the round again (\`paperformalizer propose ${slug} --round ${round} --apply --toolkit ${toolkit}\`)${said}`);
       // refused before a decision was recorded: nothing entered the toolkit, the round still waits
       if (failed?.message) report(`the apply of promotion round ${failed.round ?? sawApply ?? ""} was refused and nothing was applied — the page shows the user why; when it is theirs to answer (an entry still undecided), tell them, else settle what it names and have the round applied again${said}`);
       sawApply = null;
       apply0 = applySig();
     }
     if (timeout && Date.now() - t0 > timeout * 1000) { console.log(`[orch] ${slug}: nothing to act on yet (${live ? "running" : "waiting for the owner"})`); process.exit(2); }
-    setTimeout(tick, Number(process.env.LEANSMITH_ORCH_TICK_MS) || (timeout ? Math.min(10_000, timeout * 1000) : 10_000));
+    setTimeout(tick, Number(process.env.PAPERFORMALIZER_ORCH_TICK_MS) || (timeout ? Math.min(10_000, timeout * 1000) : 10_000));
   };
   tick();
 } else if (cmd === "decided") {

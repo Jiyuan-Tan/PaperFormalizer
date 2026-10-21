@@ -28,12 +28,12 @@ export const F_STAGES = ["1", "1.5", "2", "2.5", "3", "3.5", "4", "5"] as const;
 export type CursorStage = (typeof STAGE_ORDER)[number];
 
 export const MODEL_PLAN = {
-  // Shared "mechanical / clerical" codex tier (default gpt-6.1-sol, env LEANSMITH_MODEL_CODEX_MECH).
+  // Shared "mechanical / clerical" codex tier (default gpt-6.1-sol, env PAPERFORMALIZER_MODEL_CODEX_MECH).
   // Not a stage: V1 passes `MODEL_PLAN.mechanicalTier.model` for its extraction calls.
   mechanicalTier: { runner: "codex", model: MODELS.codexMechanical, effort: "high" },
   stage1: { runner: "claude", model: MODELS.claudeMain },
   // F1.5 review: plan DEPTH + REUSE + statement-vs-math
-  // fidelity audit, on the mechanical tier at high effort. Env: LEANSMITH_MODEL_CODEX_MECH.
+  // fidelity audit, on the mechanical tier at high effort. Env: PAPERFORMALIZER_MODEL_CODEX_MECH.
   stage1_5: { runner: "codex", model: MODELS.codexMechanical, effort: "high" },
   stage2: { runner: "codex", model: MODELS.codexKernel, effort: "high" },
   // F2.5/F3/F3.5/F4 are the proof-review loop (`proof_reviewer.ts::runUnit` routes its
@@ -121,8 +121,8 @@ export const UNENTERABLE_HALT_IDS: ReadonlySet<StageHaltId> = new Set<StageHaltI
 export const FROM_STAGE_USAGE = STAGE_HALT_IDS.filter((s) => !UNENTERABLE_HALT_IDS.has(s)).join("|");
 export const STOP_AFTER_USAGE = STAGE_HALT_IDS.filter((s) => !UNSTOPPABLE_HALT_IDS.has(s)).join("|");
 
-/** `leansmith study`, as its own usage error and the top-level usage print it. */
-export const STUDY_SYNOPSIS = "leansmith study <slug> [--toolkit <path>] [--resume] [--clear-build-cap] [--clear-review-cap] [--clear-coordinate-cap] [--dry-run]";
+/** `paperformalizer study`, as its own usage error and the top-level usage print it. */
+export const STUDY_SYNOPSIS = "paperformalizer study <slug> [--toolkit <path>] [--resume] [--clear-build-cap] [--clear-review-cap] [--clear-coordinate-cap] [--dry-run]";
 
 /** Why `--from-stage <id>` is refused, or null when it is accepted. */
 export function fromStageRefusal(id: StageHaltId): string | null {

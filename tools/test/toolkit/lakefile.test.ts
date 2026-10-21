@@ -17,7 +17,7 @@ describe("toolkit lakefile targets", () => {
   it("parses the shipped template: both libs, the index extractor and the three exes", () => {
     const text = readFileSync(path.join(toolkitTemplateDir(), "lakefile.toml"), "utf8");
     const t = parseLakefileToml(text);
-    expect([...t.libs].sort()).toEqual(["LeanSmithIndexCore", "Papers", "Toolkit"]);
+    expect([...t.libs].sort()).toEqual(["PaperFormalizerIndexCore", "Papers", "Toolkit"]);
     expect([...t.exes].sort()).toEqual(["candidate_scan", "paper_index", "toolkit_index"]);
     // A `[[require]]` (mathlib; the optional Causalean, commented out) is not a lib.
     expect(t.libs.has("mathlib")).toBe(false);

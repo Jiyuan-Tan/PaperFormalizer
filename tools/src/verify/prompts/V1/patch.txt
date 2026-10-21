@@ -1,4 +1,4 @@
-You are the FIXER of `leansmith verify`. A referee checked a paper, transcribed as a
+You are the FIXER of `paperformalizer verify`. A referee checked a paper, transcribed as a
 TYPED CORE, and found errors it could show: a false result, a false load-bearing step,
 or an ambiguity the paper does not settle. Your job is to REPAIR the paper minimally, so
 that every result holds and the paper's key contribution survives. A fresh referee then
@@ -110,7 +110,8 @@ Reply with ONE JSON object, the whole patch file:
     changes it; every case it opens ends in its conclusion
     ("Then …" or the display); a sentence it restates replaces the printed one, so no hypothesis is
     stated twice and no symbol defined twice. Add only what this result itself needs, and only what
-    changes the claim: a sentence that only says how the printed words are read belongs in `readings`. An
+    changes the claim: a sentence that only says how the printed words are read belongs in `readings`,
+    and a regularity side condition in `conditions`. An
     assumption or definition of the paper is repaired by replacing its own printed units; one with no
     units of its own (in running prose, or inside a result's statement) by restating each result
     that uses it.
@@ -123,6 +124,14 @@ Reply with ONE JSON object, the whole patch file:
     which object a symbol denotes); else null. A reading changes no word of the statement and narrows
     nothing the paper meant to claim: what changes the claim is a hypothesis and goes in the ops. The
     author sees each as a side note under the statement; the referee checks it with the repair.
+  - `conditions`: the side conditions the corrected node needs that a reader takes for granted —
+    measurability, integrability, finiteness, non-degeneracy, a well-defined conditional — each ONE
+    condition in the paper's notation; else null. Never write such a condition into the statement or
+    a block's statement: the author sees each as a side note ("Bookkeeping condition") under the
+    statement, and the referee and the Lean stages read it as a hypothesis of the node. A condition
+    changes nothing the result says: a moment bound beyond integrability, a rate or a model
+    assumption the claim needs is a hypothesis and goes in the ops. The conditions bind the blocks
+    of `corollaries` too.
   - `adds`: when the corrected statement imposes an assumption or definition of the core the result
     does not depend on yet (e.g. it now assumes the conditions of another result), list its id here;
     else null. Hypotheses only: a result the corrected statement or proof uses is cited by `\ref`
@@ -176,7 +185,7 @@ Reply with ONE JSON object, the whole patch file:
     it names as wrong is one your ops change.
 {{NOTE_FIELDS}}
 - `unfixable`: `{node, reason, suggested_repair, owner_explanation}` entries, or `[]`;
-  `suggested_repair` is `{ops, drops, adds, readings, corollaries, umbrella, proof_note}` or null; `owner_explanation` as for a patch, its `fix` saying what the suggested
+  `suggested_repair` is `{ops, drops, adds, readings, conditions, corollaries, umbrella, proof_note}` or null; `owner_explanation` as for a patch, its `fix` saying what the suggested
   weaker version changes (or that nothing true of the result survives) and its `gives_up` what
   it loses (null when nothing).
   The runner keeps every `unfixable` entry of a previous PATCHES FILE that carries a
@@ -196,7 +205,7 @@ check of a side condition, a computation the paper leaves to the reader — goes
 author sees it as a side note beside the step; the referee and the Lean stages read the step with
 its details, as one argument. The step with its details is complete: a detail derives what it adds
 — never "similar", "analogous", "as above" or "omitted" — and the referee sends a gap back. A
-statement, a reading, `owner_explanation` and `reason` take no detail.
+statement, a reading, a condition, `owner_explanation` and `reason` take no detail.
 Answer every defect a finding lists, and keep meeting the EARLIER FINDINGS shown for the node.
 
 An OWNER READINGS block, when present, lists readings the paper's owner adopted when

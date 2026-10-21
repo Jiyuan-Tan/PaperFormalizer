@@ -71,7 +71,7 @@ export {
   type SymbolReadings,
 } from "./referee_shard_prompts.js";
 
-/** Parallel referee calls unless `leansmith.json`
+/** Parallel referee calls unless `paperformalizer.json`
  * `referee.max_concurrent` says otherwise. */
 export const SHARD_CONCURRENCY = 6;
 
@@ -105,7 +105,7 @@ export interface ShardLimits {
   sizeOf: (id: string) => number;
 }
 
-/** `leansmith.json` `referee.shard_bytes` / `shard_max_hypotheses` / `shard_max_lemmas` /
+/** `paperformalizer.json` `referee.shard_bytes` / `shard_max_hypotheses` / `shard_max_lemmas` /
  * `shard_max_theorems` defaults. */
 export const DEFAULT_SHARD_LIMITS: Omit<ShardLimits, "sizeOf"> = { bytes: 70_000, hypotheses: 10, lemmas: 6, theorems: 3 };
 
@@ -401,9 +401,9 @@ export interface ShardedRefereeInput {
   knownIds: ReadonlySet<string>;
   /** The symbol referee's readings, shown to every shard under PINNED READINGS. */
   symbols?: SymbolReadings;
-  /** Parallel referee calls (`leansmith.json` `referee.max_concurrent`; default `SHARD_CONCURRENCY`). */
+  /** Parallel referee calls (`paperformalizer.json` `referee.max_concurrent`; default `SHARD_CONCURRENCY`). */
   concurrency?: number;
-  /** Shard sizes (`leansmith.json` `referee.shard_bytes`, `shard_max_*`; default
+  /** Shard sizes (`paperformalizer.json` `referee.shard_bytes`, `shard_max_*`; default
    * `DEFAULT_SHARD_LIMITS`); a node's content bytes are its excerpts'. */
   limits?: Omit<ShardLimits, "sizeOf">;
   /** A repair of a statement on file (its core text is the corrected form) and what the printed

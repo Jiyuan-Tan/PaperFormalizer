@@ -601,7 +601,7 @@ export interface ResultView {
   leanView: PageView | null;
   /** The stored links are not shown (`linksRefusal`): written for an earlier version of this
    *  statement (`changed`), against it cut short (`truncated`), or by an earlier link step for a cut
-   *  that is not its cut now (`recut`); `leansmith relink` writes them again. */
+   *  that is not its cut now (`recut`); `paperformalizer relink` writes them again. */
   linksStale?: "changed" | "truncated" | "recut";
   /** F5 asked this result's rows and no call answered them (`nl_links.json` `unanswered`). */
   linksUnanswered?: true;
@@ -650,7 +650,7 @@ export interface RunDetail {
   objections: OwnerObjection[];
   /** The owner's and the agent's messages on the page, oldest first. */
   messages: ThreadEntry[];
-  /** The run's last share on the site of shared papers (`share.json`, written by `leansmith share`), less its token. */
+  /** The run's last share on the site of shared papers (`share.json`, written by `paperformalizer share`), less its token. */
   share: ShareView | null;
 }
 

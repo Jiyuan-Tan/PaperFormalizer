@@ -291,7 +291,7 @@ export function renderChecklist(batch: ProposalBatch, opts: RenderChecklistOptio
     "",
     "Then run:",
     "",
-    `    leansmith propose ${batch.slug} --round ${batch.round} --apply --toolkit ${opts.toolkitRoot}${opts.dryRun ? " --dry-run" : ""}`,
+    `    paperformalizer propose ${batch.slug} --round ${batch.round} --apply --toolkit ${opts.toolkitRoot}${opts.dryRun ? " --dry-run" : ""}`,
     "",
     ...(opts.health ? ["## Your toolkit now", "", opts.health, ""] : []),
     ...(opts.garden ? [`Gardening suggestions for the toolkit as it stands are in \`${opts.garden}\` (the orchestrator decides and carries them out).`, ""] : []),

@@ -146,7 +146,7 @@ export function renderMatch(a: MatchInput): string {
     L.push(`**Status.** ${st.words}.${r.lean || (umbrella && r.axioms) ? ` **Axioms${umbrella ? " (of its propositions together)" : ""}.** ${axiomWords(r.axioms)}.` : ""}`, "");
     const link = linkOf.get(r.node_id);
     const stale = Boolean(link && r.lean && a.current?.has(r.node_id) && !linksHold(link, a.current.get(r.node_id)!));
-    if (link && r.lean && stale) L.push("The phrase-by-phrase correspondence on file was written for another version of this Lean statement, so it is not shown (`leansmith relink` writes it again).", "");
+    if (link && r.lean && stale) L.push("The phrase-by-phrase correspondence on file was written for another version of this Lean statement, so it is not shown (`paperformalizer relink` writes it again).", "");
     else if (link && r.lean) {
       // a row with no text (links written when a hypothesis's bare name was a row) states nothing
       const rows = link.rows.filter((w) => w.lean.trim() !== "");

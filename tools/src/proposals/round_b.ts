@@ -13,7 +13,7 @@
 // automatically). The result is `runs/<slug>/proposals/B.json` and the owner's checklist
 // `<toolkit>/doc/proposals/<slug>.B.md`; the toolkit's reuse history gains this paper's line, and
 // when its health has findings a gardening list is written beside it (`garden.ts`). Accepted entries
-// are moved by `leansmith propose <slug> --apply` (`apply_b.ts`).
+// are moved by `paperformalizer propose <slug> --apply` (`apply_b.ts`).
 import { existsSync } from "node:fs";
 import { mkdir, readdir, readFile, rename } from "node:fs/promises";
 import path from "node:path";
@@ -367,7 +367,7 @@ export async function archiveEarlierRound(cfg: ToolkitConfig, qid: string, batch
 /** The stop message of a pending round. */
 export function roundBStopMessage(cfg: ToolkitConfig, qid: string, rec: ProposalRoundState, count: number, dryRun = false, fullAuto = false): string {
   return `promotion: ${count} result(s) proposed for the toolkit — ${fullAuto ? ROUND_IS_DELEGATED : ROUND_IS_THE_OWNERS}; the checklist is ${rec.checklist_path}, applied by: ` +
-    `leansmith propose ${qid} --apply --toolkit ${cfg.toolkitRoot}${dryRun ? " --dry-run" : ""}`;
+    `paperformalizer propose ${qid} --apply --toolkit ${cfg.toolkitRoot}${dryRun ? " --dry-run" : ""}`;
 }
 
 /** Set a pending round aside (its plan or report is re-made, so it is proposed afresh): the batch,

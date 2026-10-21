@@ -337,13 +337,13 @@ async function assertCandidateScanExe(cfg: ToolkitConfig): Promise<void> {
   throw new Error(
     `the toolkit lakefile declares no \`candidate_scan\` exe, which the promotion round and the toolkit graph run. ` +
       `Copy its \`[[lean_exe]]\` entry from ${path.join(toolkitTemplateDir(), "lakefile.toml")} and ` +
-      `${path.join(toolkitTemplateDir(), "CandidateScan.lean")} (with LeanSmithIndexCore.lean) into ${cfg.toolkitRoot}, then resume.`,
+      `${path.join(toolkitTemplateDir(), "CandidateScan.lean")} (with PaperFormalizerIndexCore.lean) into ${cfg.toolkitRoot}, then resume.`,
   );
 }
 
 /** Where the `--graph` scan is written: machine-local build output, never committed. */
 export function graphScanPath(cfg: ToolkitConfig): string {
-  return path.join(cfg.toolkitRoot, ".lake", "build", "leansmith", "graph_scan.json");
+  return path.join(cfg.toolkitRoot, ".lake", "build", "paperformalizer", "graph_scan.json");
 }
 
 /** Build the toolkit and papers libraries and the exe, then scan every toolkit and paper

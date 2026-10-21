@@ -12,7 +12,7 @@
 # the tracked Lean sources and the pins (StatLean/, StatLean.lean, lakefile.toml, lean-toolchain,
 # lake-manifest.json), so an archive is only ever offered to the sources it was built from.
 set -euo pipefail
-REPO="${STATLEAN_CACHE_REPO:-Jiyuan-Tan/LeanSmith}"
+REPO="${STATLEAN_CACHE_REPO:-Jiyuan-Tan/PaperFormalizer}"
 TAG="${STATLEAN_CACHE_TAG:-build-cache}"
 HERE="$(cd "$(dirname "$0")/.." && pwd)"
 cd "$HERE"

@@ -4,7 +4,7 @@
 // writes <registry-dir>/site/viewer/ afresh: the local UI's app.js and app.css (app.js draws a
 // shared paper in its snapshot mode), the page template snapshot.html as page.html, DOMPurify,
 // KaTeX (its stylesheet, script and web fonts) and pdf.js (its module and worker), with VERSION
-// naming the LeanSmith commit they come from. The registry's site build reads them; they are
+// naming the PaperFormalizer commit they come from. The registry's site build reads them; they are
 // never edited there.
 import { execFileSync } from "node:child_process";
 import { cpSync, existsSync, mkdirSync, readdirSync, readFileSync, rmSync, writeFileSync } from "node:fs";
@@ -46,12 +46,12 @@ const commit = git("rev-parse", "HEAD") || "unknown";
 const dirty = git("status", "--porcelain", "--", "src/ui/static") ? " (with uncommitted changes to src/ui/static)" : "";
 const purify = /DOMPurify (\d+\.\d+\.\d+)/u.exec(readFileSync(path.join(STATIC, "vendor", "purify.min.js"), "utf8"))?.[1] ?? "unknown";
 writeFileSync(path.join(out, "VERSION"), [
-  `LeanSmith ${commit}${dirty}`,
+  `PaperFormalizer ${commit}${dirty}`,
   `katex ${version("katex")}`,
   `pdfjs-dist ${version("pdfjs-dist")}`,
   `dompurify ${purify}`,
   "",
-  "Copied by tools/scripts/sync_viewer.mjs of LeanSmith: do not edit these files here.",
+  "Copied by tools/scripts/sync_viewer.mjs of PaperFormalizer: do not edit these files here.",
   "",
 ].join("\n"));
-console.log(`viewer copied into ${out} (LeanSmith ${commit.slice(0, 12)}${dirty})`);
+console.log(`viewer copied into ${out} (PaperFormalizer ${commit.slice(0, 12)}${dirty})`);

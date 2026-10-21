@@ -252,7 +252,7 @@ export interface PipelineContext {
    *  against it. Kept as its own field because the F-stage code reads it directly. */
   repoRoot: string;
   /**
-   * The user's toolkit (Lean project, run records, base libraries), from `leansmith.json`.
+   * The user's toolkit (Lean project, run records, base libraries), from `paperformalizer.json`.
    * Every runner populates it (the verify runner, the F runner's callers, the study CLI, the
    * operator bins).
    */
@@ -291,7 +291,7 @@ export interface PipelineLogEntry {
    * Condensed orchestrator reminder for a checkpoint/blocked halt: what to do
    * at this checkpoint + what the next phase is, with a pointer to the canonical
    * SKILL section. Populated by `checkpointGuidance`; absent on ordinary
-   * `completed` transitions. The leansmith skill tells the orchestrator
+   * `completed` transitions. The paperformalizer skill tells the orchestrator
    * to read this on the last pipeline.jsonl line so it re-grounds after a long run.
    */
   next_step_guidance?: string;

@@ -43,6 +43,14 @@ export const PATCH_PIN_PREFIX = "ass:pin-fix-";
 export function patchReadingId(node: string, text: string): string {
   return `${PATCH_PIN_PREFIX}${createHash("sha256").update(`${node}|${normalizeBasisText(text)}`).digest("hex").slice(0, 8)}`;
 }
+/** The id prefix of a side condition a repair states beside its statement (a patch's `conditions`):
+ * a regularity condition the corrected result needs (measurability, integrability, …), kept out of
+ * its text like a referee's bookkeeping condition. Its provenance tag is `PATCH_ADDED_BY`. */
+export const PATCH_BK_PREFIX = "ass:bk-fix-";
+/** The id of the side condition `text` a repair of `node` states: by its meaning, as for a reading. */
+export function patchConditionId(node: string, text: string): string {
+  return `${PATCH_BK_PREFIX}${createHash("sha256").update(`${node}|${normalizeBasisText(text)}`).digest("hex").slice(0, 8)}`;
+}
 
 /** The tag in the id of a block a repair SPLITS OFF a result (a patch's `corollaries`): a result of
  * its own, of the parent's kind, that the paper does not print — `<thm|lem|prop>:cor-fix-<hash>`. The
@@ -437,6 +445,9 @@ export interface PatchFileLike {
     /** The fixer's: readings of the node's wording the repair states beside the statement; each
      * becomes an `ass:pin-fix-<hash>` wired like an owner reading. */
     readings?: string[];
+    /** The fixer's: side conditions (regularity) the corrected result needs, stated beside the
+     * statement; each becomes an `ass:bk-fix-<hash>` wired like a reading. */
+    conditions?: string[];
     /** The fixer's: results the repair SPLITS OFF the node (a result) — each a statement node of its
      * own (`splitCorollaryId`) depending on `adds` and, a corollary (`splitKind`), on the node; proved by `follows`. */
     corollaries?: SplitCorollary[];
@@ -1251,20 +1262,23 @@ export function compilePatchEdits(transcribed: Core, file: PatchFileLike): { edi
     });
     for (const w of into) edits.push({ op: "wire", statement: w, dep: r.id });
   }
-  // A repair's readings: likewise, one node per reading.
+  // A repair's readings and side conditions: likewise, one node each.
   const stated = new Set<string>();
   for (const p of file.patches) {
     if (!ids.has(p.node) || gone.has(p.node)) continue;
     const into = (statements.has(p.node) ? [p.node, ...corollariesOf(p.node)] : transcribed.statements.filter((s) => s.depends_on.includes(p.node)).map((s) => s.id)).filter((w) => !gone.has(w));
-    for (const reading of p.readings ?? []) {
-      const id = patchReadingId(p.node, reading);
-      if (into.length === 0 || stated.has(id)) continue;
-      stated.add(id);
+    const added = [
+      ...(p.readings ?? []).map((t) => ({ id: patchReadingId(p.node, t), text: t, reason: `${PIN_REASON_PREFIX}${p.node}: stated by the repair` })),
+      ...(p.conditions ?? []).map((t) => ({ id: patchConditionId(p.node, t), text: t, reason: `side condition of ${p.node} stated by the repair` })),
+    ];
+    for (const a of added) {
+      if (into.length === 0 || stated.has(a.id)) continue;
+      stated.add(a.id);
       edits.push({
         op: "add_assumption",
-        node: { id, kind: "regularity", condition: reading, bookkeeping: { flag: true, added_by: PATCH_ADDED_BY, reason: `${PIN_REASON_PREFIX}${p.node}: stated by the repair` } } as CoreAssumption,
+        node: { id: a.id, kind: "regularity", condition: a.text, bookkeeping: { flag: true, added_by: PATCH_ADDED_BY, reason: a.reason } } as CoreAssumption,
       });
-      for (const w of into) edits.push({ op: "wire", statement: w, dep: id });
+      for (const w of into) edits.push({ op: "wire", statement: w, dep: a.id });
     }
   }
   return { edits, descoped };
@@ -1448,13 +1462,16 @@ export function pinsOn(core: Core, id: string): Array<{ id: string; node: string
 }
 
 /** The conditions statement `id` of an accepted core carries beyond the paper's text (`ass:bk-n` by
- * the referee, `ass:bk-owner-n` by the paper's owner): what the paper handed back must state there. */
-export function conditionsOn(core: Core, id: string): Array<{ id: string; condition: string; by: "referee" | "owner" }> {
+ * the referee, `ass:bk-owner-n` by the paper's owner, `ass:bk-fix-<hash>` by a repair): what the
+ * paper handed back must state there. */
+export function conditionsOn(core: Core, id: string): Array<{ id: string; condition: string; by: "referee" | "owner" | "repair" }> {
   const st = core.statements.find((s) => s.id === id);
   if (!st) return [];
+  const by = (a: CoreAssumption): "referee" | "owner" | "repair" =>
+    a.bookkeeping?.added_by === OWNER_ADDED_BY ? "owner" : a.bookkeeping?.added_by === PATCH_ADDED_BY ? "repair" : "referee";
   return core.assumptions
     .filter((a) => isReadingAddition(a) && a.id.startsWith("ass:bk-") && st.depends_on.includes(a.id))
-    .map((a) => ({ id: a.id, condition: a.condition, by: a.bookkeeping?.added_by === OWNER_ADDED_BY ? "owner" as const : "referee" as const }));
+    .map((a) => ({ id: a.id, condition: a.condition, by: by(a) }));
 }
 
 /** A condition V1.5 appended to the paper on acceptance, as the F stages must read it. */
@@ -1509,8 +1526,8 @@ export function renderBindingReadings(readings: readonly BindingReading[]): stri
 
 /** One binding reading as text: `<id> (reading of <node>): <text>`. */
 export function bindingReadingItem(r: BindingReading): string {
-  const by = r.id.startsWith(OWNER_PIN_PREFIX) ? ", adopted by the paper's owner" : r.id.startsWith(PATCH_PIN_PREFIX) ? ", stated by its repair" : "";
-  return `${r.id} (${r.kind === "pin" ? `reading of ${r.of}${by}` : `condition of ${r.of}`}): ${r.text}`;
+  const by = r.id.startsWith(OWNER_PIN_PREFIX) ? ", adopted by the paper's owner" : r.id.startsWith(PATCH_PIN_PREFIX) || r.id.startsWith(PATCH_BK_PREFIX) ? ", stated by its repair" : "";
+  return `${r.id} (${r.kind === "pin" ? `reading of ${r.of}${by}` : `condition of ${r.of}${by}`}): ${r.text}`;
 }
 
 // ---------------------------------------------------------------------------------------------

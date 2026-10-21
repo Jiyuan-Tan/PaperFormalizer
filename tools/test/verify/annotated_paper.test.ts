@@ -193,7 +193,7 @@ function unannotate(tex: string): string {
     }
     throw new Error("unbalanced");
   };
-  let out = tex.replace(/\n\\usepackage\{xcolor\}% added by LeanSmith\n/, "").replace(/% LeanSmith annotation macros[\s\S]*?% end of LeanSmith annotation macros\n/, "");
+  let out = tex.replace(/\n\\usepackage\{xcolor\}% added by PaperFormalizer\n/, "").replace(/% PaperFormalizer annotation macros[\s\S]*?% end of PaperFormalizer annotation macros\n/, "");
   // a proof block inserted on its own line takes its newline with it
   for (const macro of ["\\vsProof", "\\vsProposedProof"]) {
     for (let at = out.indexOf(`${macro}{`); at >= 0; at = out.indexOf(`${macro}{`)) {
@@ -275,12 +275,12 @@ describe("annotated paper (V6)", () => {
     expect(md).toContain("## Unlocated (0)");
     expect(md).toContain("Compiled with pdflatex: `main.pdf`.");
     // the preamble: xcolor after \documentclass, the macros before \begin{document}
-    expect(main.startsWith("\\documentclass{article}\n\\usepackage{xcolor}% added by LeanSmith\n")).toBe(true);
+    expect(main.startsWith("\\documentclass{article}\n\\usepackage{xcolor}% added by PaperFormalizer\n")).toBe(true);
     expect(main.indexOf(VS_BLOCK_MARKER)).toBeLessThan(main.indexOf("\\begin{document}"));
     expect(main.indexOf(VS_BLOCK_MARKER)).toBeGreaterThan(main.indexOf("\\newtheorem{prop}"));
     // each part is a block laid out for reading: its bold label on its own line, the content indented below
     const macro = (name: string): string => main.split("\n").find((l) => l.startsWith(`\\newcommand{\\${name}}`)) ?? "";
-    for (const [name, colour, font, label] of [["vsOriginal", "vsRed", "", "Original:"], ["vsCorrected", "vsBlue", "", "Corrected:"], ["vsClarified", "vsBlue", "", "Clarified statement:"], ["vsNote", "vsNote", "\\normalfont\\small", "LeanSmith:"], ["vsReading", "vsNote", "\\normalfont\\small", "Clarification:"], ["vsReadingOwner", "vsNote", "\\normalfont\\small", "Clarification (author):"]] as const) {
+    for (const [name, colour, font, label] of [["vsOriginal", "vsRed", "", "Original:"], ["vsCorrected", "vsBlue", "", "Corrected:"], ["vsClarified", "vsBlue", "", "Clarified statement:"], ["vsNote", "vsNote", "\\normalfont\\small", "PaperFormalizer:"], ["vsReading", "vsNote", "\\normalfont\\small", "Clarification:"], ["vsReadingOwner", "vsNote", "\\normalfont\\small", "Clarification (author):"]] as const) {
       expect(macro(name)).toBe(`\\newcommand{\\${name}}[1]{\\vsBlock{${colour}}{${font}}{${label}}{#1}}`);
     }
     expect(macro("vsReadingSymbol")).toBe("\\newcommand{\\vsReadingSymbol}[2]{\\vsBlock{vsNote}{\\normalfont\\small}{Clarification (symbol #1):}{#2}}");
@@ -534,7 +534,7 @@ describe("annotate_tex helpers", () => {
       const bare = "\\documentclass[11pt]{article}\n\\usepackage{amsmath}\n\\begin{document}\nx\n\\end{document}\n";
       const once = injectPreamble(bare, loadsXcolor(bare));
       expect(once.addedXcolor && once.addedBlock).toBe(true);
-      expect(once.tex).toMatch(/^\\documentclass\[11pt\]\{article\}\n\\usepackage\{xcolor\}% added by LeanSmith\n/);
+      expect(once.tex).toMatch(/^\\documentclass\[11pt\]\{article\}\n\\usepackage\{xcolor\}% added by PaperFormalizer\n/);
       expect(injectPreamble(once.tex, loadsXcolor(once.tex)).tex).toBe(once.tex);
 
       const withX = "\\documentclass{article}\n\\usepackage[dvipsnames]{xcolor}\n\\begin{document}\nx\n\\end{document}\n";
@@ -556,13 +556,13 @@ describe("annotate_tex helpers", () => {
       expect(loadsXcolor("", "% \\RequirePackage{xcolor}\n")).toBe(false);
       const once = injectPreamble(tpl, loadsXcolor(preambleOf(tpl)));
       expect(once.addedXcolor && once.addedBlock).toBe(true);
-      expect(once.tex).toContain("\\documentclass[nonblindrev]{informs4}\n\\usepackage{xcolor}% added by LeanSmith\n % the default\n");
+      expect(once.tex).toContain("\\documentclass[nonblindrev]{informs4}\n\\usepackage{xcolor}% added by PaperFormalizer\n % the default\n");
       expect(once.tex.indexOf(VS_BLOCK_MARKER)).toBeGreaterThan(once.tex.indexOf("natbib"));
       expect(injectPreamble(once.tex, loadsXcolor(preambleOf(once.tex))).tex).toBe(once.tex);
       // no \\begin{document}: the block follows the real class line and the added xcolor line
       const frag = "%\\documentclass{a}\n\\documentclass{b}\nText.\n";
       const f = injectPreamble(frag, false);
-      expect(f.tex.startsWith(`%\\documentclass{a}\n\\documentclass{b}\n\\usepackage{xcolor}% added by LeanSmith\n${VS_PREAMBLE_BLOCK}\n`)).toBe(true);
+      expect(f.tex.startsWith(`%\\documentclass{a}\n\\documentclass{b}\n\\usepackage{xcolor}% added by PaperFormalizer\n${VS_PREAMBLE_BLOCK}\n`)).toBe(true);
       expect(injectPreamble(f.tex, false).tex).toBe(f.tex);
     }],
     ["moves an insertion point out of math, math environments, brace groups, labels and comments", () => {
@@ -798,6 +798,12 @@ describe("annotated paper — a reading pinned on a result stated in running tex
     expect((await annotateRun({ runDir, qid: QID, state, when: "halt", compile: passed, log: () => {} })).error).toBeNull();
     expect(await read(runDir, "annotated/main.tex")).toContain("is consistent.}\\vsReading{consistency is convergence in probability}\\vsCondition{$n \\ge 2$}\n\nThe next result");
     expect(await read(runDir, "annotated/ANNOTATIONS.md")).toMatch(/\| `thm:one` \| main\.tex:4 \| condition added \| after-env \| ass:bk-1: \$n \\ge 2\$ \|/u);
+    // a side condition a repair states (`conditions`): the same note, never the statement's text
+    core.assumptions.push({ id: "ass:bk-fix-0a1b2c3d", kind: "regularity", condition: "$Y$ is integrable", bookkeeping: { flag: true, added_by: "V1-patch", reason: "side condition of thm:one stated by the repair" } } as Core["assumptions"][number]);
+    core.statements[0]!.depends_on.push("ass:bk-fix-0a1b2c3d");
+    await write(VERIFY_FILES.coreJson, core);
+    expect((await annotateRun({ runDir, qid: QID, state, when: "halt", compile: passed, log: () => {} })).error).toBeNull();
+    expect(await read(runDir, "annotated/main.tex")).toContain("\\vsCondition{$n \\ge 2$}\\vsCondition{$Y$ is integrable}\n\nThe next result");
   });
 });
 

@@ -3,7 +3,7 @@ import path from "node:path";
 import { pathToFileURL } from "node:url";
 import { describe, expect, it } from "vitest";
 
-// Loaded first in a plain Node process, as `leansmith report` loads it (vitest's own module
+// Loaded first in a plain Node process, as `paperformalizer report` loads it (vitest's own module
 // loader hides an import cycle): the bundle reaches the page model, which reads a run's share record
 // through `share_record.ts`, never `share.ts`, which needs the bundle loaded.
 describe("bundle module", () => {

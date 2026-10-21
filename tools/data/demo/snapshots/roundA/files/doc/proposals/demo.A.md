@@ -14,7 +14,7 @@ Unbuilt, each stays an assumption of the paper. Decide each by editing the `deci
 
 Then run:
 
-    leansmith propose demo --round A --apply --toolkit @@TOOLKIT@@ --dry-run
+    paperformalizer propose demo --round A --apply --toolkit @@TOOLKIT@@ --dry-run
 
 ## a-lem-schur · Schur's inequality (exponent 1)
 
