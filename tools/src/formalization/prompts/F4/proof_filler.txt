@@ -27,7 +27,8 @@ proof roadmap (`proof_tex`); do not open the core or the plan. An umbrella state
 formalized — no plan entry, no declaration, no `@node` tag: it only says that the statements split off
 it (`split_from`) hold, and those are formalized.
 A node's PROOF ROADMAP is the human proof; for a repaired result it opens with
-`[Proof change (minimal patch): …]`, which supersedes the printed steps it replaces. Read the relevant
+`[Proof change (minimal patch): …]`, which supersedes the printed steps it replaces; a `\vsDetail{…}`
+in it completes the step before it (read the step with its details). Read the relevant
 step before filling a sorry; do not invent a strategy the roadmap does not take. Open a Lean file to
 edit it, to read the declaration you are proving, or to unfold a definition it uses — not to re-read
 what this page already quotes.

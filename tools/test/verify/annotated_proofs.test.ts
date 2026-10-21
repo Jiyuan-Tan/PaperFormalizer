@@ -201,6 +201,15 @@ describe("proof edits: the printed proof revised in place", () => {
   /** The proof's second unit, "Then … follows.", replaced. */
   const EDIT = { op: "replace", unit: "thm:a/proof/1/2", tex: "By the bias bound $|E\\hat\\theta - \\theta| \\le C h^2$ with $h = n^{-1/6}$, $\\hat\\theta - \\theta = O_p(n^{-1/3})$." };
 
+  it("a step whose words stand as printed and only gains a detail is not marked: its detail is a side note after it; a revised step keeps its detail in its block", () => {
+    const kept = { op: "replace", unit: "thm:a/proof/1/1", tex: "First, $E[X_n] \\to \\mu$ by the law of large numbers.\\vsDetail{The $X_n$ are i.i.d.\\ with finite mean.}" };
+    const revised = { ...EDIT, tex: `${EDIT.tex}\\vsDetail{Here $C$ bounds the second derivative.}` };
+    const out = annotated(input({ patches: { patches: [{ node: "thm:a", corrected_statement: null, proof_note: "derived", ops: [kept, revised] as never }], unfixable: [] } }));
+    expect(out).toContain("First, $E[X_n] \\to \\mu$ by the law of large numbers. \\vsDetail{The $X_n$ are i.i.d.\\ with finite mean.}");
+    expect(out).not.toContain("\\vsStep{First");
+    expect(out).toContain(`\\vsStep{Then $\\hat\\theta - \\theta = O_p(n^{-1/2})$ follows.} \\vsCorrectedStep{${revised.tex}}`);
+  });
+
   it("each run of replaced steps red with its replacement blue right after (adjacent steps one block), no note on the proof", () => {
     const out = annotated(input({
       patches: { patches: [{ node: "thm:a", corrected_statement: null, proof_note: "derived", ops: [EDIT, { op: "replace", unit: "thm:a/proof/1/1", tex: "First, $E[X_n] \\to \\mu$ by the law of large numbers. The variance is $O(1/n)$." }] as never }], unfixable: [] },

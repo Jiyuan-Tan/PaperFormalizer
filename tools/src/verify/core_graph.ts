@@ -17,7 +17,7 @@
  *   • one REMAP (`remapNodeIds`) rewrites every id-keyed artifact when a V1 round removes or
  *     renames a node that carries records.
  */
-import { revisesProof, type PatchOp } from "./ops.js";
+import { revisesProof, splitDetails, type PatchOp } from "./ops.js";
 import { createHash } from "node:crypto";
 import type { Core, CoreAssumption, CoreStatement, CoreSymbol, ScopedClause } from "../core/schema.js";
 import { normalizeSymbol } from "../core/symbol_names.js";
@@ -100,7 +100,8 @@ export type SplitKind = "corollary" | "proposition";
 export function splitKind(proof: string | null | undefined, parentLabel: string | null | undefined, umbrella = false): SplitKind {
   if (umbrella) return "proposition";
   const label = parentLabel?.trim();
-  return !label || citedLabels(proof ?? "").includes(label) ? "corollary" : "proposition";
+  // the proof the author reads: a citation inside a detail only is none
+  return !label || citedLabels(splitDetails(proof ?? "").text).includes(label) ? "corollary" : "proposition";
 }
 /** The kind of each block of a core (`split_from` set), by its id (`splitKind` on its `proof_tex` and
  * its parent's `tex_locator.label`). */

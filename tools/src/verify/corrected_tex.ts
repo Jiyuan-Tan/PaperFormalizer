@@ -64,7 +64,7 @@ const PRINTED = new Set(["vsPrintedProof"]);
 /** Arguments each macro of the annotated paper takes. */
 const ARITY: Record<string, number> = {
   vsAt: 2, vsOriginal: 1, vsStep: 1, vsStruck: 1, vsStruckRed: 1, vsCorrected: 1, vsClarified: 1, vsCorrectedStep: 1,
-  vsProposed: 1, vsProposedStep: 1, vsNote: 1, vsRewind: 1, vsCap: 1, vsReading: 1, vsReadingOwner: 1, vsReadingSymbol: 2, vsCondition: 1, vsConditionOwner: 1,
+  vsProposed: 1, vsProposedStep: 1, vsNote: 1, vsRewind: 1, vsCap: 1, vsReading: 1, vsReadingOwner: 1, vsReadingSymbol: 2, vsCondition: 1, vsConditionOwner: 1, vsDetail: 1,
   vsProof: 1, vsProposedProof: 1, vsPrintedProof: 1, vsCorollary: 3, vsProposedCorollary: 3, vsCorollaryProof: 3, vsSplitProposition: 3, vsProposedSplitProposition: 3, vsSplitPropositionProof: 3, vsFit: 1, vsDisplay: 1, vsFitIn: 2, vsMathEnv: 2, vsItem: 1, vsPar: 0, vsLine: 0, vsSub: 0, vsBreak: 0, vsLabel: 1,
 };
 const VS = new RegExp(String.raw`\\(${Object.keys(ARITY).sort((a, b) => b.length - a.length).join("|")})(?![A-Za-z])`, "gu");
@@ -169,7 +169,8 @@ export function laid(s: string): string {
         case "vsLabel": return `\\label{${k.args[0]!.trim()}}`;
         case "vsItem": return `\n\n\\noindent ${k.args[0]!.trim()}`;
         case "vsPar": case "vsLine": case "vsSub": case "vsBreak": return "\n\n";
-        case "vsPrintedProof": return "";
+        // A detail of a proof step (the fixer's, for the referee and the Lean proof): never in the paper.
+        case "vsPrintedProof": case "vsDetail": return "";
         default: return k.args.map(laid).join(" ");
       }
     })

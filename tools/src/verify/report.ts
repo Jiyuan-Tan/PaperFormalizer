@@ -1250,7 +1250,7 @@ export function renderReport(json: VerifyReportJson): string {
     const count = (k: string): number => changed.filter((r) => kind(r) === k).length;
     L.push(
       `${changed.length} of ${json.results.length} result(s) differ from the version you provided — ` +
-        `${count("repaired")} repaired, ${count("written")} with the proof written out in full (no error), ` +
+        `${count("repaired")} repaired, ${count("written")} with the proof completed (no error), ` +
         `${count("reading")} only with a side condition or reading made explicit; ` +
         "the others are as printed. " +
         (json.run.early_stop
@@ -1268,7 +1268,7 @@ export function renderReport(json: VerifyReportJson): string {
         L.push(`- corrected: ${c.corrected ? line(c.corrected) : "statement unchanged"}`);
         if (r.umbrella) L.push(`- an umbrella over ${json.results.filter((x) => x.split_from === r.node_id).map((x) => `\`${x.node_id}\``).join(", ")}: no Lean declaration of its own, established exactly when all of them are`);
         if (kind(r) === "reading") L.push(r.findings.some(isMadePrecise) ? "- no error: the printed statement did not determine the claim; the reading adopted is stated, and a referee pass confirmed it" : "- no error: only a side condition or reading the referee made explicit (see below)");
-        if (kind(r) === "written") L.push("- no error: the proof as printed could not be checked, so it was written out in full (below)");
+        if (kind(r) === "written") L.push("- no error: the proof as printed could not be checked, so its steps were completed (below)");
       }
       for (const d of c.dropped_dependencies) L.push(`- no longer uses \`${d}\``);
       for (const h of c.referee_conditions) {

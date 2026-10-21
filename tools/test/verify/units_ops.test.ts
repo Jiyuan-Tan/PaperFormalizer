@@ -141,6 +141,18 @@ describe("ops: resolution and materialization", () => {
     expect(materializeReply({ patches: [{ node: "lem:a", ops: [], proof_note: null }], unfixable: [] }, () => scope(src), () => false).violations).toEqual([expect.stringContaining("prints no proof of this result — give the full proof")]);
   });
 
+  it("a detail (\\vsDetail) rides in the amended proof the referee and the Lean stages read; a statement, a reading or a block's statement takes none", () => {
+    const src = paper();
+    const step = { op: "replace", unit: "lem:a/proof/1/2", to: null, tex: "Hence $h \\le 2c$.\\vsDetail{As $h = 2f$ and $f \\le c$.}" };
+    const d = materializeReply({ patches: [{ node: "lem:a", ops: [step], proof_note: null }], unfixable: [] }, () => scope(src), () => true);
+    expect(d.violations).toEqual([]);
+    expect((d.raw as { patches: Array<{ proof_note: string }> }).patches[0]!.proof_note).toContain("Hence $h \\le 2c$.\\vsDetail{As $h = 2f$ and $f \\le c$.}");
+    const stmt = { op: "replace", unit: "lem:a/1/5", to: null, tex: "Then $h(x) \\le 3$.\\vsDetail{x}" };
+    expect(materializeReply({ patches: [{ node: "lem:a", ops: [stmt], proof_note: null }], unfixable: [] }, () => scope(src), () => true).violations).toEqual([expect.stringContaining("replaces text of the statement and holds a `\\vsDetail`")]);
+    const reading = { node: "lem:a", ops: [step], proof_note: null, readings: ["$h$ is measurable.\\vsDetail{x}"] };
+    expect(materializeReply({ patches: [reading], unfixable: [] }, () => scope(src), () => true).violations).toEqual([expect.stringContaining("a reading or a block's statement holds a `\\vsDetail`")]);
+  });
+
 });
 
 // ---------------------------------------------------------------------------------------------

@@ -11,6 +11,9 @@
  * changes are marked (a repair is replacements of the paper's units, user decision 2026-09-26; a
  * hypothesis is added by restating, and the note says which); a change identical to the printed text
  * as printed is not marked; each result gets one note, after the statement.
+ * A corrected proof step's details (`\vsDetail`, the fixer's: what the referee and the Lean proof need
+ * beyond the paper's level of detail) are side notes beside the step; a step whose words stand as printed
+ * is not marked, its details set after it.
  * Pinned readings still standing as assumptions get a note after their statement (`\vsReading`,
  * "Clarification:"; the owner's `\vsReadingOwner`, "Clarification (author):"; a symbol's
  * `\vsReadingSymbol`, "Clarification (symbol …):").
@@ -74,7 +77,7 @@ import {
 import { envImbalance } from "./tex_balance.js";
 import { balancedLikeUnit, bodyDefinitionList, readPaperText, texVerdictKey, texVerdicts, withLocalBodyDefinitions, type TexFragmentKind } from "./tex_fragment_check.js";
 import { SYMBOL_PIN_OF, conditionsOn, fullReadingText, pinsOn, splitCorollaryId, splitKind } from "./core_graph.js";
-import { PROOF_UNCHANGED, isProofOp, isStatementOp, materializeRepair, nodePassage as unitPassage, resolveOps, sliceOffsets, statementSpan, type PassageSources, type PatchOp } from "./ops.js";
+import { PROOF_UNCHANGED, isProofOp, isStatementOp, splitDetails, materializeRepair, nodePassage as unitPassage, resolveOps, sliceOffsets, statementSpan, type PassageSources, type PatchOp } from "./ops.js";
 import { PaperUnits, flatLineStart, isControlLine, type Unit } from "./units.js";
 import { BUILTIN_ENVS, FURTHER_PROOF_SEPARATOR, parseTheoremCounters } from "./tex_envs.js";
 import { blankTexComments } from "../shared/tex_text.js";
@@ -934,11 +937,16 @@ export function planAnnotations(input: AnnotationInput): AnnotationPlan {
       }
       return { from, to, text: blueTex(`${t}${units.flat.slice(at, to)}`) || "\\textit{(removed)}" };
     };
-    /** A run the result leaves as printed up to spacing and punctuation: no change. */
+    /** A run the result leaves as printed up to spacing and punctuation, its details (`\\vsDetail`) apart: no
+     * change. Its details are set unmarked after it, as side notes. */
     const unchanged = (members: readonly RangeMark[]): boolean => {
       if (members.some((m) => m.redOnly)) return false;
       const r = runText(members);
-      return r.text !== null && bare(r.text) === bare(blueTex(units.flat.slice(r.from, r.to)));
+      if (r.text === null) return false;
+      const { text, details } = splitDetails(r.text);
+      if (bare(text) !== bare(blueTex(units.flat.slice(r.from, r.to)))) return false;
+      for (const d of details) ops.push({ start: r.to - reg.start, end: r.to - reg.start, blue: null, note: d, noteMacro: "vsDetail", how });
+      return true;
     };
     // A no-change run is dropped before runs are joined, so it never rides in a neighbour's block.
     const runs = marks.filter((m) => m.first >= 0 && m.last >= m.first).map(closed).filter((m) => !unchanged([m]));
@@ -1818,7 +1826,7 @@ export function renderAnnotationsMd(slug: string, main: string, r: Omit<Annotate
     `Annotated copy of \`source/\`; main file \`${main}\`. Red (\`\\vsOriginal\`, "Original:"): the paper's text that is wrong or ambiguous (kind \`not determined\`: it does not say enough to be checked, and nothing was shown false). ` +
       "Blue (`\\vsCorrected` / `\\vsClarified`: \"Corrected:\", \"Clarified statement:\"): the corrected text (a hypothesis a repair adds is written into it; the note says which). Proofs (kind `corrected proof`) are revised in place: each printed step a repair changes red (`\\vsStep`, \"Original:\") with its replacement right after (`\\vsCorrectedStep`, \"Corrected:\"); a repair without step edits (or a result whose proof was not located) gets one block per result (`\\vsProof`, \"Corrected proof (confirmed):\"; a pending one `\\vsProposedProof`) after the proof; when the paper prints none, right after the result, naming every lemma it uses and, by the paper's section numbers, where their corrections are marked; else right after the result, saying the proof could not be located. " +
       "Red struck through (`\\vsStruck`; `\\vsStruckRed`, red alone, where a line cannot cross the text), kind `no longer used`: an assumption or definition no result uses after the repairs, with a note naming the results that now state the conditions they use. " +
-      "Orange (`\\vsNote`, \"LeanSmith: …\"): what is wrong, the proposed fix, and whether the fix weakens the result; `\\vsReading` (\"Clarification:\", kind `clarification (reading)`): a reading pinned for formalization; `\\vsReadingOwner` (\"Clarification (author):\"): the owner's reading of a finding the owner withdrew; `\\vsReadingSymbol` (\"Clarification (symbol …):\"): the reading of a symbol; `\\vsCondition` (\"Bookkeeping condition:\", kind `condition added`; the owner's `\\vsConditionOwner`, \"Bookkeeping condition:\"): a condition the verified statement carries beyond the printed text, at the end of each result carrying it. " +
+      "Orange (`\\vsNote`, \"LeanSmith: …\"): what is wrong, the proposed fix, and whether the fix weakens the result; `\\vsReading` (\"Clarification:\", kind `clarification (reading)`): a reading pinned for formalization; `\\vsReadingOwner` (\"Clarification (author):\"): the owner's reading of a finding the owner withdrew; `\\vsReadingSymbol` (\"Clarification (symbol …):\"): the reading of a symbol; `\\vsCondition` (\"Bookkeeping condition:\", kind `condition added`; the owner's `\\vsConditionOwner`, \"Bookkeeping condition:\"): a condition the verified statement carries beyond the printed text, at the end of each result carrying it; `\\vsDetail` (\"Proof detail:\"): the fixer's detail of a corrected proof step, for the referee and the Lean proof, beside the step it completes. " +
       "Awaiting your decision (a halt only): `\\vsProposed` (blue, \"Proposed repair (awaiting your decision):\"), `\\vsProposedStep` / `\\vsProposedProof` (blue, \"Corrected (for the proposed statement):\", \"Proof of the proposed statement:\" — the decision is on the statement, never on its proof), `\\vsRewind` (\"Proposed correction (awaiting your decision):\"), `\\vsCap` (\"Repair not settled (awaiting your decision):\"). " +
       "Lines are the ORIGINAL source's.",
     "",

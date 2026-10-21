@@ -75,14 +75,16 @@ Reply with ONE JSON object, the whole patch file:
     null: one unit). That is the only operation: an insertion replaces the unit it follows by that
     unit's text followed by the new text; a hypothesis is added by replacing the statement's units
     with the statement restated with it. Change only the units that change: an unchanged unit is
-    never replaced, and a statement unit's content is never dropped. For one item, `tex` is its
+    never replaced (a proof unit that only gains a detail is replaced by its printed text with the
+    detail after it), and a statement unit's content is never dropped. For one item, `tex` is its
     content (its \item stays), and for a step of an algorithm its text (its step command stays;
     one op per step, a control line replaced by a control line); a run of several units takes
     every list it touches whole, its `tex`
     then giving the list environment. Replacing proof units revises the printed proof. The runner
     applies the ops to the printed text: the corrected text and the amended proof it derives are
     what the referee checks and the Lean stages formalize, and the author sees each op in the paper,
-    the units it replaces red and its `tex` blue. A hypothesis the paper states outside the
+    the units it replaces red and its `tex` blue, its details (`\vsDetail`, STYLE below) as side
+    notes. A hypothesis the paper states outside the
     statement stays where the paper states it (the result still uses it, unless listed in `drops`). An op's `tex` never creates
     an equation number or a label (the runner stars numbered displays and drops new labels); a
     display that takes the place of a labelled display of the units it replaces keeps that
@@ -137,8 +139,8 @@ Reply with ONE JSON object, the whole patch file:
     results — group by shared conditions: never one block per formula when several follow from the
     same lemma under the same hypotheses. `statement` is complete and self-contained (its own
     conditions and conclusion; it may cite the result and others by `\ref`); `follows` is its
-    complete proof, printed as the block's proof: written at the level of detail of the paper's own
-    proofs, every step derived, citing by `\ref` every result it uses; `adds` lists the
+    complete proof, printed as the block's proof: written as the paper writes its proofs, with its
+    details aside (STYLE below), citing by `\ref` every result it uses; `adds` lists the
     assumptions and definitions of the core its statement itself imposes or uses (else null);
     `title` is the few words the author would name it by (else null).
     A block is shown as a COROLLARY when it is a consequence of the corrected statement, and as a
@@ -165,7 +167,8 @@ Reply with ONE JSON object, the whole patch file:
     (the ops) and the rest are its blocks. Never an umbrella for a single claim, for a further
     conclusion under the same assumptions, or for length.
   - `proof_note`: null when the paper prints a proof of the node (proof ops carry any change).
-    Only when it prints none: the COMPLETE proof, every step derived in full.
+    Only when it prints none: the complete proof, written as the paper writes its proofs, with its
+    details aside (STYLE below).
   - `owner_explanation`: the error and the repair for the paper's AUTHOR, shown next to the
     printed statement, so that the author sees from it alone WHY the statement needs correcting.
     A `gives_up` that is not null names every class of cases the repair excludes and every limit
@@ -179,8 +182,21 @@ Reply with ONE JSON object, the whole patch file:
   The runner keeps every `unfixable` entry of a previous PATCHES FILE that carries a
   `suggested_repair`: the owner rules on those.
 
-A proof step you write or change (in ops or `proof_note`) is derived in full — never "similar",
-"analogous", "as above" or "omitted": the referee checks every step and sends such a step back.
+=== STYLE: THE AUTHOR'S PROOF, ITS DETAILS ASIDE ===
+
+The author reads your proof text as a revision of their own proof. A proof step you write or change
+(in ops, `proof_note` or a block's `follows`) is written as the paper writes its proofs: its level of
+detail, its notation, its way of citing. Keep the paper's argument: revise the steps a finding names,
+never replace a proof that a revised step would repair by a new proof. A step the paper takes from
+another proof stays so ("as in the proof of Theorem~\ref{…}, with … in place of …") when that argument
+applies; a standard fact is cited, not derived again.
+What the referee or the Lean proof needs beyond that — the instantiation of a reused argument, the
+check of a side condition, a computation the paper leaves to the reader — goes in a DETAIL,
+`\vsDetail{…}`, right after the sentence or display it completes (never inside mathematics). The
+author sees it as a side note beside the step; the referee and the Lean stages read the step with
+its details, as one argument. The step with its details is complete: a detail derives what it adds
+— never "similar", "analogous", "as above" or "omitted" — and the referee sends a gap back. A
+statement, a reading, `owner_explanation` and `reason` take no detail.
 Answer every defect a finding lists, and keep meeting the EARLIER FINDINGS shown for the node.
 
 An OWNER READINGS block, when present, lists readings the paper's owner adopted when
@@ -224,8 +240,8 @@ node itself a patch with no ops (its note's `gives_up` null), its `proof_note` n
 restated.
 
 A step the referee could not check (a `clarify` finding on the paper's own proof, a repair it
-could not reproduce) is step (1): write it out in full as proof ops on that step's units, nothing
-else changed.
+could not reproduce) is step (1): an op on that step's units completes it — its words revised only
+where they are wrong, what the referee missed in a detail after it — nothing else changed.
 When the referee says a patch is not minimal, adopt the smaller change it names.
 A `consequence` finding: the result held as printed, but no longer follows from a repaired result
 it uses. Patch it as a consequence of that repair (`consequence_of`, `reason`): restate it or

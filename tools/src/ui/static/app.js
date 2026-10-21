@@ -790,8 +790,8 @@ function withDrawers(page, w) {
    kept when the reader leaves the paper, and put back as it stands when they return to it unchanged. */
 let KEPT = null; // { paper: the payload it was drawn from, el }
 function keepBody() { const el = $("#paper-body"); if (el && P.paper && P.drawn.body === P.paper) KEPT = { paper: P.paper, el }; }
-const KIND_TAG = { note: ["LeanSmith", "t-note"], reading: ["Clarification", ""], "reading-owner": ["Author's reading", ""], "reading-symbol": ["Symbol", ""], condition: ["Bookkeeping condition", "t-cond"], rewind: ["Proposed correction", "t-note"], cap: ["Repair not settled", "t-note"] };
-const CHIP = { note: "Findings", reading: "Clarifications", "reading-owner": "Clarifications", "reading-symbol": "Clarifications", condition: "Bookkeeping", rewind: "Findings", cap: "Findings" };
+const KIND_TAG = { note: ["LeanSmith", "t-note"], reading: ["Clarification", ""], "reading-owner": ["Author's reading", ""], "reading-symbol": ["Symbol", ""], condition: ["Bookkeeping condition", "t-cond"], detail: ["Proof detail", "t-detail"], rewind: ["Proposed correction", "t-note"], cap: ["Repair not settled", "t-note"] };
+const CHIP = { note: "Findings", reading: "Clarifications", "reading-owner": "Clarifications", "reading-symbol": "Clarifications", condition: "Bookkeeping", detail: "Proof details", rewind: "Findings", cap: "Findings" };
 
 async function showPaper(slug, first) {
   const at = `/api/runs/${encodeURIComponent(slug)}`, here = () => S.view === "paper" && S.slug === slug;
@@ -1259,7 +1259,7 @@ function drawCards() {
   const chips = {};
   for (const c of comments) chips[CHIP[c.kind] ?? "Findings"] = (chips[CHIP[c.kind] ?? "Findings"] ?? 0) + 1;
   // most to least consequential; a symbol's reading is a clarification, a condition added to a statement its own group
-  $("#chips").innerHTML = ["Findings", "Bookkeeping", "Clarifications"].filter((k) => chips[k]).map((k) => [k, chips[k]]).map(([k, n]) => `<button class="chip" type="button" data-chip="${k}" aria-pressed="${!P.off.has(k)}" title="${P.off.has(k) ? "Hidden — click to show" : "Click to hide"}">${k} ${n}</button>`).join("");
+  $("#chips").innerHTML = ["Findings", "Bookkeeping", "Clarifications", "Proof details"].filter((k) => chips[k]).map((k) => [k, chips[k]]).map(([k, n]) => `<button class="chip" type="button" data-chip="${k}" aria-pressed="${!P.off.has(k)}" title="${P.off.has(k) ? "Hidden — click to show" : "Click to hide"}">${k} ${n}</button>`).join("");
   filterCards();
 }
 /* A comment's card as the page state has it now (its reading being edited, its issue being written). */
@@ -1509,7 +1509,7 @@ function cardTops(cards, k, gap) {
 /* Margin layout, as in a word processor's comment rail: the open card sits exactly beside its mark
    and the others give way above and below it. Cards not open show their first lines only; two or
    more on one paragraph fold into a stack (the most important on top) that opens with any of them. */
-const KIND_RANK = { note: 1, rewind: 2, cap: 2, "reading-owner": 3, reading: 4, condition: 4, "reading-symbol": 5 };
+const KIND_RANK = { note: 1, rewind: 2, cap: 2, "reading-owner": 3, reading: 4, condition: 4, "reading-symbol": 5, detail: 6 };
 function layout() {
   const host = $("#rail-cards"); if (!host) return;
   const cards = $$(".card", host);

@@ -83,6 +83,14 @@ describe("tex_html: the paper page renderer", () => {
     expect(r.html).toContain("katex");
     expect(r.html).not.toContain("mathbbm");
   });
+  it("a corrected step's detail (\\vsDetail) is a side note beside the step, not text of the step", () => {
+    const r = renderPaper({ files: { "m.tex": String.raw`\begin{document}\begin{proof}\vsCorrectedStep{As in the proof of Lemma 1, with $g$ for $f$.\vsDetail{There $f \le c$ was used only through $\|f\|_\infty$; $\|g\|_\infty \le c$ too.}}\end{proof}\end{document}` }, main: "m.tex" });
+    expect(r.comments).toHaveLength(1);
+    expect(r.comments[0]).toMatchObject({ kind: "detail", label: "Proof detail" });
+    expect(r.html).toContain('class="cmark k-detail"');
+    expect(r.html).toContain('title="proof detail"');
+    expect(r.html.replace(/<[^>]+>/g, "")).not.toContain("was used only through");
+  });
   it("renders math with the paper's macros, escapes text, and turns annotations into marks and a comment", () => {
     expect(r.html).toContain("katex");
     expect(r.html).not.toContain("katex-error");

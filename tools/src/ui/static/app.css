@@ -419,6 +419,7 @@ span.rv { padding: 0 0.15rem; }
 .cmark.k-note, .cmark.k-rewind, .cmark.k-cap { background: var(--accent-bright); border-color: var(--accent-bright); }
 /* a condition added to the statement: the colour of added text, not a clarification's */
 .cmark.k-condition { background: var(--ins); border-color: var(--ins); }
+.cmark.k-detail { border-color: var(--def-bar); }
 .cmark.linked { box-shadow: 0 0 0 3px var(--lean-wash), 0 0 0 4px var(--lean); }
 .p.marks { height: 0; margin: 0; line-height: 0; text-align: right; }
 .tex-raw { font-family: var(--mono); font-size: 0.85em; background: var(--del-wash); color: var(--del); border-radius: 3px; padding: 0 0.25em; }
@@ -441,6 +442,7 @@ mjx-container[jax="SVG"][display="true"] { display: block; text-align: center; }
 .ctag { font-family: var(--mono); font-size: 0.58rem; letter-spacing: 0.08em; text-transform: uppercase; font-weight: 700; border-radius: var(--r-badge); padding: 0.08rem 0.4rem; margin-left: auto; background: var(--axiom-wash); color: var(--axiom); }
 .ctag.t-note { background: var(--accent-wash); color: var(--accent); }
 .ctag.t-cond { background: var(--ins-wash); color: var(--ins); }
+.ctag.t-detail { background: var(--def-wash); color: var(--def-bar); }
 .cbody { overflow-wrap: anywhere; }
 .cbody .katex-display { overflow-x: auto; overflow-y: hidden; }
 /* a comment's own line breaks — its (a) (b) (c) items among them — stand apart */

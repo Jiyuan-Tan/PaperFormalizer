@@ -669,6 +669,7 @@ const ANNOTATION_NOTES: Record<string, { kind: string; label: string }> = {
   vsReadingOwner: { kind: "reading-owner", label: "Clarification (author)" },
   vsCondition: { kind: "condition", label: "Bookkeeping condition" },
   vsConditionOwner: { kind: "condition", label: "Bookkeeping condition" },
+  vsDetail: { kind: "detail", label: "Proof detail" },
   vsRewind: { kind: "rewind", label: "Proposed correction — awaiting a ruling" },
   vsCap: { kind: "cap", label: "Repair not settled — awaiting a ruling" },
 };
@@ -1332,7 +1333,7 @@ function render(ctx: Ctx, s: string, inline = false): string {
       const key = earlier ? `${hash}-${earlier + 1}` : hash;
       ctx.comments.push({ id, key, excerpt: a.body.replace(/\s+/g, " ").trim().slice(0, 160), kind, label, html: render(ctx, a.body, true).replace(/<br>/g, '<span class="nl"></span>'), env });
       if (kind === "reading" || kind === "reading-owner") for (const node of readingsStated(ctx.pinned, a.body, env)) ctx.readings[node] ??= id;
-      out += `<span class="cmark k-${kind}" data-c="${id}" title="${kind.startsWith("reading") ? "clarification" : "LeanSmith comment"}"></span>`;
+      out += `<span class="cmark k-${kind}" data-c="${id}" title="${kind.startsWith("reading") ? "clarification" : kind === "detail" ? "proof detail" : "LeanSmith comment"}"></span>`;
       continue;
     }
     if (name === "tcAnchor") {

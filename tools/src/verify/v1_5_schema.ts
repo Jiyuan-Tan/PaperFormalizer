@@ -169,7 +169,8 @@ export const NODE_FIELDS_TEXT = `      id                      the core node id,
                               witness lives in, in one line. null otherwise.
       minimality              true EXACTLY when this node is a patch part graded "error"
                               only because it is correct but not minimal (the witness then
-                              names the strictly weaker sufficient replacement); false
+                              names the smaller sufficient change: a weaker replacement, or a
+                              passage to keep as printed or move into a detail); false
                               otherwise.
       weakens_contribution    true EXACTLY when this node is a patched node graded "error" because the repair, though it
                               holds, weakens what the paper claims (the PATCHES rule).

@@ -325,7 +325,7 @@ export function renderPlainSections(json: VerifyReportJson): string[] {
     if (readings.length > 0) L.push("**How a statement is read.**", "", ...readings, "");
     if (sides.length > 0) L.push("**Side conditions the proofs use without stating them.**", "", ...sides, "");
     if (symbols.length > 0) L.push("**Notation.**", "", ...symbols.map((s) => `- $${s.symbol}$: ${one(s.reading)}`), "");
-    if (written.length > 0) L.push("**Proofs written out in full** (the printed argument could not be checked as it stands; no error was found).", "", ...written.map((r) => `- ${name(r.node_id)}`), "");
+    if (written.length > 0) L.push("**Proofs completed** (a step of the printed argument could not be checked as it stands, so it was completed; no error was found).", "", ...written.map((r) => `- ${name(r.node_id)}`), "");
     if (withdrawn.length > 0) {
       L.push("**Objections raised during the review and withdrawn.** The paper's owner showed that each misreads the paper; the printed statement stands under the reading given.", "");
       for (const w of withdrawn) L.push(`- **${name(w.node)}.** ${one(w.reason)}`);

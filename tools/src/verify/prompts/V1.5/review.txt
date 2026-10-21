@@ -151,10 +151,18 @@ of that patch, with the misfit as the witness, never drift.
 - Judge a patched statement as written under all its hypotheses, with the paper's
   proof amended by the proof change: reproduce the
   amended argument as you would the paper's. `ok` when it holds; `error` with a
-  witness when it does not. The proof change must be a complete proof of what it
-  changes: a step it asserts without deriving is `unclear` — name that step in
-  `detail`, so the fixer can write it out. Name every such step and every error of
-  the repair in the same verdict, not the first one only.
+  witness when it does not. The proof change, read with its details
+  (`\vsDetail{…}`: side notes the author sees beside a step), must be a complete
+  proof of what it changes: a step neither it nor its details derive is `unclear` —
+  name that step in `detail`, so the fixer can complete it. A step reusing an
+  argument of the paper ("as in the proof of …, with …") is derived when that
+  argument applies under the stated substitution: check it there. Name every such
+  step and every error of the repair in the same verdict, not the first one only.
+  The author reads the proof change as a revision of their own proof, in its
+  style: one that plainly rewrites steps no finding needs changed, derives again
+  what the paper takes from another proof or a standard fact, or writes into the
+  proof a derivation the paper's own proofs leave out, is a larger change (`minimality: true`, the witness
+  naming the passage to keep as printed or to move into a detail).
 - A patched result is graded on its corrected text and its remaining wiring: a
   node its patch lists in `drops` (a hypothesis, or a result it no longer relies
   on) or `supersedes` (restated in the corrected text) no longer applies to it,
@@ -233,8 +241,8 @@ of that patch, with the misfit as the witness, never drift.
   that a result using the parent is wired to its blocks (the printed result
   is the parent together with them). Grade each block as a patched statement, its
   proof as written: `ok` when it holds as written and follows from its own
-  conditions and the results it cites, by `follows` (a step it asserts without
-  deriving is `unclear`); `error` with a witness when it does not. The proof need
+  conditions and the results it cites, by `follows` with its details (a step
+  neither derives is `unclear`); `error` with a witness when it does not. The proof need
   not go through the parent: never require it to. The citation must be honest —
   a proof that cites the parent must really use it, and one that uses the parent
   must cite it; a mismatch is a defect of that proof's text, never of the paper
@@ -304,7 +312,7 @@ CORRECTNESS — one of four grades:
 
   unclear      you could not reproduce a step and you have NO witness. Not an
                error of the paper, but nothing unchecked passes: the step is
-               sent back to be written out in full and checked again. Say in
+               sent back to be completed and checked again. Say in
                `detail` exactly which step and what you could not close —
                every such step, not the first only.
 

@@ -48,6 +48,35 @@ export const isStatementOp = (op: PatchOp): boolean => !isProofOp(op);
 /** Does this repair revise the printed proof? */
 export const revisesProof = (r: { ops?: readonly PatchOp[] | null }): boolean => (r.ops ?? []).some(isProofOp);
 
+/** Does `tex` hold a DETAIL (`\vsDetail{…}`, the fixer's): what the referee and the Lean proof need of a
+ * proof step beyond the paper's level of detail, shown to the author beside the step (`annotate_tex.ts`)
+ * and left out of the corrected paper (`corrected_tex.ts`). Only proof text takes one. */
+export const hasDetail = (tex: string): boolean => /\\vsDetail(?![A-Za-z])/u.test(tex);
+
+/** `tex` apart from its details: the text the author reads, and each detail's content, in order (a use
+ * whose argument does not close is left in the text). Pure. */
+export function splitDetails(tex: string): { text: string; details: string[] } {
+  const re = /\\vsDetail(?![A-Za-z])\s*\{/gu;
+  const details: string[] = [];
+  let text = "";
+  let at = 0;
+  for (let m = re.exec(tex); m; m = re.exec(tex)) {
+    let depth = 1;
+    let j = m.index + m[0].length;
+    for (; j < tex.length && depth > 0; j += 1) {
+      if (tex[j] === "\\") j += 1;
+      else if (tex[j] === "{") depth += 1;
+      else if (tex[j] === "}") depth -= 1;
+    }
+    if (depth > 0) break;
+    text += tex.slice(at, m.index);
+    details.push(tex.slice(m.index + m[0].length, j - 1).trim());
+    at = j;
+    re.lastIndex = j;
+  }
+  return { text: text + tex.slice(at), details };
+}
+
 /** The TeX an op writes. */
 export const opTex = (op: PatchOp): string => op.tex;
 

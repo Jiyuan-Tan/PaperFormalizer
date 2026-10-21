@@ -24,7 +24,7 @@ import { copyFile, readFile } from "node:fs/promises";
 import path from "node:path";
 import { z } from "zod";
 import { OWNER_EXPLANATION_JSON, OwnerExplanationFieldSchema, TEX_STRING, TEX_STRING_NONEMPTY, TEX_STRING_OR_NULL } from "./owner_text.js";
-import { OPS_JSON, PROOF_UNCHANGED, PatchOpSchema, materializeRepair, nodePassage, resolveOps, revisesProof, supersededNodes, type PassageSources, type PatchOp, type RepairScope } from "./ops.js";
+import { OPS_JSON, PROOF_UNCHANGED, PatchOpSchema, hasDetail, isStatementOp, materializeRepair, nodePassage, resolveOps, revisesProof, supersededNodes, type PassageSources, type PatchOp, type RepairScope } from "./ops.js";
 import { RefCoreSchema, type RefCore } from "./ref_core.js";
 import { loadUnits } from "./units.js";
 import { parseTypedCore } from "../core/core_io.js";
@@ -812,6 +812,12 @@ export function materializeReply(
     const parsed = z.array(PatchOpSchema).safeParse(x.ops ?? []);
     if (!parsed.success) return void violations.push(`${where}: \`ops\` does not parse: ${parsed.error.issues.map((i) => i.message).join("; ")}`);
     x.ops = parsed.data;
+    // A detail completes a proof step: the statement, a reading or a block's statement takes none.
+    parsed.data.forEach((op, k) => {
+      if (isStatementOp(op) && hasDetail(op.tex)) violations.push(`${where}: ops[${k}] (${op.op}) replaces text of the statement and holds a \`\\vsDetail\`: only proof text (proof ops, \`proof_note\`, a block's \`follows\`) takes a detail`);
+    });
+    const texts = (v: unknown, pick: (e: Record<string, unknown>) => unknown = (e) => e): string[] => (Array.isArray(v) ? v.map((e) => pick(e as Record<string, unknown>)).filter((t): t is string => typeof t === "string") : []);
+    if ([...texts(x.readings), ...texts(x.corollaries, (c) => c?.statement)].some(hasDetail)) violations.push(`${where}: a reading or a block's statement holds a \`\\vsDetail\`: only proof text (proof ops, \`proof_note\`, a block's \`follows\`) takes a detail`);
     // An umbrella takes its texts from the pipeline (ops on it are a violation, `validatePatchFile`).
     if (x.umbrella === true && Array.isArray(x.corollaries) && x.corollaries.length > 0 && parsed.data.length === 0) {
       x.corrected_statement = UMBRELLA_STATEMENT;

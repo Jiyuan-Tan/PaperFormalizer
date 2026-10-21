@@ -106,6 +106,9 @@ export const VS_PREAMBLE_BLOCK = [
   "\\newcommand{\\vsReading}[1]{\\vsBlock{vsNote}{\\normalfont\\small}{Clarification:}{#1}}",
   "\\newcommand{\\vsReadingOwner}[1]{\\vsBlock{vsNote}{\\normalfont\\small}{Clarification (author):}{#1}}",
   "\\newcommand{\\vsReadingSymbol}[2]{\\vsBlock{vsNote}{\\normalfont\\small}{Clarification (symbol #1):}{#2}}",
+  // A detail of a corrected proof step: what the referee and the Lean proof need beyond the paper's
+  // level of detail, beside the step it completes (the fixer writes it in its proof text).
+  "\\newcommand{\\vsDetail}[1]{\\vsBlock{vsNote}{\\normalfont\\small}{Proof detail:}{#1}}",
   // A condition the verified statement carries beyond the printed text (the referee's, the owner's).
   "\\newcommand{\\vsCondition}[1]{\\vsBlock{vsNote}{\\normalfont\\small}{Bookkeeping condition:}{#1}}",
   "\\newcommand{\\vsConditionOwner}[1]{\\vsBlock{vsNote}{\\normalfont\\small}{Bookkeeping condition:}{#1}}",
@@ -157,7 +160,7 @@ export function struckMacro(tex: string): "vsStruck" | "vsStruckRed" {
 }
 
 /** The macro for a note part: the run's note, or a decision awaiting the owner. */
-export type NoteMacro = "vsNote" | "vsRewind" | "vsCap";
+export type NoteMacro = "vsNote" | "vsRewind" | "vsCap" | "vsDetail";
 
 /** Packages (and classes) that load xcolor themselves. */
 const XCOLOR_LOADERS = /\\(?:usepackage|RequirePackage)\s*(?:\[[^\]]*\])?\s*\{[^}]*\b(?:xcolor|tikz|pgf|pgfplots|colortbl|beamerarticle)\b[^}]*\}/;

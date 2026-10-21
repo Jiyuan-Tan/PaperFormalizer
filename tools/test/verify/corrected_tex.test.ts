@@ -170,6 +170,8 @@ describe("correctedTex — the corrected paper's source", () => {
   });
 
   it("writes the layout macros out and keeps a text nobody uses any more as printed, listed once", () => {
+    // a proof step's detail is for the referee and the Lean proof: the corrected paper prints the step alone
+    expect(laid("Hence $h \\le 2c$.\\vsDetail{As $f \\le c$, $h = 2f \\le 2c$.} Done.")).toBe("Hence $h \\le 2c$. Done.");
     expect(laid("A \\vsItem{(i)} one; \\vsItem{(ii)} two. \\vsPar B \\vsDisplay{y=1}")).toBe("A \n\n\\noindent (i) one; \n\n\\noindent (ii) two. \n\nB \n\\[\ny=1\n\\]\n");
     const r = correctedTex(`${at("def:d", "printed")}\\vsStruck{Let $d=1$.} ${at("def:d", "printed")}\\vsStruckRed{\\[ d=1 \\]} ${at("def:d", "no longer used")}\\vsNote{No result uses this.}`, OPTS);
     expect(r.tex.trim()).toBe("Let $d=1$. \\[ d=1 \\]");
