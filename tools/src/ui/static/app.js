@@ -36,7 +36,10 @@ if (SNAP) {
   if (!purify?.sanitize) throw new Error("the page of a shared paper needs DOMPurify");
   const clean = (html) => purify.sanitize(String(html), { ADD_ATTR: ["target"], FORBID_TAGS: ["form", "style"] });
   let inside = false; // (DOMPurify itself may parse through innerHTML)
-  const cleaned = (set) => function (v) { if (inside) return set.call(this, v); inside = true; let html; try { html = clean(v); } finally { inside = false; } return set.call(this, html); };
+  // An SVG element's markup is cleaned as SVG (the proof map): read as HTML, DOMPurify drops every SVG element in it.
+  const SVG = "http://www.w3.org/2000/svg";
+  const cleanSvg = (v) => clean(`<svg xmlns="${SVG}">${v}</svg>`).replace(/^<svg[^>]*>/u, "").replace(/<\/svg>$/u, "");
+  const cleaned = (set) => function (v) { if (inside) return set.call(this, v); inside = true; let html; try { html = this?.namespaceURI === SVG ? cleanSvg(v) : clean(v); } finally { inside = false; } return set.call(this, html); };
   for (const name of ["innerHTML", "outerHTML"]) {
     const d = Object.getOwnPropertyDescriptor(Element.prototype, name);
     Object.defineProperty(Element.prototype, name, { ...d, set: cleaned(d.set) });
@@ -936,8 +939,8 @@ function drawSnapStatus() {
   const login = /^[A-Za-z0-9-]{1,39}$/.test(sh?.shared_by ?? "") ? sh.shared_by : null;
   const on = /^\d{4}-\d{2}-\d{2}/.test(sh?.shared_at ?? "") ? sh.shared_at.slice(0, 10) : null;
   const by = login ? `<p>Shared by <a href="https://github.com/${esc(login)}" target="_blank" rel="noopener">@${esc(login)}</a>${on ? ` on ${esc(on)}` : ""}.</p>` : "";
-  const files = [...(P.paper?.pdf ? [[P.paper.pdf, "Corrected paper (PDF)"]] : []), ...(SNAP.leanDir ? [["lean/", "Lean code"]] : [])];
-  $("#status").innerHTML = `<div class="status"><div class="line"><span class="pill b-done">${esc(String(s.verdict ?? "report").replace(/_/g, " "))}</span><h2>Checked by PaperFormalizer</h2></div>${b ? `<p>${esc(b)}</p>` : ""}${by}<div class="actions"><button class="btn" type="button" data-report>Full report</button>${files.map(([f, label]) => `<a class="btn" href="${esc(f)}" target="_blank" rel="noopener">${esc(label)}</a>`).join("")}</div></div>`;
+  const files = [...(P.paper?.pdf ? [[P.paper.pdf, "Revised paper (PDF)"]] : []), ...(SNAP.leanDir ? [["lean/", "Lean code"]] : [])];
+  $("#status").innerHTML = `<div class="status"><div class="line"><span class="pill b-done">${esc(String(s.verdict ?? "report").replace(/_/g, " "))}</span><h2>Formalized with PaperFormalizer</h2></div>${b ? `<p>${esc(b)}</p>` : ""}${by}<div class="actions"><button class="btn" type="button" data-report>Full report</button>${files.map(([f, label]) => `<a class="btn" href="${esc(f)}" target="_blank" rel="noopener">${esc(label)}</a>`).join("")}</div></div>`;
 }
 /* The bundle's REPORT.md, typeset in the drawer (a shared paper's page): its headings, paragraphs and
    lists, **bold** and `code`, and its formulas by KaTeX under the paper's macros. A plain reader of
