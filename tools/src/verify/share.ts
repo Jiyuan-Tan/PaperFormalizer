@@ -34,7 +34,7 @@ export { isFinal, readShare, SHARE_FILE, shareRecordView, type ShareRecord, type
 export const DEFAULT_SHARE_URL = "https://theoremchecker-share.comments-worker.workers.dev";
 export const SHARE_URL_ENV = "PAPERFORMALIZER_SHARE_URL";
 /** The public site of shared papers: a paper's page is `<site>papers/<slug>/`. */
-export const SITE_URL = "https://jiyuan-tan.github.io/PaperFormalizerPapers/";
+export const SITE_URL = "https://paperformalizer.org/";
 const PAGE_FILE = "page/page.json";
 /** A paper folder's name in the registry. */
 const REGISTRY_SLUG = /^[a-z0-9][a-z0-9_-]{0,79}$/u;

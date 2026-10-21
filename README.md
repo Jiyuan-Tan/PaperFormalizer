@@ -356,7 +356,7 @@ after `source scripts/node_env.sh`.
 ### Sharing
 
 `paperformalizer share` (or Share on a finished paper's page) publishes a finished run on the public
-site of shared papers, <https://jiyuan-tan.github.io/PaperFormalizerPapers/>, after you sign in to
+site of shared papers, <https://paperformalizer.org/>, after you sign in to
 GitHub in your browser — identity only, no permission. It is optional; `doc/USER_MANUAL.md`
 ("Sharing a finished paper") says what is published and how.
 

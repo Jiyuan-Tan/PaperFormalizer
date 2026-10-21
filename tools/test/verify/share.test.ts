@@ -248,7 +248,7 @@ describe("share: what is sent, and how", () => {
       "  slug       a_paper",
       "  files      11 files, N kB",
       "  parts      MATCH.md, REPORT.md, bundle.json, corrected_paper/ (3 files), f4_reviews.log, f4_seal.json, lean/ (2 files), page/ (1 file)",
-      "  public at  https://jiyuan-tan.github.io/PaperFormalizerPapers/papers/a_paper/",
+      "  public at  https://paperformalizer.org/papers/a_paper/",
       "",
       "You confirm in your browser: sign in to GitHub — the share service learns your name and account, nothing else, and asks for no permission — and press \"Share publicly\". The paper is attributed to that account. Unless you are one of the registry's trusted sharers, its owner reviews the paper before it is published.",
       "",
@@ -276,7 +276,7 @@ describe("share: what is sent, and how", () => {
     const out = lines.join("\n");
     expect(out).toContain(`Sent. To finish, open this page, sign in to GitHub and press "Share publicly":\n  ${SERVICE}/claim/${id}\nCheck code: K7PQ (the page you open shows the same code; continue only if it does).`);
     expect(out).toContain("confirmed by @alice: the registry is checking the paper …");
-    expect(lines.at(-1)).toBe("published: https://jiyuan-tan.github.io/PaperFormalizerPapers/papers/a_paper/");
+    expect(lines.at(-1)).toBe("published: https://paperformalizer.org/papers/a_paper/");
     expect(opened).toEqual([`${SERVICE}/claim/${id}`]);
     expect(await readShare(run)).toMatchObject({ status: "published", login: "alice", url: paperUrl(SLUG) });
     await expect(runShareCli([SLUG, "--force"])).rejects.toThrow(/unknown flag --force/);

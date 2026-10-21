@@ -454,7 +454,7 @@ on file recorded). With `--out` both go to that directory and the run is left un
 ### Sharing a finished paper
 
 A finished paper can be published on the public site of shared papers
-(<https://jiyuan-tan.github.io/PaperFormalizerPapers/>), at `papers/<slug>/` there. Sharing is your
+(<https://paperformalizer.org/>), at `papers/<slug>/` there. Sharing is your
 decision, and it is public:
 
 - **What it publishes**: the whole bundle — the corrected paper's TeX source and PDF, the findings
