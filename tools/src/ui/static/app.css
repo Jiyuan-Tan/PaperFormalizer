@@ -127,7 +127,7 @@ textarea { width: 100%; min-height: 4.2rem; resize: vertical; }
 /* toolkit page */
 .page { max-width: 1140px; margin: 0 auto; padding: 2.2rem 16px 6rem; }
 .head { display: grid; grid-template-columns: minmax(0, 1fr) auto; gap: 1.5rem; align-items: end; border-bottom: 2px solid var(--ink); padding-bottom: 1rem; }
-.head h1 { font-weight: normal; font-size: 2.05rem; margin: 0.25rem 0 0.3rem; line-height: 1.15; }
+.head h1 { font-weight: 600; font-size: 2.05rem; margin: 0.25rem 0 0.3rem; line-height: 1.15; }
 .meta { color: var(--ink-soft); font-size: var(--fs-sm); display: flex; flex-wrap: wrap; align-items: baseline; gap: 0.25rem 1rem; }
 .stats { display: flex; gap: 1.6rem; flex-wrap: wrap; }
 .stat b { display: block; font-size: 1.55rem; font-weight: normal; font-variant-numeric: tabular-nums; line-height: 1.1; }
@@ -235,7 +235,7 @@ dl.dmeta { display: grid; grid-template-columns: 4.6rem minmax(0, 1fr); gap: 0.2
 article.paper { padding: 2rem 0 8rem; line-height: 1.62; min-width: 0; }
 .byline { color: var(--accent); font-size: var(--fs-sm); margin-bottom: 1.4rem; line-height: 1.6; }
 .byline .tokens { color: var(--ink-faint); font-size: var(--fs-xs); }
-h1.ptitle { font-weight: normal; font-size: 1.9rem; line-height: 1.25; margin: 0 0 0.4rem; }
+h1.ptitle { font-weight: 600; font-size: 1.9rem; line-height: 1.25; margin: 0 0 0.4rem; }
 .authors { color: var(--ink-soft); margin-bottom: 1.1rem; }
 .status { border-left: 3px solid var(--rule); padding: 0.25rem 1.1rem; margin: 1rem 0 1.4rem; display: grid; gap: 0.5rem; }
 .status.needs { border-left-color: var(--accent-bright); }
