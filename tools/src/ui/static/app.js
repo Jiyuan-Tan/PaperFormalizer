@@ -966,8 +966,12 @@ function drawSnapStatus() {
    lists, **bold** and `code`, and its formulas by KaTeX under the paper's macros. A plain reader of
    the few forms the report writes, not Markdown at large; what it inserts passes DOMPurify. */
 function reportHTML(md) {
-  const m = P.paper?.macros;
-  const inline = (t) => t.replace(/\\label\{[^{}]*\}\s*/g, "").split(/`([^`]+)`/).map((part, k) => (k % 2 ? `<code>${esc(part)}</code>` : typeset(part, m, (x) => esc(x).replace(/\*\*([^*]+)\*\*/g, "<strong>$1</strong>")))).join("");
+  const m = P.paper?.macros, labels = P.paper?.labels ?? {};
+  // a reference the report quotes from the paper (`Lemma~\ref{x}`): the number the paper prints for it
+  const refs = (t) => t.replace(/~(?=\\(?:eq|c|C)?ref\b)/g, " ").replace(/\\(eqref|ref|cref|Cref)\s*\{([^{}]*)\}/g, (all, cmd, l) => {
+    const n = labels[l.trim()]; return n ? (cmd === "eqref" ? `(${n})` : String(n)) : all;
+  });
+  const inline = (t) => refs(t).replace(/\\label\{[^{}]*\}\s*/g, "").split(/`([^`]+)`/).map((part, k) => (k % 2 ? `<code>${esc(part)}</code>` : typeset(part, m, (x) => esc(x).replace(/\*\*([^*]+)\*\*/g, "<strong>$1</strong>")))).join("");
   const out = [];
   let para = [], list = null;
   const flush = () => {
@@ -986,6 +990,31 @@ function reportHTML(md) {
   flush();
   return out.join("");
 }
+/** `md` in pieces of about `size` characters, each cut at a blank line the next block starts after (not a
+ *  list item's continuation): each piece reads alone, and the pieces joined are `md`. Pure. */
+function reportChunks(md, size = 20000) {
+  const lines = String(md).split(/(?<=\n)/), out = [];
+  let cur = "";
+  lines.forEach((line, k) => {
+    cur += line;
+    if (cur.length >= size && !line.trim() && !/^\s/.test(lines[k + 1] ?? "x")) { out.push(cur); cur = ""; }
+  });
+  if (cur) out.push(cur);
+  return out;
+}
+/** The report in the drawer, a piece at a time: the first pieces at once, each later one as it nears
+ *  the drawer's view — a long report (a megabyte, thousands of formulas) would otherwise be typeset
+ *  whole before anything shows. */
+function drawReport(md) {
+  const host = $("#d-body"), parts = reportChunks(md);
+  host.innerHTML = `<div class="report">${parts.map((p, i) => `<section class="rpart" data-i="${i}" style="min-height:${Math.min(4000, Math.ceil(p.length / 90) * 1.2)}em"></section>`).join("")}</div>`;
+  const fill = (sec) => { if (sec.dataset.done) return; sec.dataset.done = "1"; sec.innerHTML = reportHTML(parts[Number(sec.dataset.i)]); sec.style.minHeight = ""; };
+  const secs = $$(".rpart", host);
+  secs.slice(0, 2).forEach(fill);
+  if (!window.IntersectionObserver) { secs.forEach(fill); return; }
+  const io = new IntersectionObserver((ents) => { for (const en of ents) if (en.isIntersecting) { io.unobserve(en.target); fill(en.target); } }, { root: host, rootMargin: "1500px 0px" });
+  secs.slice(2).forEach((x) => io.observe(x));
+}
 async function openReport() {
   closeDrawer();
   $("#d-kind").textContent = "report"; $("#d-title").textContent = "Full report";
@@ -996,7 +1025,7 @@ async function openReport() {
   try {
     const r = await fetch("REPORT.md", { credentials: "same-origin" });
     if (!r.ok) throw new Error(`${r.status} ${r.statusText}`);
-    $("#d-body").innerHTML = `<div class="report">${reportHTML(await r.text())}</div>`;
+    drawReport(await r.text());
   } catch (err) { $("#d-body").innerHTML = `<p class="none">The report could not be read: ${esc(err.message)}</p>`; }
   $("#d-body").scrollTop = 0;
 }

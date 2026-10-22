@@ -310,7 +310,7 @@ function runPage(slug: string, payloads: Record<string, unknown>, more: Record<s
     if (init?.headers?.["If-None-Match"] === etag) return { status: 304, ok: false, headers: { get: () => etag }, json: async () => ({}) };
     return { status: data === undefined ? 404 : 200, ok: data !== undefined, statusText: "", headers: { get: () => etag }, json: async () => data ?? { error: `no ${url}` } };
   };
-  const exposed = "SNAP, snapLoad, P, S, C, LS, drawLib, drawPaperBody, connect, route, refreshInbox, showPaper, openDrawer, closeDrawer, drawCards, drawStatus, drawMap, selectNode, jumpTo, activate, repairClick, acceptRepairRecs, promoClick, reportHTML";
+  const exposed = "SNAP, snapLoad, reportChunks, P, S, C, LS, drawLib, drawPaperBody, connect, route, refreshInbox, showPaper, openDrawer, closeDrawer, drawCards, drawStatus, drawMap, selectNode, jumpTo, activate, repairClick, acceptRepairRecs, promoClick, reportHTML";
   expect(js).toContain("/* ── boot ");
   const body = js.replace(/\/\* ── boot [\s\S]*$/, `return { ${exposed} };\n})();`).replace(/^\(\(\) => \{$/m, "return (() => {");
   const names = ["EventSource", "window", "document", "location", "fetch", "navigator", "CSS", "performance", "requestAnimationFrame", "setInterval", "setTimeout", "clearTimeout", "NodeFilter", "Element"];
@@ -323,6 +323,23 @@ function runPage(slug: string, payloads: Record<string, unknown>, more: Record<s
 }
 
 describe("page: a shared paper's report, typeset", () => {
+  it("a reference the report quotes from the paper reads as the number the paper prints; an unknown label stays as written", () => {
+    const { page } = runPage("p", {});
+    (page.P as unknown as { paper: unknown }).paper = { labels: { "lem:a": "E.4", "eq:s": "3.1" } };
+    const html = page.reportHTML!(String.raw`The proof of Lemma~\ref{lem:a} uses (\ref{eq:s}), \eqref{eq:s} and \cref{lem:x}.`) as string;
+    expect(html).toBe(String.raw`<p>The proof of Lemma E.4 uses (3.1), (3.1) and \cref{lem:x}.</p>`);
+  });
+  it("a long report is cut into pieces at blank lines that start a block: each piece reads alone, and together they are the report", () => {
+    const { page } = runPage("p", {});
+    const md = ["## A", "", "para one", "line two", "", "- item", "  continued", "", "  - not a block start", "", "## B", "", "last"].join("\n");
+    const parts = page.reportChunks!(md, 1) as string[];
+    expect(parts.join("")).toBe(md);
+    // never cut before an indented line (a list item's continuation), always after a blank line
+    for (const p of parts.slice(0, -1)) expect(p).toMatch(/\n\s*\n$/u);
+    expect(parts.some((p) => p.startsWith("  "))).toBe(false);
+    expect(parts.length).toBeGreaterThan(3);
+    expect(page.reportChunks!(md) as string[]).toEqual([md]);
+  });
   it("headings, paragraphs, lists (an item's lines joined), bold, code and formulas; a \\label is dropped; the text is escaped", () => {
     const { page } = runPage("p", {});
     const md = "# Correctness report — p\n\n**Verdict: ERRORS FOUND**\n\n## What was wrong\n\n### Theorem 3 — repaired\n\n- **As printed.** \\label{thm:a} For all $a$,\n  \\[ a \\ge 0 . \\]\n- **Lean.** `Papers.T3` <b>x</b>\n\nA closing line.";
