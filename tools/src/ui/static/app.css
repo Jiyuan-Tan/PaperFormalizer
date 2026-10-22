@@ -352,6 +352,8 @@ figure img.fig { background: #fff; border-radius: 3px; }
 figure.fig:has(> .subfig) { display: flex; flex-wrap: wrap; justify-content: center; align-items: flex-start; gap: 0.8rem 2%; }
 figure.fig:has(> .subfig) > * { flex: 1 1 100%; }
 figure.fig:has(> .subfig) > .subfig { flex: 1 1 18rem; max-width: 100%; margin: 0; }
+/* a part that carries its own caption reads as a figure of its own: the full width, its caption under it */
+figure.fig:has(> .subfig) > .subfig:has(.caption-text) { flex-basis: 100%; }
 /* a caption inside a minipage or subfigure reads as a figure caption: small, left-aligned, under its picture */
 .subfig .caption-text { display: block; font-size: 0.9rem; line-height: 1.45; color: var(--ink-soft); text-align: left; margin-top: 0.5rem; }
 figcaption { font-size: 0.9rem; color: var(--ink-soft); text-align: left; margin: 0.5rem auto 0; max-width: 46rem; }

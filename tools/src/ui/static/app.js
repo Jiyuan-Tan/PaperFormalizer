@@ -30,7 +30,7 @@ const app = $("#app");
    paper body of a page the site's build cleaned with the same rules (`trusted`), was cleaned there. */
 const SNAP = (() => {
   const el = document.currentScript, src = el?.dataset.snapshot;
-  return src ? { src, viewer: new URL(".", el.src).href, slug: null, share: null, leanDir: null, views: null, trusted: null } : null;
+  return src ? { src, viewer: new URL(".", el.src).href, slug: null, share: null, leanDir: null, views: null, trusted: null, math: null, mathSet: null } : null;
 })();
 if (SNAP) {
   const purify = window.DOMPurify;
@@ -40,7 +40,7 @@ if (SNAP) {
   // An SVG element's markup is cleaned as SVG (the proof map): read as HTML, DOMPurify drops every SVG element in it.
   const SVG = "http://www.w3.org/2000/svg";
   const cleanSvg = (v) => clean(`<svg xmlns="${SVG}">${v}</svg>`).replace(/^<svg[^>]*>/u, "").replace(/<\/svg>$/u, "");
-  const cleaned = (set) => function (v) { if (inside || (SNAP.trusted !== null && v === SNAP.trusted)) return set.call(this, v); inside = true; let html; try { html = this?.namespaceURI === SVG ? cleanSvg(v) : clean(v); } finally { inside = false; } return set.call(this, html); };
+  const cleaned = (set) => function (v) { if (inside || (SNAP.trusted !== null && v === SNAP.trusted) || SNAP.mathSet?.has(v)) return set.call(this, v); inside = true; let html; try { html = this?.namespaceURI === SVG ? cleanSvg(v) : clean(v); } finally { inside = false; } return set.call(this, html); };
   for (const name of ["innerHTML", "outerHTML"]) {
     const d = Object.getOwnPropertyDescriptor(Element.prototype, name);
     Object.defineProperty(Element.prototype, name, { ...d, set: cleaned(d.set) });
@@ -87,6 +87,9 @@ async function snapLoad() {
   if (s.paper && typeof s.paper === "object") {
     s.paper.html = retag(strict(s.paper.html));
     if (s.sanitized === "site") SNAP.trusted = s.paper.html;
+    // the site's build moves each formula's markup out of the body into `paper.math` (a placeholder
+    // `.kx` stands for it): formulas are drawn as their part of the paper nears the window
+    if (s.sanitized === "site" && Array.isArray(s.paper.math)) { SNAP.math = s.paper.math.map((x) => String(x)); SNAP.mathSet = new Set(SNAP.math); }
     for (const c of Array.isArray(s.paper.comments) ? s.paper.comments : []) if (c && typeof c === "object") { c.html = strict(c.html); if (c.label != null) c.label = strict(c.label); }
     for (const t of Array.isArray(s.paper.toc) ? s.paper.toc : []) if (t && typeof t === "object") t.html = strict(t.html);
   }
@@ -561,6 +564,7 @@ const XLP = { ranges: new Map(), whole: new Set(), root: null };
 const xlCanPaint = () => typeof Highlight === "function" && Boolean(CSS.highlights);
 /** The visible characters of `root` without white space, each with its text node and offset. */
 function xlChars(root) {
+  drawMath(root); // its words are read with its formulas
   const chars = []; let str = "";
   const walk = document.createTreeWalker(root, NodeFilter.SHOW_TEXT, { acceptNode: (n) => (n.parentElement?.closest(".rv-tag, .env, .eqn, .katex-mathml, .cmark, .rv.del, .fbadge, .rv-proofonly") ? NodeFilter.FILTER_REJECT : NodeFilter.FILTER_ACCEPT) });
   for (let n = walk.nextNode(); n; n = walk.nextNode()) {
@@ -1170,7 +1174,7 @@ function drawPaperBody() {
   if (!P.paper) { body.innerHTML = `<p class="empty-note">The paper's source is not in this run yet.</p>`; $("#toc").innerHTML = ""; return; }
   MARKS = ENVS = null; P.drawn.body = P.paper;
   if (KEPT?.paper === P.paper) { body.replaceWith(KEPT.el); $$(".linked", KEPT.el).forEach((x) => x.classList.remove("linked")); linkedId = null; }
-  else { body.innerHTML = P.paper.html; setupPdfFigures(body); }
+  else { body.innerHTML = P.paper.html; setupPdfFigures(body); setupMath(body); }
   // (a heading's own links — a \ref in it — are unwrapped: an <a> inside the entry's would split it in two)
   $("#toc").innerHTML = P.paper.toc.map((t) => `<li class="l${t.level}"><a href="#${esc(t.id)}" data-sec="${esc(t.id)}">${t.html?.replace(/<\/?a\b[^>]*>/g, "") ?? esc(t.text)}</a></li>`).join("");
 }
@@ -1189,6 +1193,20 @@ function drawBadges() {
     // a corollary block is headed already, and a result an environment holds is shown there
     a.innerHTML = !r || a.closest(".rv.cor, .prose-res") || (r.label && inEnv.has(r.label)) ? "" : resBadge(r);
   }
+}
+/* Formulas of a shared paper the site's build set apart (`SNAP.math`): each placeholder in `root`
+   replaced by its formula's markup. */
+function drawMath(root) {
+  if (!SNAP?.math || !root?.querySelectorAll) return;
+  for (const ph of root.querySelectorAll(".kx[data-k]")) { const h = SNAP.math[Number(ph.dataset.k)]; if (typeof h === "string") ph.outerHTML = h; }
+}
+/** The formulas of each part of the paper drawn as that part nears the window (all at once without IntersectionObserver). */
+function setupMath(body) {
+  if (!SNAP?.math) return;
+  const parts = [...body.children].filter((b) => b.querySelector(".kx"));
+  if (!window.IntersectionObserver) { parts.forEach(drawMath); return; }
+  const io = new IntersectionObserver((ents) => { for (const en of ents) if (en.isIntersecting) { io.unobserve(en.target); drawMath(en.target); } }, { rootMargin: "1500px 0px" });
+  parts.forEach((b) => io.observe(b));
 }
 /* PDF figures: pdf.js draws page 1 when the figure scrolls into view (loaded once, lazily). */
 let pdfjsP = null;

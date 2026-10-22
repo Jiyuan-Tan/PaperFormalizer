@@ -622,6 +622,26 @@ describe("page: a shared paper the site's build cleaned", () => {
     el.innerHTML = '<p data-copy="x">other</p>';
     expect([el.innerHTML, seen]).toEqual(["<p>other</p>", ['<p data-copy="x">other</p>']]);
   });
+  it("draws a formula the build set apart from its table, as is; a page not cleaned by the site has no table", async () => {
+    const math = ['<span class="katex" data-copy="k">x</span>'];
+    const snap = (sanitized: string | undefined) => ({
+      schema: 1, slug: "p9", title: "T", authors: "", verdict: null, buckets: {}, tokens: null, main: "main.tex", leanDir: null, sanitized,
+      results: [], leanDefs: {}, places: {}, texHtml: {}, paper: { title: "T", authors: "", html: '<p>Let <span class="kx" data-k="0"></span>.</p>', math, toc: [], comments: [], envs: [], labels: {} },
+    });
+    class Element { h = ""; get innerHTML() { return this.h; } set innerHTML(v: string) { this.h = v; } get outerHTML() { return this.h; } set outerHTML(v: string) { this.h = v; } insertAdjacentHTML(_w: string, v: string) { this.h += v; } }
+    for (const [sanitized, table] of [["site", math], [undefined, null]] as const) {
+      const seen: string[] = [];
+      const DOMPurify = { addHook: () => {}, sanitize: (h: string) => { seen.push(h); return h.replace(/ data-copy="[^"]*"/g, ""); } };
+      const { page } = runPage("p9", { "page/page.json": snap(sanitized), "share.json": null }, { DOMPurify }, { src: "page/page.json", Element });
+      await (page.snapLoad as () => Promise<unknown>)();
+      const SNAP = page.SNAP as unknown as { math: string[] | null };
+      expect(SNAP.math).toEqual(table);
+      // a formula of the table goes in as is; the same string on a page the site did not clean is cleaned
+      const el = new Element();
+      el.outerHTML = math[0]!;
+      expect(el.outerHTML).toBe(table ? math[0] : '<span class="katex">x</span>');
+    }
+  });
 });
 
 describe("page: the whole script draws a run from what the server sends", () => {

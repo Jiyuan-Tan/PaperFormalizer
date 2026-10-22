@@ -46,6 +46,12 @@ const AUX = String.raw`\newlabel{thm:a}{{7}{3}}
 \bibcite{hajek}{{1}{1960}{{H\'ajek}}{{}}}`;
 
 describe("tex_html: the paper page renderer", () => {
+  it("a \\cref to a section or an appendix reads with its name, as cleveref's options print it", () => {
+    const body = String.raw`\begin{document}\section{Intro}\label{sec:a}See \cref{sec:a}, \Cref{sec:b} and \cref{app:c}.\section{Model}\label{sec:b}x\appendix\section{Proofs}\label{app:c}y\end{document}`;
+    const text = (pre: string) => renderPaper({ files: { "m.tex": pre + body }, main: "m.tex" }).html.replace(/<[^>]+>/g, "");
+    expect(text(String.raw`\usepackage[capitalize,noabbrev]{cleveref}`)).toContain("See Section 1, Section 2 and Appendix A.");
+    expect(text(String.raw`\usepackage{cleveref}`)).toContain("See section 1, Section 2 and appendix A.");
+  });
   it("a \\cref inside math reads with its name, as outside math", () => {
     const tex = String.raw`\newtheorem{assumption}{Assumption}\begin{document}\begin{assumption}\label{asp:a}X.\end{assumption}
 Then $y \le 1 \text{ by \cref{asp:a}}$ and $z \text{ by \ref{asp:a}}$.\end{document}`;

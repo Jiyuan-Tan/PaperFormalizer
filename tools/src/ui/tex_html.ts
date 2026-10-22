@@ -260,6 +260,8 @@ export interface Preamble {
   graphicsPath: string[];
   /** etoolbox toggles as the preamble leaves them (`\newtoggle`, `\toggletrue`, `\togglefalse`, `\settoggle`). */
   toggles: Record<string, boolean>;
+  /** cleveref's `capitalize` option (`\cref` names a section "Section" rather than "section"), when loaded. */
+  crefCapital: boolean;
 }
 
 /** An etoolbox toggle command (`\newtoggle{t}`, `\toggletrue{t}`, `\togglefalse{t}`, `\settoggle{t}{true}`)
@@ -382,7 +384,8 @@ export function readPreamble(pre: string): Preamble {
     const o = optArg(pre, i); if (o) i = o.end;
     return arg(pre, i).body;
   };
-  return { title: simple("title"), authors: simple("author"), macros, textMacros, delimited, envDefs, theorems, numberWithin, graphicsPath, toggles };
+  const crefCapital = [...pre.matchAll(/\\usepackage\s*\[([^\]]*)\]\s*\{[^}]*\bcleveref\b[^}]*\}/gu)].some((m) => /\bcapitali[sz]e\b/u.test(m[1]!));
+  return { title: simple("title"), authors: simple("author"), macros, textMacros, delimited, envDefs, theorems, numberWithin, graphicsPath, toggles, crefCapital };
 }
 
 // ── aux: numbers and pages of labels, citations ──────────────────────────────
@@ -697,6 +700,8 @@ interface Ctx {
   aux: AuxIndex;
   own: Record<string, string>;
   refNames: Record<string, string>;
+  /** A label a heading carries (`\section{…}\label{…}`): "section", or "appendix" after `\appendix`. */
+  refKinds: Record<string, "section" | "appendix">;
   counters: Record<string, number>;
   sec: number[];
   appendix: boolean;
@@ -804,7 +809,7 @@ function renderMath(ctx: Ctx, tex00: string, display: boolean): string {
     // for \cref its name, as outside math
     .replace(/\\(eqref|ref|cref|Cref|autoref)\s*\{([^{}]*)\}/g, (_, cmd: string, l: string) => {
       const label = labelKey(l); const n = ctx.aux.labels[label] ?? ctx.own[label]; const t = n ? n : "??";
-      const name = ["cref", "Cref", "autoref"].includes(cmd) ? ctx.refNames[label] : null;
+      const name = refName(ctx, cmd, label);
       return cmd === "eqref" ? `(${t})` : name ? `\\text{${name}}~${t}` : t;
     });
   const key = `${display ? "D" : "I"}${tex}`;
@@ -855,12 +860,24 @@ function citeText(ctx: Ctx, cmd: string, keys: string, opt: string | null): stri
   return textual ? `<span class="cite">${body}</span>` : `<span class="cite">[${body}]</span>`;
 }
 
+/** The name `\cref` / `\Cref` / `\autoref` gives `label`: its environment's (`refNames`), else a heading's
+ *  ("Section", "Appendix"; lower case for `\cref` without cleveref's `capitalize`, hyperref's for `\autoref`). */
+function refName(ctx: Ctx, cmd: string, label: string): string | null {
+  if (!["cref", "Cref", "autoref"].includes(cmd)) return null;
+  const own = ctx.refNames[label];
+  if (own) return own;
+  const kind = ctx.refKinds[label];
+  if (!kind) return null;
+  const word = kind === "appendix" ? "Appendix" : "Section";
+  return cmd === "Cref" || (cmd === "cref" && ctx.pre.crefCapital) || (cmd === "autoref" && kind === "appendix") ? word : word.toLowerCase();
+}
+
 function refText(ctx: Ctx, cmd: string, ref: string): string {
   const label = labelKey(ref);
   const n = ctx.aux.labels[label] ?? ctx.own[label];
   if (ctx.pass === 2 && (n === undefined || n === "") && !ctx.health.unresolvedRefs.includes(label)) ctx.health.unresolvedRefs.push(label);
   const t = n !== undefined && n !== "" ? esc(n) : "??";
-  const name = ["cref", "Cref", "autoref"].includes(cmd) ? ctx.refNames[label] : null;
+  const name = refName(ctx, cmd, label);
   return `<a class="ref" href="#lbl-${esc(slug(label))}">${cmd === "eqref" ? `(${t})` : name ? `${esc(name)} ${t}` : t}</a>`;
 }
 
@@ -1366,6 +1383,8 @@ function render(ctx: Ctx, s: string, inline = false): string {
       if (num) ctx.target = num;
       const text = render(ctx, a.body, true);
       const id = `sec-${num ? num.replace(/\./g, "-") + "-" : ""}${slug(a.body.replace(/\\[A-Za-z]+/g, ""))}`;
+      const lm = /^\s*\\label\s*\{([^{}]*)\}/u.exec(s.slice(i));
+      if (lm) ctx.refKinds[labelKey(lm[1]!)] = ctx.appendix ? "appendix" : "section";
       if (ctx.pass === 2) ctx.toc.push({ id, text: `${num ? num + " " : ""}${plain(text)}`, html: `${num ? esc(num) + " " : ""}${text.replace(/\sid="[^"]*"/g, "").replace(/<a\b[^>]*>|<\/a>/g, "")}`, level });
       out += `</div><h${level + 1} id="${id}">${num ? `<span class="secnum">${num}</span> ` : ""}${text}</h${level + 1}><div class="p">`;
       continue;
@@ -1943,9 +1962,9 @@ export function paperRenderer(input: PaperInput): { paper: RenderedPaper; fragme
   const mathMacros = katexMacros(pre.macros);
   let mj: ((tex: string, display: boolean) => string) | null = null;
   const mathjax = () => (mj ??= mathjaxRenderer({ ...KATEX_GAPS, ...mathMacros }));
-  const refNames: Record<string, string> = {};
+  const refNames: Record<string, string> = {}, refKinds: Record<string, "section" | "appendix"> = {};
   const make = (pass: 1 | 2, own: Record<string, string>, cache: Map<string, string>): Ctx => ({
-    pass, pre, aux, own, refNames, counters: {}, sec: [], appendix: false, target: "", toc: [], comments: [], envs: [], anchors: {}, readings: {}, pinned,
+    pass, pre, aux, own, refNames, refKinds, counters: {}, sec: [], appendix: false, target: "", toc: [], comments: [], envs: [], anchors: {}, readings: {}, pinned,
     envStack: [], splits: {}, umbrellas: { names: [], open: null }, splitKinds: input.splitKinds ?? {}, lastEnv: null, lastEnvEnd: null, marks: 0, footnotes: 0, mathCache: cache, kinds: input.theoremKinds ?? {},
     assets, assetsLower: new Map([...assets].map((a) => [a.toLowerCase(), a])), assetBase: input.assetBase ?? "", tikz: input.tikz ? { url: input.tikz.url, page: new Map(input.tikz.pictures.map((t, k) => [t.replace(/\s+/g, ""), k + 1])) } : null, health, depth: 0, expansions: 0, mathMacros,
     mathOverrides: input.mathOverrides ?? {}, mathjax, toggles: { ...pre.toggles },
