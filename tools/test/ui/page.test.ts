@@ -598,6 +598,32 @@ describe("page: a shared paper's page, drawn read-only from its bundle's snapsho
   });
 });
 
+describe("page: a shared paper the site's build cleaned", () => {
+  it("is not cleaned again: its paper body is inserted as is, and any other HTML still passes the sanitizer", async () => {
+    const body = '<p data-copy="kept">Body</p><span class="rv-tag">Corrected</span>';
+    const snap = {
+      schema: 1, slug: "p9", title: "A Paper", authors: "A. Author", verdict: "repaired", buckets: {}, tokens: null, main: "main.tex", leanDir: null, sanitized: "site",
+      results: [], leanDefs: {}, places: {}, texHtml: { a: '<i data-copy="t">t</i>' },
+      paper: { title: "A Paper", authors: "A. Author", html: body, toc: [{ html: '<a data-copy="c">1</a>' }], comments: [{ id: "c1", kind: "note", html: '<b data-copy="n">n</b>', label: "L" }], envs: [], labels: {} },
+    };
+    const seen: string[] = [];
+    const DOMPurify = { addHook: () => {}, sanitize: (h: string) => { seen.push(h); return h.replace(/ data-copy="[^"]*"/g, ""); } };
+    class Element { h = ""; get innerHTML() { return this.h; } set innerHTML(v: string) { this.h = v; } get outerHTML() { return this.h; } set outerHTML(v: string) { this.h = v; } insertAdjacentHTML(_w: string, v: string) { this.h += v; } }
+    const { page } = runPage("p9", { "page/page.json": snap, "share.json": null }, { DOMPurify }, { src: "page/page.json", Element });
+    type Views = { paper: { html: string; toc: Array<{ html: string }>; comments: Array<{ html: string }> }; drawers: { texHtml: Record<string, string> } };
+    const v = await (page.snapLoad as () => Promise<Views>)();
+    // nothing of the page was cleaned on load; the body's tags read in today's words
+    expect(seen).toEqual([]);
+    expect([v.paper.html, v.paper.toc[0]!.html, v.paper.comments[0]!.html, v.drawers.texHtml.a]).toEqual(['<p data-copy="kept">Body</p><span class="rv-tag">Revised</span>', '<a data-copy="c">1</a>', '<b data-copy="n">n</b>', '<i data-copy="t">t</i>']);
+    // the body goes in as is; any other string still passes the sanitizer
+    const el = new Element();
+    el.innerHTML = v.paper.html;
+    expect([el.innerHTML, seen]).toEqual([v.paper.html, []]);
+    el.innerHTML = '<p data-copy="x">other</p>';
+    expect([el.innerHTML, seen]).toEqual(["<p>other</p>", ['<p data-copy="x">other</p>']]);
+  });
+});
+
 describe("page: the whole script draws a run from what the server sends", () => {
   it("says when its picture is no longer the server's: a lost connection, a page updated on disk; a server started anew reloads it", () => {
     const { page, at, location, sources } = runPage("p", {});

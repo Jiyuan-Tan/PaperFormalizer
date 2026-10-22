@@ -26,10 +26,11 @@ const app = $("#app");
    data-snapshot="page/page.json">` (`snapshot.html`). There is no server: the paper's views are cut
    from the bundle's snapshot (`page_snapshot.ts`), nothing is posted, nothing of a run at work is
    drawn, and the bundle's files are linked by paths relative to the page. Anyone may share a bundle,
-   so its snapshot is untrusted: every HTML string this page inserts passes DOMPurify first. */
+   so its snapshot is untrusted: every HTML string this page inserts passes DOMPurify first — or, the
+   paper body of a page the site's build cleaned with the same rules (`trusted`), was cleaned there. */
 const SNAP = (() => {
   const el = document.currentScript, src = el?.dataset.snapshot;
-  return src ? { src, viewer: new URL(".", el.src).href, slug: null, share: null, leanDir: null, views: null } : null;
+  return src ? { src, viewer: new URL(".", el.src).href, slug: null, share: null, leanDir: null, views: null, trusted: null } : null;
 })();
 if (SNAP) {
   const purify = window.DOMPurify;
@@ -39,7 +40,7 @@ if (SNAP) {
   // An SVG element's markup is cleaned as SVG (the proof map): read as HTML, DOMPurify drops every SVG element in it.
   const SVG = "http://www.w3.org/2000/svg";
   const cleanSvg = (v) => clean(`<svg xmlns="${SVG}">${v}</svg>`).replace(/^<svg[^>]*>/u, "").replace(/<\/svg>$/u, "");
-  const cleaned = (set) => function (v) { if (inside) return set.call(this, v); inside = true; let html; try { html = this?.namespaceURI === SVG ? cleanSvg(v) : clean(v); } finally { inside = false; } return set.call(this, html); };
+  const cleaned = (set) => function (v) { if (inside || (SNAP.trusted !== null && v === SNAP.trusted)) return set.call(this, v); inside = true; let html; try { html = this?.namespaceURI === SVG ? cleanSvg(v) : clean(v); } finally { inside = false; } return set.call(this, html); };
   for (const name of ["innerHTML", "outerHTML"]) {
     const d = Object.getOwnPropertyDescriptor(Element.prototype, name);
     Object.defineProperty(Element.prototype, name, { ...d, set: cleaned(d.set) });
@@ -80,12 +81,16 @@ async function snapLoad() {
   const s = await r.json();
   if (s?.schema !== 1 || typeof s.slug !== "string" || !Array.isArray(s.results)) throw new Error("its snapshot is of a layout this page does not read");
   SNAP.leanDir = typeof s.leanDir === "string" ? s.leanDir : null;
+  // The site's build cleans a page with these same rules (its site/sanitize.mjs, `sanitized: "site"`):
+  // then nothing is cleaned again here, and the paper body, the largest by far, is inserted as is.
+  const strict = s.sanitized === "site" ? (html) => String(html ?? "") : SNAP.strict;
   if (s.paper && typeof s.paper === "object") {
-    s.paper.html = retag(SNAP.strict(s.paper.html));
-    for (const c of Array.isArray(s.paper.comments) ? s.paper.comments : []) if (c && typeof c === "object") { c.html = SNAP.strict(c.html); if (c.label != null) c.label = SNAP.strict(c.label); }
-    for (const t of Array.isArray(s.paper.toc) ? s.paper.toc : []) if (t && typeof t === "object") t.html = SNAP.strict(t.html);
+    s.paper.html = retag(strict(s.paper.html));
+    if (s.sanitized === "site") SNAP.trusted = s.paper.html;
+    for (const c of Array.isArray(s.paper.comments) ? s.paper.comments : []) if (c && typeof c === "object") { c.html = strict(c.html); if (c.label != null) c.label = strict(c.label); }
+    for (const t of Array.isArray(s.paper.toc) ? s.paper.toc : []) if (t && typeof t === "object") t.html = strict(t.html);
   }
-  s.texHtml = Object.fromEntries(Object.entries(s.texHtml && typeof s.texHtml === "object" ? s.texHtml : {}).map(([k, v]) => [k, SNAP.strict(v)]));
+  s.texHtml = Object.fromEntries(Object.entries(s.texHtml && typeof s.texHtml === "object" ? s.texHtml : {}).map(([k, v]) => [k, strict(v)]));
   SNAP.share = await fetch("share.json", { credentials: "same-origin" }).then((x) => (x.ok ? x.json() : null)).catch(() => null);
   const pick = (r, keep) => Object.fromEntries(Object.entries(r).filter(([k]) => SNAP_DRAWER.includes(k) === keep));
   const summary = {
