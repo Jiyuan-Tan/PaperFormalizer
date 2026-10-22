@@ -222,6 +222,23 @@ describe("the corrected-paper bundle (V6)", () => {
     expect(await read("page/page.json")).toBe(text);
   });
 
+  it("the TikZ pictures the page draws are carried in corrected_paper/_tikz/, where the page names them", async () => {
+    const run = await seedRun();
+    const main = path.join(run.runDir, "source", "main.tex");
+    await writeFile(main, (await readFile(main, "utf8")).replace("\\end{document}", "\\begin{tikzpicture}\\draw (0,0) -- (1,1);\\end{tikzpicture}\n\\end{document}"), "utf8");
+    await writeFile(path.join(run.runDir, "state.json"), JSON.stringify(run.state), "utf8");
+    await runV6(run); // the page asks for the pictures: their typesetting starts in the run's logs
+    const dir = path.join(run.runDir, "logs", "ui_tikz");
+    const name = (await readdir(dir)).find((f) => f.endsWith(".tex"))!.slice(0, -4);
+    for (let i = 0; i < 300 && !existsSync(path.join(dir, `${name}.pdf`)) && !existsSync(path.join(dir, `${name}.failed`)); i++) await new Promise((r) => setTimeout(r, 100));
+    await writeFile(path.join(dir, `${name}.pdf`), "%PDF-1.4 the pictures\n");
+    await rm(path.join(dir, `${name}.failed`), { force: true });
+    await runV6(run);
+    const bundle = path.join(run.runDir, "bundle");
+    expect(await readFile(path.join(bundle, "page", "page.json"), "utf8")).toContain(`corrected_paper/_tikz/${name}.pdf`);
+    expect(await readFile(path.join(bundle, "corrected_paper", "_tikz", `${name}.pdf`), "utf8")).toBe("%PDF-1.4 the pictures\n");
+  }, 60_000);
+
   it.skipIf(!FILE_SYMLINKS)("a linked source file is copied as the file itself, so the seal can name it", async () => {
     const run = await seedRun();
     const outside = await mkdtemp(path.join(os.tmpdir(), "verify-bundle-link-"));

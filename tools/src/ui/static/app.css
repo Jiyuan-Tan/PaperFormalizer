@@ -347,6 +347,8 @@ figure img.fig { background: #fff; border-radius: 3px; }
 .pdf-fig canvas { max-width: 100%; background: #fff; border-radius: 3px; }
 .pdf-open { position: absolute; top: 0.2rem; right: 0.3rem; font-family: var(--mono); font-size: var(--fs-2xs); background: var(--card); padding: 0 0.3rem; border-radius: 3px; opacity: 0.8; }
 .subfig { display: inline-block; vertical-align: top; max-width: 49%; margin: 0 0.5%; }
+/* a caption inside a minipage or subfigure reads as a figure caption: small, left-aligned, under its picture */
+.subfig .caption-text { display: block; font-size: 0.9rem; line-height: 1.45; color: var(--ink-soft); text-align: left; margin-top: 0.5rem; }
 figcaption { font-size: 0.9rem; color: var(--ink-soft); text-align: left; margin: 0.5rem auto 0; max-width: 46rem; }
 figure.tab figcaption { margin: 0 auto 0.5rem; }
 .tbl { overflow-x: auto; margin: 0 auto; }

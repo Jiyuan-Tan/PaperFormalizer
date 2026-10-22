@@ -40,6 +40,7 @@ import { loadCatalog, repoRoot, type Catalog } from "../toolkit/init.js";
 import { checkSelfContained, compareLocal, leanHeader, planRequires, renderLakefile, rootModule, toolkitRequires, type Git, type LocalCompare, type PublicTree } from "./bundle_lean.js";
 import { currentStatements, nodeTags, renderMatch, type NlLinksResult, type NodeTag } from "./bundle_match.js";
 import { PAGE_FILE, pageSnapshot } from "../ui/page_snapshot.js";
+import { TIKZ_DIR } from "../ui/tikz.js";
 import { blankPaths, checkF4Seal, F4_REVIEWS_FILE, F4_SEAL_FILE, f4Reviews, REVIEWER_CALLS_LOG, sha256, withBundle, type F4Seal } from "./f4_seal.js";
 import { auxLabels, correctedTex, envSpanOfLabel, labelsDefined, refsIn, type CorrectedItem } from "./corrected_tex.js";
 import { splitCount, splitKind } from "./core_graph.js";
@@ -578,6 +579,14 @@ export async function writeBundle(a: BundleArgs): Promise<BundleResult> {
     if (left) throw new Error(`it names ${left}`);
     await writeFile(path.join(dir, PAGE_FILE), `${text}\n`, "utf8");
     page = PAGE_FILE;
+    // the TikZ pictures the page draws, typeset by the local UI into the run's logs: the bundle carries
+    // them where the page names them, so a reader with the bundle sees them too
+    for (const f of new Set([...text.matchAll(new RegExp(`${PAPER_DIR}/_tikz/([0-9a-f]+\\.pdf)`, "gu"))].map((m) => m[1]!))) {
+      const from = path.join(a.runDir, TIKZ_DIR, f);
+      if (!existsSync(from)) { log(`bundle: the TikZ picture ${f} the page names is not in ${TIKZ_DIR}`); continue; }
+      await mkdir(path.join(dir, PAPER_DIR, "_tikz"), { recursive: true });
+      await cp(from, path.join(dir, PAPER_DIR, "_tikz", f));
+    }
   } catch (err) {
     await rm(path.dirname(path.join(dir, PAGE_FILE)), { recursive: true, force: true });
     log(`bundle: page snapshot not written (${err instanceof Error ? err.message : String(err)})`);
