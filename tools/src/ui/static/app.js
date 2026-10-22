@@ -1291,7 +1291,7 @@ function cardHTML(c, r, o = { own: [], atRest: false, draft: null }) {
   const [tag, cls] = KIND_TAG[c.kind] ?? ["Note", ""];
   const editing = o.draft !== null && o.own.length > 0;
   return `<div class="card" data-card="${esc(c.id)}" data-kind="${esc(c.kind)}" data-chip="${CHIP[c.kind] ?? "Findings"}" ${r ? `data-node="${esc(r.id)}"` : ""} ${c.env ? `data-env="${esc(c.env)}"` : ""} tabindex="0">
-    <div class="cbyline"><span class="av">TC</span><span class="cname">${c.kind === "note" ? "PaperFormalizer" : c.label}</span>${r ? `<span class="cwhen">${esc(envOf(r.id)?.heading ?? r.id)}</span>` : ""}<span class="ctag ${cls}">${esc(tag)}</span></div>
+    <div class="cbyline"><span class="av">PF</span><span class="cname">${c.kind === "note" ? "PaperFormalizer" : c.label}</span>${r ? `<span class="cwhen">${esc(envOf(r.id)?.heading ?? r.id)}</span>` : ""}<span class="ctag ${cls}">${esc(tag)}</span></div>
     ${editing ? "" : `<div class="cbody">${c.html}</div>`}${c.kind === "reading-owner" ? ownerReadingHTML(o) : ""}${editing || c.kind === "rewind" || c.kind === "cap" ? "" : issueHTML(o)}</div>`;
 }
 /* The foot of a comment that asks no decision: the owner may report an issue with it (optional — a
@@ -1987,7 +1987,7 @@ function repairCardHTML(r, d) {
       ${wantsText ? `<textarea data-rtext rows="${c.kind === "redo" && (c.text ?? "").length > 160 ? 7 : 2}" style="width:100%;margin-top:0.4rem" placeholder="${c.kind === "redo" ? "What the new repair should do" : "Why you decline it"}">${esc(c.text ?? "")}</textarea>` : ""}
       <div class="resume-in" style="margin-top:0.6rem"><span class="msg">${decided} of ${d.repairs.length} decided</span><span class="grow"></span><button class="btn btn-primary" type="button" data-repairs-send ${decided === d.repairs.length ? "" : "disabled"}>Send my decisions</button></div>`;
   return `<div class="card decision" data-card="repair:${esc(r.node)}" data-kind="note" data-chip="Findings" data-node="${esc(r.node)}" ${anchor ? `data-anchor="${esc(anchor)}"` : ""} data-repair="${esc(r.node)}" tabindex="0">
-    <div class="cbyline"><span class="av">TC</span><span class="cname">Your decision</span><span class="cwhen">${esc(envOf(r.node)?.heading ?? r.node)}</span><span class="ctag">weaker repair</span></div>
+    <div class="cbyline"><span class="av">PF</span><span class="cname">Your decision</span><span class="cwhen">${esc(envOf(r.node)?.heading ?? r.node)}</span><span class="ctag">weaker repair</span></div>
     <div class="cbody"><p>${r.undetermined ? "The statement as printed does not determine what it claims (nothing was shown false). The proposed repair — in blue beside the statement — states one reading, and claims less." : "The statement as printed does not hold. The proposed repair — in blue beside the statement — is true but claims less."}</p>
       <details><summary>The proposed statement, as shown in the paper</summary><div class="pstmt">${tex(r.proposed, m)}</div>
       ${(r.corollaries ?? []).map((x, k) => `<p class="meta">With split-off result ${k + 1}${x.title ? ` — ${tex(x.title, m)}` : ""} (a result of its own: a corollary of the statement, or a claim it bundled in)</p><div class="pstmt">${tex(x.statement, m)}</div>`).join("")}</details>
