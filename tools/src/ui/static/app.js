@@ -964,25 +964,39 @@ function drawSnapStatus() {
   const files = [...(P.paper?.pdf ? [[P.paper.pdf, "Revised paper (PDF)"]] : []), ...(SNAP.leanDir ? [["lean/", "Lean code"]] : [])];
   $("#status").innerHTML = `<div class="status"><div class="line"><span class="pill b-done">${esc(bucketWord(String(s.verdict ?? "report")))}</span><h2>Formalized with PaperFormalizer</h2></div>${b ? `<p>${esc(b)}</p>` : ""}${by}<div class="actions"><button class="btn" type="button" data-report>Full report</button>${files.map(([f, label]) => `<a class="btn" href="${esc(f)}" target="_blank" rel="noopener">${esc(label)}</a>`).join("")}</div></div>`;
 }
-/* The bundle's REPORT.md, typeset in the drawer (a shared paper's page): its headings, paragraphs and
-   lists, **bold** and `code`, and its formulas by KaTeX under the paper's macros. A plain reader of
-   the few forms the report writes, not Markdown at large; what it inserts passes DOMPurify. */
+/* The bundle's REPORT.md, typeset in the drawer (a shared paper's page): its headings, paragraphs,
+   lists and tables, **bold** and `code`, and its formulas by KaTeX under the paper's macros. A plain
+   reader of the few forms the report writes, not Markdown at large; what it inserts passes DOMPurify. */
 function reportHTML(md) {
   const m = P.paper?.macros, labels = P.paper?.labels ?? {};
   // a reference the report quotes from the paper (`Lemma~\ref{x}`): the number the paper prints for it
+  // (a list `\cref{a,b}`: each number, "a, b and c"; one label unknown leaves it as written)
   const refs = (t) => t.replace(/~(?=\\(?:eq|c|C)?ref\b)/g, " ").replace(/\\(eqref|ref|cref|Cref)\s*\{([^{}]*)\}/g, (all, cmd, l) => {
-    const n = labels[l.trim()]; return n ? (cmd === "eqref" ? `(${n})` : String(n)) : all;
+    const ns = l.split(",").map((x) => labels[x.trim()]);
+    if (!ns.every(Boolean)) return all;
+    const words = ns.map((n) => (cmd === "eqref" ? `(${n})` : String(n)));
+    return words.length > 1 ? `${words.slice(0, -1).join(", ")} and ${words.at(-1)}` : words[0];
   });
   const inline = (t) => refs(t).replace(/\\label\{[^{}]*\}\s*/g, "").split(/`([^`]+)`/).map((part, k) => (k % 2 ? `<code>${esc(part)}</code>` : typeset(part, m, (x) => esc(x).replace(/\*\*([^*]+)\*\*/g, "<strong>$1</strong>")))).join("");
   const out = [];
-  let para = [], list = null;
+  let para = [], list = null, rows = null;
+  // a table row's cells: split at each `|` not escaped, `\|` read as `|` (GFM, also inside a formula)
+  const cells = (row) => row.trim().replace(/^\|/, "").replace(/(?<!\\)\|\s*$/, "").split(/(?<!\\)\|/).map((c) => c.trim().replace(/\\\|/g, "|"));
   const flush = () => {
     if (para.length) out.push(`<p>${inline(para.join(" "))}</p>`);
     if (list) out.push(`<ul>${list.map((i) => `<li>${inline(i)}</li>`).join("")}</ul>`);
-    para = []; list = null;
+    if (rows) {
+      // a header row when the second row is the `|---|` rule
+      const rule = rows.length > 1 && rows[1].every((c) => /^:?-{2,}:?$/.test(c));
+      const td = (r, tag) => `<tr>${r.map((c) => `<${tag}>${inline(c)}</${tag}>`).join("")}</tr>`;
+      out.push(`<div class="rtable"><table>${rule ? `<thead>${td(rows[0], "th")}</thead>` : ""}<tbody>${rows.slice(rule ? 2 : 0).map((r) => td(r, "td")).join("")}</tbody></table></div>`);
+    }
+    para = []; list = null; rows = null;
   };
   for (const line of String(md).split(/\r?\n/)) {
     const h = /^(#{1,4})\s+(.*)$/.exec(line), li = /^\s{0,3}[-*]\s+(.*)$/.exec(line);
+    if (/^\s{0,3}\|/.test(line)) { if (!rows) flush(); (rows ??= []).push(cells(line)); continue; }
+    if (rows) flush();
     if (!line.trim()) flush();
     else if (h) { flush(); out.push(`<h${Math.min(6, h[1].length + 2)} class="rh">${inline(h[2])}</h${Math.min(6, h[1].length + 2)}>`); }
     else if (li) { if (para.length) { const keep = list; list = null; flush(); list = keep; } (list ??= []).push(li[1]); }

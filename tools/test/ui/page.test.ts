@@ -329,6 +329,15 @@ describe("page: a shared paper's report, typeset", () => {
     const html = page.reportHTML!(String.raw`The proof of Lemma~\ref{lem:a} uses (\ref{eq:s}), \eqref{eq:s} and \cref{lem:x}.`) as string;
     expect(html).toBe(String.raw`<p>The proof of Lemma E.4 uses (3.1), (3.1) and \cref{lem:x}.</p>`);
   });
+  it("a list of references reads as their numbers; a table is a table, `\\|` inside a cell read as `|`", () => {
+    const { page } = runPage("p", {});
+    (page.P as unknown as { paper: unknown }).paper = { labels: { "app:a": "C", "app:b": "D", "eq:1": "3" } };
+    expect(page.reportHTML!(String.raw`See \cref{app:a, app:b}, \eqref{eq:1,eq:1} and \cref{app:a,app:x}.`)).toBe(String.raw`<p>See C and D, (3) and (3) and \cref{app:a,app:x}.</p>`);
+    const html = page.reportHTML!(["Before.", "| node | finding |", "| --- | --- |", "| `T1` | the norm $\\\\|f\\\\|_1$ \\| bound |", "| b | c |", "After."].join("\n")) as string;
+    expect(html).toMatch(/^<p>Before\.<\/p><div class="rtable"><table><thead><tr><th>node<\/th><th>finding<\/th><\/tr><\/thead><tbody><tr><td><code>T1<\/code><\/td><td>the norm <span class="katex">/);
+    expect(html).toContain("| bound</td></tr><tr><td>b</td><td>c</td></tr></tbody></table></div><p>After.</p>");
+    expect(html).not.toContain("katex-error");
+  });
   it("a long report is cut into pieces at blank lines that start a block: each piece reads alone, and together they are the report", () => {
     const { page } = runPage("p", {});
     const md = ["## A", "", "para one", "line two", "", "- item", "  continued", "", "  - not a block start", "", "## B", "", "last"].join("\n");

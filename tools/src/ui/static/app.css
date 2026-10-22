@@ -178,6 +178,13 @@ table.runs { width: 100%; border-collapse: collapse; font-size: var(--fs-sm); ta
 .mod-title { font-weight: normal; font-size: 1.35rem; margin: 0.35rem 0 0.25rem; line-height: 1.3; }
 .mod-sum { color: var(--ink-soft); margin: 0 0 0.4rem; }
 .mod-path { font-family: var(--mono); font-size: 0.7rem; color: var(--lean); overflow-wrap: anywhere; margin-bottom: 1rem; }
+.rtable { overflow-x: auto; margin: 0.6rem 0 1rem; }
+.rtable table { width: 100%; border-collapse: collapse; font-size: var(--fs-sm); table-layout: fixed; }
+.rtable th, .rtable td { border-bottom: 1px solid var(--rule); padding: 0.3rem 0.6rem 0.3rem 0; text-align: left; vertical-align: top; overflow-wrap: break-word; }
+.rtable th:first-child:not(:last-child) { width: 30%; }
+.rtable code { overflow-wrap: anywhere; }
+.rtable .katex-display { overflow-x: auto; overflow-y: hidden; }
+.rtable th { font-weight: 600; border-bottom-color: var(--ink-faint); }
 table.mtable { width: 100%; border-collapse: collapse; font-size: var(--fs-sm); }
 .mtable th { font-variant: small-caps; text-align: left; font-size: 0.86rem; font-weight: 400; color: var(--ink-faint); letter-spacing: 0.06em; padding: 0.4rem 0.5rem; border-bottom: 1px solid var(--rule); }
 .mtable td { padding: 0.55rem 0.5rem; border-bottom: 1px solid var(--rule-soft); vertical-align: top; }
