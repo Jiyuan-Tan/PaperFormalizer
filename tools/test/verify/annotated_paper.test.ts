@@ -23,7 +23,7 @@ import {
   verbatimLike,
 } from "../../src/verify/annotate_tex.js";
 import { texMathProblems, type OwnerExplanation } from "../../src/verify/owner_text.js";
-import { applyEdits, compileTex, macroArity, planAnnotations, type AnnotationInput, type CompileTex } from "../../src/verify/annotated_paper.js";
+import { applyEdits, compileTex, floatEnd, macroArity, planAnnotations, type AnnotationInput, type CompileTex } from "../../src/verify/annotated_paper.js";
 import { annotateRun, annotationInput } from "../../src/verify/annotate_run.js";
 import { sha256File } from "../../src/verify/core_hash.js";
 import { applyPatchFile, PatchFileSchema } from "../../src/verify/patches.js";
@@ -280,7 +280,7 @@ describe("annotated paper (V6)", () => {
     expect(main.indexOf(VS_BLOCK_MARKER)).toBeGreaterThan(main.indexOf("\\newtheorem{prop}"));
     // each part is a block laid out for reading: its bold label on its own line, the content indented below
     const macro = (name: string): string => main.split("\n").find((l) => l.startsWith(`\\newcommand{\\${name}}`)) ?? "";
-    for (const [name, colour, font, label] of [["vsOriginal", "vsRed", "", "Original:"], ["vsCorrected", "vsBlue", "", "Corrected:"], ["vsClarified", "vsBlue", "", "Clarified statement:"], ["vsNote", "vsNote", "\\normalfont\\small", "PaperFormalizer:"], ["vsReading", "vsNote", "\\normalfont\\small", "Clarification:"], ["vsReadingOwner", "vsNote", "\\normalfont\\small", "Clarification (author):"]] as const) {
+    for (const [name, colour, font, label] of [["vsOriginal", "vsRed", "", "Original:"], ["vsCorrected", "vsBlue", "", "Revised:"], ["vsClarified", "vsBlue", "", "Clarified statement:"], ["vsNote", "vsNote", "\\normalfont\\small", "PaperFormalizer:"], ["vsReading", "vsNote", "\\normalfont\\small", "Clarification:"], ["vsReadingOwner", "vsNote", "\\normalfont\\small", "Clarification (author):"]] as const) {
       expect(macro(name)).toBe(`\\newcommand{\\${name}}[1]{\\vsBlock{${colour}}{${font}}{${label}}{#1}}`);
     }
     expect(macro("vsReadingSymbol")).toBe("\\newcommand{\\vsReadingSymbol}[2]{\\vsBlock{vsNote}{\\normalfont\\small}{Clarification (symbol #1):}{#2}}");
@@ -415,7 +415,7 @@ describe("annotated paper at an owner halt", () => {
     // not also rendered as a V6 "suggested repair (not applied)"
     expect(sec).not.toContain("Suggested repair (not applied)");
     const main = await read(run.runDir, "annotated/main.tex");
-    expect(main).toContain("\\newcommand{\\vsProposed}[1]{\\vsBlock{vsBlue}{}{Proposed repair (awaiting your decision):}{#1}}");
+    expect(main).toContain("\\newcommand{\\vsProposed}[1]{\\vsBlock{vsBlue}{}{Proposed revision (awaiting your decision):}{#1}}");
     // confirmed repairs render as at V6
     expect(main).toContain("\\vsOriginal{The estimator converges at rate $n^{-1/2}$.} \\vsCorrected{The estimator converges at rate $n^{-1/3}$.}");
     const md = await read(run.runDir, "annotated/ANNOTATIONS.md");
@@ -491,7 +491,7 @@ describe("annotated paper at an owner halt", () => {
     expect(md).toContain("**Awaiting your decision: 2 item(s)**");
     expect(md).toMatch(/\| `ass:indep` \| sec\/results\.tex:2 \| awaiting decision \|/);
     expect(md).toMatch(/\| `prop:mono` \| sec\/results\.tex:6 \| awaiting decision \|/);
-    for (const [name, label] of [["vsRewind", "Proposed correction (awaiting your decision):"], ["vsCap", "Repair not settled (awaiting your decision):"]] as const) {
+    for (const [name, label] of [["vsRewind", "Proposed correction (awaiting your decision):"], ["vsCap", "Revision not settled (awaiting your decision):"]] as const) {
       expect(await read(run.runDir, "annotated/main.tex")).toContain(`\\newcommand{\\${name}}[1]{\\vsBlock{vsNote}{\\normalfont\\small}{${label}}{#1}}`);
     }
   });
@@ -1433,3 +1433,25 @@ describe("a suggestion stored as one line", () => {
   });
 });
 
+describe("floatEnd: a paragraph of the paper is never written inside a float", () => {
+  const tex = String.raw`Text with $W_1$.
+
+\begin{figure}
+\begin{minipage}{0.4\textwidth}
+\caption{Blocks of width $W_1$.}
+
+\begin{tikzpicture}\draw (0,0);\end{tikzpicture}
+% \end{figure} in a comment closes nothing
+\end{minipage}
+\end{figure}
+After the figure.
+`;
+  it("inside a caption in a minipage of a figure: just after the line ending the figure", () => {
+    const end = floatEnd(tex, tex.indexOf("\\caption"));
+    expect(tex.slice(end!)).toBe("After the figure.\n");
+  });
+  it("in running text: none", () => {
+    expect(floatEnd(tex, 0)).toBeNull();
+    expect(floatEnd(tex, tex.indexOf("After"))).toBeNull();
+  });
+});

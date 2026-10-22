@@ -183,7 +183,7 @@ describe("the corrected-paper bundle (V6)", () => {
     const read = (rel: string): Promise<string> => readFile(path.join(run.runDir, "bundle", rel), "utf8");
     const main = await read("corrected_paper/main.tex");
     const sec = await read("corrected_paper/sec/results.tex");
-    for (const t of [main, sec]) expect(t).not.toMatch(/\\vs[A-Z]|PaperFormalizer|xcolor|Corrected:|Original:/u);
+    for (const t of [main, sec]) expect(t).not.toMatch(/\\vs[A-Z]|PaperFormalizer|xcolor|Corrected:|Revised:|Original:/u);
     expect(main).toContain("The estimator converges at rate $n^{-1/3}$.");
     expect(main).not.toContain("$n^{-1/2}$");
     // the author's preamble, comment and layout stand

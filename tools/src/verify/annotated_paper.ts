@@ -3,7 +3,7 @@
  *
  * A copy of the paper's source tree in which every problem the run found is marked where the paper
  * states it: the wrong or ambiguous sentence in red (`\vsOriginal`, "Original:"), the
- * corrected text in blue (`\vsCorrected` / `\vsClarified`: "Corrected:", "Clarified
+ * corrected text in blue (`\vsCorrected` / `\vsClarified`: "Revised:", "Clarified
  * statement:"), and a note in a third colour (`\vsNote`,
  * "PaperFormalizer: …") saying what is wrong, the proposed fix, and — only when the run records it —
  * what the fix gives up. Each part is its own paragraph (the macros break the line). The paper reads
@@ -1165,11 +1165,11 @@ export function planAnnotations(input: AnnotationInput): AnnotationPlan {
   // --- proof corrections (user rules 2026-09-24: every change to the paper is visible; proofs are
   // REVISED, not rewritten, and shown like statements). A repair's proof ops mark the paper's proof
   // itself: each replaced run of units red ("Original:") with its TeX right after in blue
-  // ("Corrected:" / "Corrected (for the proposed statement):" — a proof change needs no owner
+  // ("Revised:" / "Revised (for the proposed statement):" — a proof change needs no owner
   // decision, user rule 2026-09-26; an insertion replaces the step it follows) — no note on the proof (the
   // explanation stays on the statement). A repair without proof ops (a result the paper prints no proof of, or a proof left as printed):
   // its proof note in one blue block after the node's PROOF as V1 located it (`TexEnv.proofLines`) —
-  // "Corrected proof (confirmed):" / "Proof of the proposed statement:" (ops that do not
+  // "Revised proof (confirmed):" / "Proof of the proposed statement:" (ops that do not
   // align with it: the block there, saying so). With no proof located: the block right after the
   // statement, naming the lemmas it rests on, or opening "(the paper's proof could not be located; the
   // corrected proof is given here)".
@@ -1766,16 +1766,42 @@ export function planAnnotations(input: AnnotationInput): AnnotationPlan {
       records.push({ node, file: tags.file, line: lineOf(input.files[tags.file]!, r.at), kind: "clarification (reading)", located_by: "after-env", summary, extended: [] });
       continue;
     }
-    // Running text (or a proof): the first blank line after the line (the paragraph's end).
+    // Running text (or a proof): the first blank line after the line (the paragraph's end) — or, when
+    // the symbol first appears in a figure, table or box (a caption, a minipage), after that float:
+    // a paragraph of the paper never goes inside one.
     const ls = lineStarts(orig);
+    const float = floatEnd(orig, ls[loc.line - 1] ?? 0);
     let k = loc.line;
     while (k < ls.length && orig.slice(ls[k]!, ls[k + 1] ?? orig.length).trim() !== "") k += 1;
-    const offset = k < ls.length ? ls[k]! : orig.length;
+    const offset = float ?? (k < ls.length ? ls[k]! : orig.length);
+    if (float !== null) log.push(`annotated paper: the reading of symbol ${v.name} first occurs inside a float; placed after it`);
     const r = pushEdit(loc.file, offset, 1, `\n${note}\n`);
-    records.push({ node, file: loc.file, line: lineOf(orig, r.at), kind: "clarification (reading)", located_by: "paragraph-end", summary, extended: [] });
+    records.push({ node, file: loc.file, line: lineOf(orig, r.at), kind: "clarification (reading)", located_by: float !== null ? "after-float" : "paragraph-end", summary, extended: [] });
   }
   for (const f of afterReadings) f();
   return { edits, records, unlocated, log, defects, fragments: [...fragments.values()] };
+}
+
+/** Floats and boxes a paragraph of the paper cannot be written into. */
+const FLOATS = new Set(["figure", "figure*", "table", "table*", "wrapfigure", "wraptable", "SCfigure", "subfigure", "subtable", "minipage", "algorithm", "algorithm*", "tikzpicture"]);
+
+/** The offset just after the line that closes the outermost float or box enclosing `at` in `text`
+ *  (`FLOATS`; comments read away), or null when `at` is in none. Pure. */
+export function floatEnd(text: string, at: number): number | null {
+  const src = blankTexComments(text);
+  const tags = [...src.matchAll(/\\(begin|end)\s*\{([^{}]+)\}/gu)].map((m) => ({ begin: m[1] === "begin", env: m[2]!.trim(), at: m.index!, end: m.index! + m[0].length }));
+  // the environments open at `at`, outermost first
+  const open: string[] = [];
+  const close = (env: string): void => { const i = open.lastIndexOf(env); if (i >= 0) open.length = i; };
+  for (const t of tags.filter((x) => x.at < at)) { if (t.begin) open.push(t.env); else close(t.env); }
+  const outer = open.findIndex((e) => FLOATS.has(e));
+  if (outer < 0) return null;
+  for (const t of tags.filter((x) => x.at >= at)) {
+    if (t.begin) { open.push(t.env); continue; }
+    close(t.env);
+    if (open.length <= outer) { const nl = src.indexOf("\n", t.end); return nl < 0 ? src.length : nl + 1; }
+  }
+  return null;
 }
 
 /** Labels a TeX text references (`\ref`, `\cref{a,b}`, `\Cref`, `\autoref`, `\eqref`, …). Pure. */
@@ -1825,10 +1851,10 @@ export function renderAnnotationsMd(slug: string, main: string, r: Omit<Annotate
     `# PaperFormalizer annotations — ${slug}`,
     "",
     `Annotated copy of \`source/\`; main file \`${main}\`. Red (\`\\vsOriginal\`, "Original:"): the paper's text that is wrong or ambiguous (kind \`not determined\`: it does not say enough to be checked, and nothing was shown false). ` +
-      "Blue (`\\vsCorrected` / `\\vsClarified`: \"Corrected:\", \"Clarified statement:\"): the corrected text (a hypothesis a repair adds is written into it; the note says which). Proofs (kind `corrected proof`) are revised in place: each printed step a repair changes red (`\\vsStep`, \"Original:\") with its replacement right after (`\\vsCorrectedStep`, \"Corrected:\"); a repair without step edits (or a result whose proof was not located) gets one block per result (`\\vsProof`, \"Corrected proof (confirmed):\"; a pending one `\\vsProposedProof`) after the proof; when the paper prints none, right after the result, naming every lemma it uses and, by the paper's section numbers, where their corrections are marked; else right after the result, saying the proof could not be located. " +
+      "Blue (`\\vsCorrected` / `\\vsClarified`: \"Revised:\", \"Clarified statement:\"): the corrected text (a hypothesis a repair adds is written into it; the note says which). Proofs (kind `corrected proof`) are revised in place: each printed step a repair changes red (`\\vsStep`, \"Original:\") with its replacement right after (`\\vsCorrectedStep`, \"Revised:\"); a repair without step edits (or a result whose proof was not located) gets one block per result (`\\vsProof`, \"Revised proof (confirmed):\"; a pending one `\\vsProposedProof`) after the proof; when the paper prints none, right after the result, naming every lemma it uses and, by the paper's section numbers, where their corrections are marked; else right after the result, saying the proof could not be located. " +
       "Red struck through (`\\vsStruck`; `\\vsStruckRed`, red alone, where a line cannot cross the text), kind `no longer used`: an assumption or definition no result uses after the repairs, with a note naming the results that now state the conditions they use. " +
       "Orange (`\\vsNote`, \"PaperFormalizer: …\"): what is wrong, the proposed fix, and whether the fix weakens the result; `\\vsReading` (\"Clarification:\", kind `clarification (reading)`): a reading pinned for formalization; `\\vsReadingOwner` (\"Clarification (author):\"): the owner's reading of a finding the owner withdrew; `\\vsReadingSymbol` (\"Clarification (symbol …):\"): the reading of a symbol; `\\vsCondition` (\"Bookkeeping condition:\", kind `condition added`; the owner's `\\vsConditionOwner`, \"Bookkeeping condition:\"): a condition the verified statement carries beyond the printed text, at the end of each result carrying it; `\\vsDetail` (\"Proof detail:\"): the fixer's detail of a corrected proof step, for the referee and the Lean proof, beside the step it completes. " +
-      "Awaiting your decision (a halt only): `\\vsProposed` (blue, \"Proposed repair (awaiting your decision):\"), `\\vsProposedStep` / `\\vsProposedProof` (blue, \"Corrected (for the proposed statement):\", \"Proof of the proposed statement:\" — the decision is on the statement, never on its proof), `\\vsRewind` (\"Proposed correction (awaiting your decision):\"), `\\vsCap` (\"Repair not settled (awaiting your decision):\"). " +
+      "Awaiting your decision (a halt only): `\\vsProposed` (blue, \"Proposed revision (awaiting your decision):\"), `\\vsProposedStep` / `\\vsProposedProof` (blue, \"Revised (for the proposed statement):\", \"Proof of the proposed statement:\" — the decision is on the statement, never on its proof), `\\vsRewind` (\"Proposed correction (awaiting your decision):\"), `\\vsCap` (\"Revision not settled (awaiting your decision):\"). " +
       "Lines are the ORIGINAL source's.",
     "",
     ...(awaiting > 0 ? [`**Awaiting your decision: ${awaiting} item(s)** (kind \`awaiting decision\` below).`, ""] : []),

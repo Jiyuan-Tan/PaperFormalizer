@@ -538,7 +538,7 @@ describe("page: a shared paper's page, drawn read-only from its bundle's snapsho
       }],
       leanDefs: {}, places: {}, texHtml: { "It fails.": "It fails." },
       // the bundle's HTML names the page's own ids and names, and carries its copy button: the stricter pass drops them
-      paper: { title: "A Paper", authors: "A. Author", html: '<p id="d-body" name="SNAP">Body</p><button data-copy="evil">x</button><span id="lbl-thm-a">a</span>', toc: [{ html: '<a id="modal-ok">1 Intro</a>' }], comments: [{ html: '<b data-copy="x">n</b>', label: '<i id="pv">L</i>' }], envs: [], anchors: {}, readings: {}, marks: 0, pages: {}, labels: {}, ownerReadings: {}, anchorHeadings: {}, pdf: "corrected_paper/main.pdf", macros: {} },
+      paper: { title: "A Paper", authors: "A. Author", html: '<p id="d-body" name="SNAP">Body</p><button data-copy="evil">x</button><span id="lbl-thm-a">a</span><span class="rv-tag">Corrected</span><span class="rv-tag">Original</span>', toc: [{ html: '<a id="modal-ok">1 Intro</a>' }], comments: [{ html: '<b data-copy="x">n</b>', label: '<i id="pv">L</i>' }], envs: [], anchors: {}, readings: {}, marks: 0, pages: {}, labels: {}, ownerReadings: {}, anchorHeadings: {}, pdf: "corrected_paper/main.pdf", macros: {} },
     };
     // the sanitizer the page loads (DOMPurify), as a stand-in that drops scripts, runs the page's
     // attribute hook on each attribute, and says what it saw
@@ -580,7 +580,8 @@ describe("page: a shared paper's page, drawn read-only from its bundle's snapsho
     expect(v.page.results[0]).not.toHaveProperty("paperError");
     expect(v.drawers.results["thm:a"]).toMatchObject({ paperError: { detail: "It fails." }, axioms: ["propext"] });
     await page.route!();
-    expect(at("#paper-body").html).toBe('<p>Body</p><button>x</button><span id="lbl-thm-a">a</span>');
+    // a paper drawn by an earlier version: its block tags in today's words
+    expect(at("#paper-body").html).toBe('<p>Body</p><button>x</button><span id="lbl-thm-a">a</span><span class="rv-tag">Revised</span><span class="rv-tag">Original</span>');
     const paper = (v as unknown as { paper: { toc: Array<{ html: string }>; comments: Array<{ html: string; label: string }> } }).paper;
     expect([paper.toc[0]!.html, paper.comments[0]!.html, paper.comments[0]!.label]).toEqual(["<a>1 Intro</a>", "<b>n</b>", "<i>L</i>"]);
     // the status: the verdict, who shared it, the bundle's files — no Share, no conversation, no run to follow

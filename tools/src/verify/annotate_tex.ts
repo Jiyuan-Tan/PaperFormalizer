@@ -99,7 +99,7 @@ export const VS_PREAMBLE_BLOCK = [
   // paragraph can end its rows inline (`\\` as `;`, no `&`) — {inline form}{the environment}.
   "\\newcommand{\\vsMathEnv}[2]{\\vsIfInner{$#1$}{#2}}",
   "\\newcommand{\\vsOriginal}[1]{\\vsBlock{vsRed}{}{Original:}{#1}}",
-  "\\newcommand{\\vsCorrected}[1]{\\vsBlock{vsBlue}{}{Corrected:}{#1}}",
+  "\\newcommand{\\vsCorrected}[1]{\\vsBlock{vsBlue}{}{Revised:}{#1}}",
   "\\newcommand{\\vsClarified}[1]{\\vsBlock{vsBlue}{}{Clarified statement:}{#1}}",
   "\\newcommand{\\vsNote}[1]{\\vsBlock{vsNote}{\\normalfont\\small}{PaperFormalizer:}{#1}}",
   // A clarification: a reading pinned for formalization (the referee's, the owner's, a symbol's).
@@ -114,10 +114,10 @@ export const VS_PREAMBLE_BLOCK = [
   "\\newcommand{\\vsConditionOwner}[1]{\\vsBlock{vsNote}{\\normalfont\\small}{Bookkeeping condition:}{#1}}",
   // A proof correction (the repair's proof note, after the proof it amends) and the step of the
   // printed proof it replaces.
-  "\\newcommand{\\vsProof}[1]{\\vsBlock{vsBlue}{}{Corrected proof (confirmed):}{#1}}",
+  "\\newcommand{\\vsProof}[1]{\\vsBlock{vsBlue}{}{Revised proof (confirmed):}{#1}}",
   "\\newcommand{\\vsStep}[1]{\\vsBlock{vsRed}{}{Original:}{#1}}",
   // A revised step of the paper's proof, right after the printed step it replaces, and a step added.
-  "\\newcommand{\\vsCorrectedStep}[1]{\\vsBlock{vsBlue}{}{Corrected:}{#1}}",
+  "\\newcommand{\\vsCorrectedStep}[1]{\\vsBlock{vsBlue}{}{Revised:}{#1}}",
   // A block a repair splits off a result, after the result: {node id}{the result}{content} — a
   // corollary of the corrected result, or a proposition the printed statement bundled in
   // (`SPLIT_MACROS`). The id is for the reader of the source (the UI); it prints nothing.
@@ -127,11 +127,11 @@ export const VS_PREAMBLE_BLOCK = [
   "\\newcommand{\\vsProposedSplitProposition}[3]{\\vsBlock{vsBlue}{}{Proposed proposition stated in #2 (awaiting your decision):}{#3}}",
   // A decision pending with the paper's owner (a halt): the proposed repair, a proposed F-stage
   // rewind, a patch cap. V6 never writes them (its tree is rebuilt with nothing pending).
-  "\\newcommand{\\vsProposed}[1]{\\vsBlock{vsBlue}{}{Proposed repair (awaiting your decision):}{#1}}",
+  "\\newcommand{\\vsProposed}[1]{\\vsBlock{vsBlue}{}{Proposed revision (awaiting your decision):}{#1}}",
   "\\newcommand{\\vsProposedProof}[1]{\\vsBlock{vsBlue}{}{Proof of the proposed statement:}{#1}}",
-  "\\newcommand{\\vsProposedStep}[1]{\\vsBlock{vsBlue}{}{Corrected (for the proposed statement):}{#1}}",
+  "\\newcommand{\\vsProposedStep}[1]{\\vsBlock{vsBlue}{}{Revised (for the proposed statement):}{#1}}",
   "\\newcommand{\\vsRewind}[1]{\\vsBlock{vsNote}{\\normalfont\\small}{Proposed correction (awaiting your decision):}{#1}}",
-  "\\newcommand{\\vsCap}[1]{\\vsBlock{vsNote}{\\normalfont\\small}{Repair not settled (awaiting your decision):}{#1}}",
+  "\\newcommand{\\vsCap}[1]{\\vsBlock{vsNote}{\\normalfont\\small}{Revision not settled (awaiting your decision):}{#1}}",
   // A hypothesis no result uses after the repairs, crossed out where the paper prints it: red with a
   // line through it (ulem's `\sout`: inline text and math, across line breaks), and red alone for what
   // a line cannot cross (a display, a list, a paragraph break). Unit by unit, never a block.

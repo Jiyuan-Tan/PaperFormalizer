@@ -70,6 +70,9 @@ if (SNAP) {
 }
 /** What only a result's drawer shows (`DRAWER_KEYS` of run_model.ts): the snapshot holds it on the result. */
 const SNAP_DRAWER = ["review", "paperError", "axioms", "conditions", "rows", "leanView", "linksStale", "linksUnanswered", "leanMissing", "segments", "uncovered", "citedSource"];
+/** A paper drawn by an earlier version names its blocks as it did then: each tag in today's words. Pure. */
+const RETAG = { "Corrected": "Revised", "Corrected step": "Revised step", "Corrected proof (confirmed)": "Revised proof (confirmed)", "Corrected (for the proposed statement)": "Revised (for the proposed statement)", "Proposed repair — awaiting a ruling": "Proposed revision — awaiting a ruling", "Repair not settled — awaiting a ruling": "Revision not settled — awaiting a ruling", "Stated apart by the repair": "Stated apart by the revision", "Added by the repair": "Added by the revision" };
+const retag = (html) => String(html ?? "").replace(/(<span class="rv-tag">)([^<]*)(<\/span>)/g, (m, a, t, b) => (RETAG[t] ? `${a}${RETAG[t]}${b}` : m));
 /** The snapshot's views as the server answers a finished run's: its page, its drawers, its paper. */
 async function snapLoad() {
   const r = await fetch(SNAP.src, { credentials: "same-origin" });
@@ -78,7 +81,7 @@ async function snapLoad() {
   if (s?.schema !== 1 || typeof s.slug !== "string" || !Array.isArray(s.results)) throw new Error("its snapshot is of a layout this page does not read");
   SNAP.leanDir = typeof s.leanDir === "string" ? s.leanDir : null;
   if (s.paper && typeof s.paper === "object") {
-    s.paper.html = SNAP.strict(s.paper.html);
+    s.paper.html = retag(SNAP.strict(s.paper.html));
     for (const c of Array.isArray(s.paper.comments) ? s.paper.comments : []) if (c && typeof c === "object") { c.html = SNAP.strict(c.html); if (c.label != null) c.label = SNAP.strict(c.label); }
     for (const t of Array.isArray(s.paper.toc) ? s.paper.toc : []) if (t && typeof t === "object") t.html = SNAP.strict(t.html);
   }

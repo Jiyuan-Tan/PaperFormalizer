@@ -1,10 +1,10 @@
 /**
  * Proof corrections in the annotated paper (user rule 2026-09-24: every change to the paper is
  * visible; proofs are revised, not rewritten): proof ops in the paper's proof itself — the printed
- * units red ("Original:"), their replacement blue right after ("Corrected:" / "Corrected
+ * units red ("Original:"), their replacement blue right after ("Revised:" / "Revised
  * (for the proposed statement):"), adjacent replaced units one block — an added step is a replacement of the step it follows — also when the proof sits in
  * another file under a "Proof of Theorem" heading; a proof note after the proof it amends
- * ("Corrected proof (confirmed):"), a proof-only repair made visible; a proof
+ * ("Revised proof (confirmed):"), a proof-only repair made visible; a proof
  * that cannot be located → the block at the end of the statement's section; a pending suggestion's
  * proof ("Proof of the proposed statement:").
  */
