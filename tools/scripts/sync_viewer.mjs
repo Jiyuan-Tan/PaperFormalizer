@@ -33,6 +33,7 @@ mkdirSync(path.join(out, "pdfjs"), { recursive: true });
 const copy = (from, to) => cpSync(from, path.join(out, to));
 copy(path.join(STATIC, "app.js"), "app.js");
 copy(path.join(STATIC, "app.css"), "app.css");
+cpSync(path.join(STATIC, "fonts"), path.join(out, "fonts"), { recursive: true }); // the serif app.css names, with its license
 copy(path.join(STATIC, "snapshot.html"), "page.html");
 copy(path.join(STATIC, "vendor", "purify.min.js"), "purify.min.js");
 copy(path.join(STATIC, "vendor", "purify.LICENSE"), "purify.LICENSE");

@@ -1,5 +1,10 @@
 /* The page's look: scholarly serif, parchment, cardinal — a document,
    not a dashboard. JuliaMono for code, as there; the system monospace when offline. */
+/* Source Serif 4 (SIL OFL 1.1, fonts/SourceSerif4-OFL.txt), served with the page so every reader sees the same type. */
+@font-face { font-family: "Source Serif 4"; src: url("fonts/source-serif-4-latin-standard-normal.woff2") format("woff2"); font-weight: 200 900; font-style: normal; font-display: swap; unicode-range: ; }
+@font-face { font-family: "Source Serif 4"; src: url("fonts/source-serif-4-latin-standard-italic.woff2") format("woff2"); font-weight: 200 900; font-style: italic; font-display: swap; unicode-range: ; }
+@font-face { font-family: "Source Serif 4"; src: url("fonts/source-serif-4-latin-ext-standard-normal.woff2") format("woff2"); font-weight: 200 900; font-style: normal; font-display: swap; unicode-range: ; }
+@font-face { font-family: "Source Serif 4"; src: url("fonts/source-serif-4-latin-ext-standard-italic.woff2") format("woff2"); font-weight: 200 900; font-style: italic; font-display: swap; unicode-range: ; }
 @font-face { font-family: "JuliaMono"; src: url("https://cdn.jsdelivr.net/gh/cormullion/juliamono@master/webfonts/JuliaMono-Regular.woff2") format("woff2"); font-weight: 400; font-display: swap; }
 @font-face { font-family: "JuliaMono"; src: url("https://cdn.jsdelivr.net/gh/cormullion/juliamono@master/webfonts/JuliaMono-Bold.woff2") format("woff2"); font-weight: 700; font-display: swap; }
 /* PaperFormalizer local UI — a parchment / cardinal system (paper column, contents rail,
@@ -13,7 +18,7 @@
   --lean: #35507a; --lean-wash: #edf1f6; --lean-line: #a9b9ce;
   --del: #b1040e; --del-wash: #fbeaea; --ins: #1f4e9c; --ins-wash: #e7eefa;
   --cond: #6b5d3e; --cond-wash: #efe9dc; --shadow: rgba(80, 65, 30, 0.16);
-  --serif: Charter, "Bitstream Charter", "Source Serif 4", "Iowan Old Style", "Palatino Linotype", Georgia, "Times New Roman", serif;
+  --serif: "Source Serif 4", Charter, "Bitstream Charter", "Iowan Old Style", "Palatino Linotype", Georgia, "Times New Roman", serif;
   --mono: "JuliaMono", ui-monospace, "SF Mono", "Cascadia Mono", "JetBrains Mono", Menlo, Consolas, "DejaVu Sans Mono", monospace;
   --fs-2xs: 0.72rem; --fs-xs: 0.78rem; --fs-sm: 0.85rem; --top: 52px; --r-badge: 3px; --r-card: 6px;
   color-scheme: light;

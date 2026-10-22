@@ -317,7 +317,7 @@ const NOTE = { seen: null };
 /** What a paper of the inbox waits for, each by a key that changes when it is another one. */
 function needsOf(r) {
   const out = [];
-  if (r.pending?.weakening) out.push(["repair", "A repair that would weaken a result waits for your decision."]);
+  if (r.pending?.weakening) out.push(["repair", "A revision that would weaken a result waits for your decision."]);
   if (r.pending?.promotion && r.status === "needs-you") out.push([`promotion ${r.pending.promotion}`, "Results proposed for your toolkit wait for your decision."]);
   for (const q of r.requests ?? []) out.push([`request ${q.id}`, "The agent asks you something."]);
   if (!out.length) out.push(["needs", r.headline]);
@@ -793,7 +793,9 @@ function withDrawers(page, w) {
    kept when the reader leaves the paper, and put back as it stands when they return to it unchanged. */
 let KEPT = null; // { paper: the payload it was drawn from, el }
 function keepBody() { const el = $("#paper-body"); if (el && P.paper && P.drawn.body === P.paper) KEPT = { paper: P.paper, el }; }
-const KIND_TAG = { note: ["PaperFormalizer", "t-note"], reading: ["Clarification", ""], "reading-owner": ["Author's reading", ""], "reading-symbol": ["Symbol", ""], condition: ["Bookkeeping condition", "t-cond"], detail: ["Proof detail", "t-detail"], rewind: ["Proposed correction", "t-note"], cap: ["Repair not settled", "t-note"] };
+/** A verdict or bucket key as the page words it: the data says `repaired`, the page says revised. Pure. */
+const bucketWord = (k) => (({ repaired: "revised" })[k] ?? k).replace(/_/g, " ");
+const KIND_TAG = { note: ["PaperFormalizer", "t-note"], reading: ["Clarification", ""], "reading-owner": ["Author's reading", ""], "reading-symbol": ["Symbol", ""], condition: ["Bookkeeping condition", "t-cond"], detail: ["Proof detail", "t-detail"], rewind: ["Proposed correction", "t-note"], cap: ["Revision not settled", "t-note"] };
 const CHIP = { note: "Findings", reading: "Clarifications", "reading-owner": "Clarifications", "reading-symbol": "Clarifications", condition: "Bookkeeping", detail: "Proof details", rewind: "Findings", cap: "Findings" };
 
 async function showPaper(slug, first) {
@@ -935,12 +937,12 @@ function drawStages() {
    place of a run's status, its conversation and its decisions. */
 function drawSnapStatus() {
   const s = P.detail.summary, sh = SNAP.share;
-  const b = s.buckets ? Object.entries(s.buckets).map(([k, v]) => `${v} ${k.replace(/_/g, " ")}`).join(" · ") : "";
+  const b = s.buckets ? Object.entries(s.buckets).map(([k, v]) => `${v} ${bucketWord(k)}`).join(" · ") : "";
   const login = /^[A-Za-z0-9-]{1,39}$/.test(sh?.shared_by ?? "") ? sh.shared_by : null;
   const on = /^\d{4}-\d{2}-\d{2}/.test(sh?.shared_at ?? "") ? sh.shared_at.slice(0, 10) : null;
   const by = login ? `<p>Shared by <a href="https://github.com/${esc(login)}" target="_blank" rel="noopener">@${esc(login)}</a>${on ? ` on ${esc(on)}` : ""}.</p>` : "";
   const files = [...(P.paper?.pdf ? [[P.paper.pdf, "Revised paper (PDF)"]] : []), ...(SNAP.leanDir ? [["lean/", "Lean code"]] : [])];
-  $("#status").innerHTML = `<div class="status"><div class="line"><span class="pill b-done">${esc(String(s.verdict ?? "report").replace(/_/g, " "))}</span><h2>Formalized with PaperFormalizer</h2></div>${b ? `<p>${esc(b)}</p>` : ""}${by}<div class="actions"><button class="btn" type="button" data-report>Full report</button>${files.map(([f, label]) => `<a class="btn" href="${esc(f)}" target="_blank" rel="noopener">${esc(label)}</a>`).join("")}</div></div>`;
+  $("#status").innerHTML = `<div class="status"><div class="line"><span class="pill b-done">${esc(bucketWord(String(s.verdict ?? "report")))}</span><h2>Formalized with PaperFormalizer</h2></div>${b ? `<p>${esc(b)}</p>` : ""}${by}<div class="actions"><button class="btn" type="button" data-report>Full report</button>${files.map(([f, label]) => `<a class="btn" href="${esc(f)}" target="_blank" rel="noopener">${esc(label)}</a>`).join("")}</div></div>`;
 }
 /* The bundle's REPORT.md, typeset in the drawer (a shared paper's page): its headings, paragraphs and
    lists, **bold** and `code`, and its formulas by KaTeX under the paper's macros. A plain reader of
@@ -1014,7 +1016,7 @@ function drawStatus() {
     ? `<section class="thread thread-hidden"><h3>Ask the agent${news ? ` <span class="msg-new">${news} new</span>` : ""}<span class="thread-tools">${hide}</span></h3></section>`
     : `<section class="thread"><h3>Ask the agent${news ? ` <span class="msg-new">${news} new</span>` : ""}<span class="thread-tools">${said.length ? `<button class="linkbtn" type="button" data-msg="clear" title="Archive this conversation in the run's folder and start afresh">Clear conversation</button>` : ""}${hide}</span></h3>${clearing}${rest.length ? `<div class="thread-list">${rest.map(messageHTML).join("")}</div>` : ""}${loose ? composeHTML() : `<div class="row"><button class="btn" type="button" data-msg="open">Write to the agent here</button><span class="hint">You are replying to its request above.</span></div>`}</section>`;
   const who = (s.orch ? `<span class="orch on">● ${esc(s.orch.agent)} attached — it acts at each halt</span>` : `<span class="orch">○ No agent attached <button class="linkbtn" type="button" id="orch-how">start one</button></span>`) +
-    (s.fullAuto ? `<span class="orch on" title="Started with --full-auto: the repairs that would weaken a main result and the promotion rounds take the agent's recommendations; each appears under “Review the agent's decisions”. You may still decide an item first.">full auto — your decisions take the agent's recommendations, for your review after</span>` : "");
+    (s.fullAuto ? `<span class="orch on" title="Started with --full-auto: the revisions that would weaken a main result and the promotion rounds take the agent's recommendations; each appears under “Review the agent's decisions”. You may still decide an item first.">full auto — your decisions take the agent's recommendations, for your review after</span>` : "");
   // rulings the agent made at halts, for the owner's review: approve, or reject with guidance (the agent acts on it)
   const reviews = (s.reviews ?? []).map((r) => `<div class="review" data-rid="${esc(r.id)}"><div><b>The agent decided</b> on ${esc(envOf(r.node)?.heading ?? r.node)} <span class="meta">${esc(ago(Date.parse(r.at)))}</span></div><div class="review-b">${tex(r.text, P.paper?.macros)}</div><div class="actions"><button class="btn btn-primary" type="button" data-review="approve">Approve</button><button class="btn" type="button" data-review="reject">Reject</button></div><div class="ask" hidden><label class="mono" style="font-size:var(--fs-2xs);color:var(--ink-faint)">What should the agent do instead?</label><textarea></textarea><div class="row" style="justify-content:flex-end"><button class="btn btn-ghost" type="button" data-review="cancel">Cancel</button><button class="btn btn-primary" type="button" data-review="send">Send to the agent</button></div></div></div>`).join("");
   host.insertAdjacentHTML("afterbegin", asks + (reviews ? `<section class="reviews"><h3>Review the agent's decisions</h3>${reviews}</section>` : ""));
@@ -1119,7 +1121,7 @@ function drawStatusBox() {
     return;
   }
   if (s.status === "done") {
-    const b = s.buckets ? Object.entries(s.buckets).map(([k, v]) => `${v} ${k.replace(/_/g, " ")}`).join(" · ") : "";
+    const b = s.buckets ? Object.entries(s.buckets).map(([k, v]) => `${v} ${bucketWord(k)}`).join(" · ") : "";
     // a finished paper can be shared on the public site; its last share is shown with where it stands
     const sh = d.share, shared = sh ? shareLineHTML(sh) : "";
     if (sh && !SHARE_FINAL.has(sh.status)) sharePoll(S.slug);
@@ -1132,7 +1134,7 @@ function drawStatusBox() {
   if (s.status === "needs-you") {
     let body = "";
     if (d.promotion?.waiting) body += `<p>Promotion round ${d.promotion.round}: ${d.promotion.proposals.length} result(s) are proposed for your toolkit. Each has its own Accept / Defer / Decline buttons, at the end of the paper.</p><div class="actions"><button class="btn btn-primary" type="button" data-jump="promo-sec">Decide them</button></div>`;
-    if (d.repairs?.length) body += P.sent ? `<p>Your decisions on the repairs were sent — the run is taking them up.</p>` : repairsPointerHTML(d);
+    if (d.repairs?.length) body += P.sent ? `<p>Your decisions on the revisions were sent — the run is taking them up.</p>` : repairsPointerHTML(d);
     if (s.toResume) body += `<div class="actions"><button class="btn" type="button" id="resume-plain">Resume the run</button></div>`;
     if (!s.orch && (d.halt || d.pending || s.toResume)) body += noOrchHTML(s.slug);
     host.innerHTML = `<div class="status needs"><div class="line"><span class="pill b-needs-you">needs you</span><h2>${tex(s.headline, P.paper?.macros)}</h2></div>${body}</div>`;
@@ -1210,8 +1212,8 @@ async function drawPdf(canvas) {
  *  correction (`corrected`). Pure. */
 function proofOnlyNote(r, live, corrected) {
   if (corrected || (r.repair !== "proof" && r.repair !== "none")) return null;
-  if (r.repair === "proof") return { text: "The statement stands as printed. The repair is in its proof — the corrected steps are marked where the proof is printed.", unrepaired: false };
-  return { text: live ? "The statement does not hold as printed. Its repair is being written." : "The statement does not hold as printed, and no repair of it is on file.", unrepaired: true };
+  if (r.repair === "proof") return { text: "The statement stands as printed. The revision is in its proof — the revised steps are marked where the proof is printed.", unrepaired: false };
+  return { text: live ? "The statement does not hold as printed. Its revision is being written." : "The statement does not hold as printed, and no revision of it is on file.", unrepaired: true };
 }
 function drawProofOnlyNotes() {
   $$("#paper-body .rv-proofonly").forEach((n) => n.remove());
@@ -1223,7 +1225,7 @@ function drawProofOnlyNotes() {
 }
 function badge(r) {
   if (r.needs) return `<span class="pill b-error">needs you</span>`;
-  if (r.bucket) return `<span class="pill ${({ verified: "b-verified", verified_with_bookkeeping: "b-vwb", conditional: "b-conditional", repaired: "b-repaired", refuted: "b-refuted" })[r.bucket] ?? "b-neutral"}">${esc(r.bucket.replace(/_/g, " "))}</span>`;
+  if (r.bucket) return `<span class="pill ${({ verified: "b-verified", verified_with_bookkeeping: "b-vwb", conditional: "b-conditional", repaired: "b-repaired", refuted: "b-refuted" })[r.bucket] ?? "b-neutral"}">${esc(bucketWord(r.bucket))}</span>`;
   if (r.state === "error") return r.paperError?.kind === "undetermined" ? `<span class="pill b-pending">not determined</span>` : `<span class="pill b-error">error</span>`;
   if (r.state === "minor") return `<span class="pill b-pending">clarification</span>`;
   if (r.review?.correctness) return `<span class="pill b-vwb">${esc(r.review.correctness)}</span>`;
@@ -1930,12 +1932,12 @@ async function promoSubmit(pr, apply, what = "") {
 
 /* Repairs that would weaken a main result: the owner accepts each, declines it, or asks for another. */
 const REC_WORDS = { accept: "accept", redo: "redo with guidance", decline: "decline (report it as an error)" };
-const REPAIR_KINDS = [["accept", "Accept", "Accept the proposed statement: it becomes the corrected result"], ["redo", "Redo with guidance", "Discard this proposal: the fixer repairs the result again along what you write"], ["decline", "Decline (report it as an error)", "Report the result as not holding as printed; it and what rests on it leave the Lean development"]];
+const REPAIR_KINDS = [["accept", "Accept", "Accept the proposed statement: it becomes the corrected result"], ["redo", "Redo with guidance", "Discard this proposal: the result is revised again along what you write"], ["decline", "Decline (report it as an error)", "Report the result as not holding as printed; it and what rests on it leave the Lean development"]];
 /* Each waits beside its statement, as a card in the margin; the status box only points there. */
 function repairsPointerHTML(d) {
   const n = d.repairs.length, recs = repairRecs(d.repairs);
   const links = d.repairs.map((r) => `<button class="linkbtn" type="button" data-goto="${esc(r.node)}">${esc(envOf(r.node)?.heading ?? r.node)}</button>${r.recommendation ? ` (the agent recommends: ${esc(REC_WORDS[r.recommendation.kind] ?? r.recommendation.kind)})` : ""}`).join(" · ");
-  return `<p>${n === 1 ? "A repair" : `${n} repairs`} would make a result of the paper weaker. ${n === 1 ? "It waits" : "Each waits"} for your decision beside its statement, marked red on the proof map: ${links}</p>${recs.fill.length + recs.missing.length ? `<div class="actions" style="justify-content:flex-end">${recButton("repair-recs", recs.missing.map((r) => envOf(r.node)?.heading ?? r.node))}</div>` : ""}`;
+  return `<p>${n === 1 ? "A revision" : `${n} revisions`} would make a result of the paper weaker. ${n === 1 ? "It waits" : "Each waits"} for your decision beside its statement, marked red on the proof map: ${links}</p>${recs.fill.length + recs.missing.length ? `<div class="actions" style="justify-content:flex-end">${recButton("repair-recs", recs.missing.map((r) => envOf(r.node)?.heading ?? r.node))}</div>` : ""}`;
 }
 /* What the agent's recommendation enters on a repair: the choice, with the guidance it offered for a
    redo or its reason for a decline — none when that text is missing. */
@@ -1984,11 +1986,11 @@ function repairCardHTML(r, d) {
   const ruling = P.sent
     ? `<p class="meta"><b>Your decision was sent</b> (${esc(REPAIR_KINDS.find(([k]) => k === c.kind)?.[1] ?? "")}) — the run is taking it up.</p>`
     : `<div class="choice">${REPAIR_KINDS.map(([k, l, t]) => `<button type="button" data-rk="${k}" title="${esc(t)}" aria-pressed="${c.kind === k}">${l}</button>`).join("")}</div>
-      ${wantsText ? `<textarea data-rtext rows="${c.kind === "redo" && (c.text ?? "").length > 160 ? 7 : 2}" style="width:100%;margin-top:0.4rem" placeholder="${c.kind === "redo" ? "What the new repair should do" : "Why you decline it"}">${esc(c.text ?? "")}</textarea>` : ""}
+      ${wantsText ? `<textarea data-rtext rows="${c.kind === "redo" && (c.text ?? "").length > 160 ? 7 : 2}" style="width:100%;margin-top:0.4rem" placeholder="${c.kind === "redo" ? "What the new revision should do" : "Why you decline it"}">${esc(c.text ?? "")}</textarea>` : ""}
       <div class="resume-in" style="margin-top:0.6rem"><span class="msg">${decided} of ${d.repairs.length} decided</span><span class="grow"></span><button class="btn btn-primary" type="button" data-repairs-send ${decided === d.repairs.length ? "" : "disabled"}>Send my decisions</button></div>`;
   return `<div class="card decision" data-card="repair:${esc(r.node)}" data-kind="note" data-chip="Findings" data-node="${esc(r.node)}" ${anchor ? `data-anchor="${esc(anchor)}"` : ""} data-repair="${esc(r.node)}" tabindex="0">
-    <div class="cbyline"><span class="av">PF</span><span class="cname">Your decision</span><span class="cwhen">${esc(envOf(r.node)?.heading ?? r.node)}</span><span class="ctag">weaker repair</span></div>
-    <div class="cbody"><p>${r.undetermined ? "The statement as printed does not determine what it claims (nothing was shown false). The proposed repair — in blue beside the statement — states one reading, and claims less." : "The statement as printed does not hold. The proposed repair — in blue beside the statement — is true but claims less."}</p>
+    <div class="cbyline"><span class="av">PF</span><span class="cname">Your decision</span><span class="cwhen">${esc(envOf(r.node)?.heading ?? r.node)}</span><span class="ctag">weaker revision</span></div>
+    <div class="cbody"><p>${r.undetermined ? "The statement as printed does not determine what it claims (nothing was shown false). The proposed revision — in blue beside the statement — states one reading, and claims less." : "The statement as printed does not hold. The proposed revision — in blue beside the statement — is true but claims less."}</p>
       <details><summary>The proposed statement, as shown in the paper</summary><div class="pstmt">${tex(r.proposed, m)}</div>
       ${(r.corollaries ?? []).map((x, k) => `<p class="meta">With split-off result ${k + 1}${x.title ? ` — ${tex(x.title, m)}` : ""} (a result of its own: a corollary of the statement, or a claim it bundled in)</p><div class="pstmt">${tex(x.statement, m)}</div>`).join("")}</details>
       <div class="prose"><b>What it gives up.</b> ${texEnum(r.given_up, m)}</div>
@@ -2012,11 +2014,11 @@ function repairClick(e) {
   return true;
 }
 /* Every repair's ruling, sent as the resume that carries them (`what`: said in its confirmation). */
-function sendRepairs(what = "", title = "Apply your decisions on the repairs", ok = "Continue") {
+function sendRepairs(what = "", title = "Apply your decisions on the revisions", ok = "Continue") {
   const pick = (k) => P.detail.repairs.filter((r) => repairChoice(P.repair, r).kind === k);
   const said = (r) => (P.repair[r.node].text ?? "").trim();
   const declined = pick("decline");
-  if ([...declined, ...pick("redo")].some((r) => !said(r))) { toast("Say why you decline, or what the new repair should do.", true); return false; }
+  if ([...declined, ...pick("redo")].some((r) => !said(r))) { toast("Say why you decline, or what the new revision should do.", true); return false; }
   const slug = S.slug;
   return runAction({
     kind: "rule-repairs", accept: pick("accept").map((r) => r.node),
@@ -2445,7 +2447,7 @@ function drawTour() {
   if (!host) { host = document.createElement("aside"); host.id = "tour"; host.setAttribute("aria-label", "Demo tour"); document.body.append(host); }
   const c = v.current, away = (location.hash || "#/") !== tourHref(v);
   host.className = TOUR.folded ? "tour folded" : "tour";
-  const wait = v.expect === "rule-repairs" ? "Waiting for your decisions on the repairs" : v.expect ? "Waiting for you to apply the round" : "";
+  const wait = v.expect === "rule-repairs" ? "Waiting for your decisions on the revisions" : v.expect ? "Waiting for you to apply the round" : "";
   host.innerHTML = TOUR.folded
     ? `<button class="btn" type="button" data-tour="unfold">Demo · step ${v.step + 1} of ${v.total}</button>`
     : `<div class="tour-head"><span class="pill b-agent">Demo</span><span class="meta">step ${v.step + 1} of ${v.total}</span><span class="grow"></span><button class="linkbtn" type="button" data-tour="fold" title="Fold the tour away">Hide</button></div>

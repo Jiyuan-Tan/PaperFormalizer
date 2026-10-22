@@ -134,9 +134,9 @@ describe("page: the choices it makes, as written", () => {
 
   it("an error's statement with no corrected text says where its repair is — and nothing when it shows one", () => {
     const note = load<(r: { repair: string | null }, live: boolean, corrected: boolean) => { text: string; unrepaired: boolean } | null>(["proofOnlyNote"], "proofOnlyNote");
-    expect(note({ repair: "proof" }, false, false)).toMatchObject({ unrepaired: false, text: expect.stringContaining("The repair is in its proof") });
-    expect(note({ repair: "none" }, false, false)).toMatchObject({ unrepaired: true, text: expect.stringContaining("no repair of it is on file") });
-    expect(note({ repair: "none" }, true, false)).toMatchObject({ unrepaired: true, text: expect.stringContaining("Its repair is being written") });
+    expect(note({ repair: "proof" }, false, false)).toMatchObject({ unrepaired: false, text: expect.stringContaining("The revision is in its proof") });
+    expect(note({ repair: "none" }, false, false)).toMatchObject({ unrepaired: true, text: expect.stringContaining("no revision of it is on file") });
+    expect(note({ repair: "none" }, true, false)).toMatchObject({ unrepaired: true, text: expect.stringContaining("Its revision is being written") });
     expect([note({ repair: "none" }, false, true), note({ repair: "proof" }, true, true), note({ repair: "statement" }, false, false), note({ repair: null }, false, false)]).toEqual([null, null, null, null]);
   });
 
@@ -386,7 +386,7 @@ describe("page: what waits for the owner is counted in the tab's title and, when
     payloads["/api/toolkit"] = { runs: [paper({ slug: "p0", title: "Other", status: "needs-you", requests: [{ id: "q1" }, { id: "q2" }] }), paper({ status: "needs-you", pending: { weakening: 1, promotion: null } })] };
     await page.refreshInbox!();
     expect(title()).toBe("(2) PaperFormalizer");
-    expect(shown.map((n) => [n.title, n.body])).toEqual([["Other", "The agent asks you something."], ["A Paper", "A repair that would weaken a result waits for your decision."]]);
+    expect(shown.map((n) => [n.title, n.body])).toEqual([["Other", "The agent asks you something."], ["A Paper", "A revision that would weaken a result waits for your decision."]]);
     await page.refreshInbox!();
     expect(shown).toHaveLength(2);
     // the agent writes; a promotion round waits
@@ -585,7 +585,7 @@ describe("page: a shared paper's page, drawn read-only from its bundle's snapsho
     expect([paper.toc[0]!.html, paper.comments[0]!.html, paper.comments[0]!.label]).toEqual(["<a>1 Intro</a>", "<b>n</b>", "<i>L</i>"]);
     // the status: the verdict, who shared it, the bundle's files — no Share, no conversation, no run to follow
     const status = at("#status").html;
-    for (const s of ["repaired", '<a href="https://github.com/alice" target="_blank" rel="noopener">@alice</a> on 2026-10-12', '<button class="btn" type="button" data-report>Full report</button>', 'href="corrected_paper/main.pdf"', 'href="lean/"']) expect(status).toContain(s);
+    for (const s of ['<span class="pill b-done">revised</span>', "<p>1 revised</p>", '<a href="https://github.com/alice" target="_blank" rel="noopener">@alice</a> on 2026-10-12', '<button class="btn" type="button" data-report>Full report</button>', 'href="corrected_paper/main.pdf"', 'href="lean/"']) expect(status).toContain(s);
     // the report opens typeset in the drawer, not as a raw file; the result-by-Lean list is not offered
     expect(status).not.toContain("MATCH.md");
     expect(status).not.toContain('href="REPORT.md"');
@@ -728,7 +728,7 @@ describe("page: the whole script draws a run from what the server sends", () => 
 
     // the status box: the pointer to the decision, the agent's question (escaped), its ruling to review
     const status = at("#status").html;
-    expect(status).toContain("A repair would make a result of the paper weaker.");
+    expect(status).toContain("A revision would make a result of the paper weaker.");
     expect(status).toContain(`data-goto="thm:a">Theorem 1</button> (the agent recommends: redo with guidance)`);
     expect(status).toContain("<b>The agent asks you:</b> which &lt;account&gt;?");
     // … with what was said on it under it — the owner's words as text, a formula of theirs typeset; the agent's typeset —
@@ -818,7 +818,7 @@ describe("page: the whole script draws a run from what the server sends", () => 
     expect(map).toContain(`data-pm="thm:cor-fix-0a1b2c3d" tabindex="0" role="button"><title>Corollary 1.1</title>`);
     expect(map).toContain(">Prop 3</text>");
     // under an error's statement with no corrected text: the repair is in the proof
-    expect(at(`.formal[data-label="lem:b"]`).html).toContain(`<div class="rv-proofonly">The statement stands as printed. The repair is in its proof`);
+    expect(at(`.formal[data-label="lem:b"]`).html).toContain(`<div class="rv-proofonly">The statement stands as printed. The revision is in its proof`);
 
     // every result's drawer draws; the referee's pinned reading and its enumerated detail among them
     for (const r of detail.results) {
@@ -889,7 +889,7 @@ describe("page: the whole script draws a run from what the server sends", () => 
     page.drawCards!(); page.drawStatus!();
     expect(last("#rail-cards")).toContain("<b>Your decision was sent</b> (Redo with guidance)");
     expect(last("#rail-cards")).not.toContain("data-repairs-send");
-    expect(at("#status").html).toContain("Your decisions on the repairs were sent");
+    expect(at("#status").html).toContain("Your decisions on the revisions were sent");
     await page.showPaper!("p1", false); await page.showPaper!("p1", false);
     expect(P.sent).toMatchObject({ seen: 2 });
     await page.showPaper!("p1", false);
@@ -897,7 +897,7 @@ describe("page: the whole script draws a run from what the server sends", () => 
     expect(at(".toast").text).toContain("did not take up your decisions");
     expect(last("#rail-cards")).toContain(`aria-pressed="true">Redo with guidance</button>`);
     expect(last("#rail-cards")).toContain("data-repairs-send");
-    expect(at("#status").html).toContain("A repair would make a result of the paper weaker.");
+    expect(at("#status").html).toContain("A revision would make a result of the paper weaker.");
     before = { cards: count("#rail-cards"), map: count("#pm-marks"), drawer: count("#d-body") };
 
     // the run is started: live, the repair is no longer the owner's to rule on (the server sends none)
