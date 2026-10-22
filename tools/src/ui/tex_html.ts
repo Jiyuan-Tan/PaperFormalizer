@@ -727,6 +727,8 @@ interface Ctx {
   marks: number;
   footnotes: number;
   mathCache: Map<string, string>;
+  /** The macros formulas are read under (a hash): with the formula, `TYPESET`'s key. */
+  mathKey: string;
   kinds: Record<string, string>;
   assets: Set<string>;
   assetsLower: Map<string, string>;
@@ -815,7 +817,16 @@ function renderMath(ctx: Ctx, tex00: string, display: boolean): string {
   const key = `${display ? "D" : "I"}${tex}`;
   const hit = ctx.mathCache.get(key);
   if (hit !== undefined) return hit;
-  let out: string;
+  // typeset by an earlier render under the same macros: its markup, and what it counted then
+  const gkey = `${ctx.mathKey}\n${key}`, kept = TYPESET.get(gkey);
+  if (kept) {
+    TYPESET.delete(gkey); TYPESET.set(gkey, kept);
+    if (kept.fallback) ctx.health.mathFallbacks++;
+    if (kept.error !== null) ctx.health.mathFailures.push({ tex: src, error: kept.error, near: ctx.envStack.at(-1) ?? ctx.lastEnv ?? ctx.toc.at(-1)?.text ?? "" });
+    ctx.mathCache.set(key, kept.out);
+    return kept.out;
+  }
+  let out: string, fallback = false, error: string | null = null;
   try {
     out = katex.renderToString(tex, {
       displayMode: display, throwOnError: true, strict: "ignore", trust: false, output: "html",
@@ -824,15 +835,23 @@ function renderMath(ctx: Ctx, tex00: string, display: boolean): string {
   } catch {
     try {
       out = `<span class="mjx${display ? " mjx-d" : ""}">${ctx.mathjax()(tex, display)}</span>`;
-      ctx.health.mathFallbacks++;
+      ctx.health.mathFallbacks++; fallback = true;
     } catch (err) {
       out = `<code class="tex-raw" title="neither KaTeX nor MathJax reads this formula">${esc(src)}</code>`;
-      ctx.health.mathFailures.push({ tex: src, error: String((err as { message?: unknown })?.message ?? err), near: ctx.envStack.at(-1) ?? ctx.lastEnv ?? ctx.toc.at(-1)?.text ?? "" });
+      error = String((err as { message?: unknown })?.message ?? err);
+      ctx.health.mathFailures.push({ tex: src, error, near: ctx.envStack.at(-1) ?? ctx.lastEnv ?? ctx.toc.at(-1)?.text ?? "" });
     }
   }
   ctx.mathCache.set(key, out);
+  TYPESET.set(gkey, { out, fallback, error });
+  while (TYPESET.size > TYPESET_MAX) TYPESET.delete(TYPESET.keys().next().value!);
   return out;
 }
+
+/** Formulas typeset by any render of this process, by the macros they were read under and the formula,
+ *  least recently used first: a paper drawn again (an edit, a new stage) typesets only what changed. */
+const TYPESET = new Map<string, { out: string; fallback: boolean; error: string | null }>();
+const TYPESET_MAX = 20000;
 
 /** The next value of a LaTeX counter, with its parent's number in front when numbered within one. */
 function nextNumber(ctx: Ctx, counter: string): string {
@@ -1960,12 +1979,13 @@ export function paperRenderer(input: PaperInput): { paper: RenderedPaper; fragme
   const health = emptyHealth();
   const aux = readAux(input.aux);
   const mathMacros = katexMacros(pre.macros);
+  const mathKey = createHash("sha1").update(JSON.stringify(mathMacros)).digest("base64url");
   let mj: ((tex: string, display: boolean) => string) | null = null;
   const mathjax = () => (mj ??= mathjaxRenderer({ ...KATEX_GAPS, ...mathMacros }));
   const refNames: Record<string, string> = {}, refKinds: Record<string, "section" | "appendix"> = {};
   const make = (pass: 1 | 2, own: Record<string, string>, cache: Map<string, string>): Ctx => ({
     pass, pre, aux, own, refNames, refKinds, counters: {}, sec: [], appendix: false, target: "", toc: [], comments: [], envs: [], anchors: {}, readings: {}, pinned,
-    envStack: [], splits: {}, umbrellas: { names: [], open: null }, splitKinds: input.splitKinds ?? {}, lastEnv: null, lastEnvEnd: null, marks: 0, footnotes: 0, mathCache: cache, kinds: input.theoremKinds ?? {},
+    envStack: [], splits: {}, umbrellas: { names: [], open: null }, splitKinds: input.splitKinds ?? {}, lastEnv: null, lastEnvEnd: null, marks: 0, footnotes: 0, mathCache: cache, mathKey, kinds: input.theoremKinds ?? {},
     assets, assetsLower: new Map([...assets].map((a) => [a.toLowerCase(), a])), assetBase: input.assetBase ?? "", tikz: input.tikz ? { url: input.tikz.url, page: new Map(input.tikz.pictures.map((t, k) => [t.replace(/\s+/g, ""), k + 1])) } : null, health, depth: 0, expansions: 0, mathMacros,
     mathOverrides: input.mathOverrides ?? {}, mathjax, toggles: { ...pre.toggles },
   });

@@ -6,9 +6,10 @@ import path from "node:path";
 import { afterAll, describe, expect, it } from "vitest";
 import { buildArgv, displayCommand, setDecisions } from "../../src/ui/actions.js";
 import { paperNames, paperUses, parseModule } from "../../src/ui/library_model.js";
-import { texCut, closedProofs, liveHeadline, markStarted, ownerReadingsByComment, redoingOf, repairKey, runDetail, runLive, runSummary, stageIndexOf, validSlug } from "../../src/ui/run_model.js";
+import { texCut, closedProofs, liveHeadline, markStarted, ownerReadingsByComment, redoingOf, repairKey, runDetail, newerRuns, runLive, runSummary, stageIndexOf, validSlug } from "../../src/ui/run_model.js";
 import { gunzipSync } from "node:zlib";
 import { readFileSync } from "node:fs";
+import { brotliDecompressSync } from "node:zlib";
 import { authorNames, expandDelimited, frontMatter, inlineInputs, katexMacros, paperRenderer, readAux, readPreamble, renderPaper, sentenceGroups, sentencePart, statementParts, texSentences, tikzPictures, tikzSetup } from "../../src/ui/tex_html.js";
 import { displayWhole, partAlone, segmentStatement } from "../../src/formalization/nl_links.js";
 import http from "node:http";
@@ -213,6 +214,9 @@ Body.\end{document}`;
     expect(p.health.mathFailures).toEqual([expect.objectContaining({ tex: "\\zzundefined x", near: "1 S" })]);
     expect(p.health.mathErrors).toBe(1);
     expect(p.html).toContain('class="tex-raw"');
+    // drawn again (the formulas now come from the process's cache): the same page, the same counts
+    const again = renderPaper({ files: { "m.tex": src }, main: "m.tex" });
+    expect([again.html, again.health.mathFallbacks, again.health.mathFailures]).toEqual([p.html, 1, p.health.mathFailures]);
     const fixed = renderPaper({ files: { "m.tex": src }, main: "m.tex", mathOverrides: { "\\zzundefined x": "z x" } });
     expect(fixed.health.mathFailures).toEqual([]);
     expect(fixed.html).not.toContain("tex-raw");
@@ -1298,6 +1302,10 @@ describe("run status: who a halt waits on", () => {
     }
     expect(await runSummary(cfg, "old")).toMatchObject({ status: "superseded", supersededBy: "redo" });
     expect(await runSummary(cfg, "redo")).toMatchObject({ status: "needs-you", supersededBy: null });
+    // the toolkit's list works the same out for all its runs in one pass
+    const newer = await newerRuns(cfg, ["old", "redo"]);
+    expect([...newer]).toEqual([["old", "redo"], ["redo", null]]);
+    expect(await runSummary(cfg, "old", newer)).toMatchObject({ status: "superseded", supersededBy: "redo" });
   });
   it("sums the run's token ledger, counting the calls whose usage could not be read", async () => {
     halt("tok", "3", "2.5");
@@ -1354,6 +1362,22 @@ describe("server: 127.0.0.1, a session key, the Host header", () => {
     expect((await fetch(`${base}/api/runs/r1/delegate`, { method: "POST", headers: { Cookie: cookie }, body: "{}" })).status).toBe(403);
     const etag = (await fetch(`${base}/api/toolkit`, { headers: { Cookie: cookie } })).headers.get("etag")!;
     expect((await fetch(`${base}/api/toolkit`, { headers: { Cookie: cookie, "If-None-Match": etag } })).status).toBe(304);
+    // the list is built again once the watcher sees a change (a new run): the old tag no longer holds
+    mkdirSync(path.join(root, "runs", "r2"), { recursive: true });
+    writeFileSync(path.join(root, "runs", "r2", "state.json"), "{}");
+    let again: Response | null = null;
+    for (let k = 0; k < 60 && (again?.status ?? 304) === 304; k++) { await new Promise((r) => setTimeout(r, 100)); again = await fetch(`${base}/api/toolkit`, { headers: { Cookie: cookie, "If-None-Match": etag } }); }
+    expect(again!.status).toBe(200);
+    expect(((await again!.json()) as { runs: Array<{ slug: string }> }).runs.map((r) => r.slug).sort()).toEqual(["r1", "r2"]);
+    rmSync(path.join(root, "runs", "r2"), { recursive: true, force: true });
+    // a browser that takes brotli is sent brotli, the same JSON
+    const br = await new Promise<{ enc: string | undefined; body: Buffer }>((resolve) => {
+      http.get({ host: "127.0.0.1", port: Number(new URL(base).port), path: "/api/toolkit", headers: { Cookie: cookie, "Accept-Encoding": "gzip, br" } }, (res) => {
+        const parts: Buffer[] = []; res.on("data", (d: Buffer) => parts.push(d)); res.on("end", () => resolve({ enc: res.headers["content-encoding"], body: Buffer.concat(parts) }));
+      });
+    });
+    expect(br.enc).toBe("br");
+    expect((JSON.parse(brotliDecompressSync(br.body).toString("utf8")) as { runs: unknown[] }).runs.length).toBeGreaterThan(0);
     // an SSH forward to another local port is served; a foreign host name (DNS rebinding) is refused
     const viaHost = (host: string) => new Promise<number>((resolve) => {
       const r = http.request({ host: "127.0.0.1", port: Number(new URL(base).port), path: "/api/toolkit", headers: { Host: host, Cookie: cookie } }, (res) => { res.resume(); resolve(res.statusCode ?? 0); });

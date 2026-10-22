@@ -1225,16 +1225,18 @@ function drawBadges() {
     a.innerHTML = !r || a.closest(".rv.cor, .prose-res") || (r.label && inEnv.has(r.label)) ? "" : resBadge(r);
   }
 }
-/* Formulas of a shared paper the site's build set apart (`SNAP.math`): each placeholder in `root`
-   replaced by its formula's markup. */
+/* Formulas the paper's view set apart (`paper.math`: the UI's server, `formulas_apart.ts`, or the site's
+   build): each placeholder in `root` replaced by its formula's markup. */
 function drawMath(root) {
-  if (!SNAP?.math || !root?.querySelectorAll) return;
-  for (const ph of root.querySelectorAll(".kx[data-k]")) { const h = SNAP.math[Number(ph.dataset.k)]; if (typeof h === "string") ph.outerHTML = h; }
+  const table = P.paper?.math;
+  if (!Array.isArray(table) || !root?.querySelectorAll) return;
+  for (const ph of root.querySelectorAll(".kx[data-k]")) { const h = table[Number(ph.dataset.k)]; if (typeof h === "string") ph.outerHTML = h; }
 }
 /** The formulas of each part of the paper drawn as that part nears the window (all at once without IntersectionObserver). */
 function setupMath(body) {
-  if (!SNAP?.math) return;
-  const parts = [...body.children].filter((b) => b.querySelector(".kx"));
+  if (!Array.isArray(P.paper?.math)) return;
+  const parts = Array.from(body?.children ?? []).filter((b) => b.querySelector?.(".kx"));
+  if (!parts.length) { drawMath(body); return; }
   if (!window.IntersectionObserver) { parts.forEach(drawMath); return; }
   const io = new IntersectionObserver((ents) => { for (const en of ents) if (en.isIntersecting) { io.unobserve(en.target); drawMath(en.target); } }, { rootMargin: "1500px 0px" });
   parts.forEach((b) => io.observe(b));
@@ -1315,7 +1317,7 @@ function drawCards() {
     // clicked near its end must not send it back to its top)
     const was = els.map((c) => [c.dataset.card, $(".cbody", c)?.scrollTop ?? 0]).filter(([, t]) => t > 0);
     host.innerHTML = now.map(([, html]) => html).join("");
-    fillBodies(host);
+    fillBodies(host); cardMath(host);
     linkedId = null; link(P.open); // the cards are new elements: the open one is marked again
     for (const [id, top] of was) {
       const c = $$(".card", host).find((x) => x.dataset.card === id); const body = c && $(".cbody", c);
@@ -1353,9 +1355,12 @@ function fillBodies(root) {
   if (!SNAP?.bodies) return;
   const byId = new Map((P.paper?.comments ?? []).map((c) => [c.id, c.html]));
   for (const b of root.querySelectorAll(".cbody[data-body]")) { const h = byId.get(b.dataset.body); if (h !== undefined) b.innerHTML = h; b.removeAttribute("data-body"); }
-  // the build set a card's formulas apart too: drawn as the card nears the window (its first lines show
-  // when closed, so its height hardly changes; the cards are placed again after)
-  if (!SNAP.math || !window.IntersectionObserver) { drawMath(root); return; }
+}
+/** A card's formulas, set apart with the paper's: drawn as the card nears the window (its first lines show
+ *  when closed, so its height hardly changes; the cards are placed again after), all of it when it opens. */
+function cardMath(root) {
+  if (!Array.isArray(P.paper?.math)) return;
+  if (!window.IntersectionObserver) { drawMath(root); return; }
   cardMathIO ??= new IntersectionObserver((ents) => {
     let drew = false;
     for (const en of ents) if (en.isIntersecting) { cardMathIO.unobserve(en.target); drawMath(en.target); drew = true; }
@@ -1367,7 +1372,7 @@ let cardMathIO = null;
 function swapCard(el, html) {
   const id = el.dataset.card, top = $(".cbody", el)?.scrollTop ?? 0, cls = el.className, style = el.getAttribute("style");
   el.outerHTML = html;
-  const now = cardEl(id); fillBodies(now); now.className = cls; if (style) now.setAttribute("style", style);
+  const now = cardEl(id); fillBodies(now); cardMath(now); now.className = cls; if (style) now.setAttribute("style", style);
   const body = $(".cbody", now); if (body) body.scrollTop = top;
 }
 function cardHTML(c, r, o = { own: [], atRest: false, draft: null }) {

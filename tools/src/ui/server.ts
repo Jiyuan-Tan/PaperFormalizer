@@ -9,15 +9,16 @@ import http from "node:http";
 import { createRequire } from "node:module";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
-import { gzipSync } from "node:zlib";
+import { brotliCompressSync, constants as zlibConstants, gzipSync } from "node:zlib";
 import type { ToolkitConfig } from "../toolkit/config.js";
 import type { ChecklistDecision } from "../proposals/checklist.js";
 import type { ProposalBatch } from "../proposals/schema.js";
 import { buildArgv, displayCommand, launch, needsAgent, writeChecklistDecisions, type Action } from "./actions.js";
 import { derive, readJsonCached, signature } from "./fscache.js";
+import { formulasApart } from "./formulas_apart.js";
 import { readLibrary } from "./library_model.js";
 import { ASSET_EXT, MATH_OVERRIDES_FILE, runPaper, texStrings, type Fragment, type PaperView } from "./page_snapshot.js";
-import { applyOf, renderCheckpointOf, checklistPath, DECISIONS_FILE, listRunSlugs, markApplying, markStarted, OBJECTIONS_FILE, START_REQUEST_FILE, MESSAGES_FILE, drawersOf, pageOf, runDetail, runDir, runLive, runSummary, validSlug, type MessageFile, type OrchDecision, type OrchMessage, type OwnerObjection } from "./run_model.js";
+import { applyOf, renderCheckpointOf, checklistPath, DECISIONS_FILE, listRunSlugs, newerRuns, markApplying, markStarted, OBJECTIONS_FILE, START_REQUEST_FILE, MESSAGES_FILE, drawersOf, pageOf, runDetail, runDir, runLive, runSummary, validSlug, type MessageFile, type OrchDecision, type OrchMessage, type OwnerObjection } from "./run_model.js";
 import { writeJsonAtomic } from "../shared/json_atomic.js";
 import { clearMessages, nextMessageId, updateMessages } from "../../scripts/messages_store.mjs";
 import { planFingerprint, pollShare, readShare, sharePaper, sharePlan, shareRecordView, shareView, type ShareDeps } from "../verify/share.js";
@@ -85,6 +86,7 @@ export async function startUiServer(cfg: ToolkitConfig, opts: { port: number; ho
   // MATH_FAILURES_FILE current for the agent without the page being open
   const rerender = new Map<string, NodeJS.Timeout>();
   const watcher = new ChangeWatcher(cfg, (scope) => {
+    if (scope === "toolkit" || scope.startsWith("run:")) toolkitGen++;
     for (const c of clients) c.write(`event: change\ndata: ${JSON.stringify({ scope })}\n\n`);
     const slug = scope.startsWith("run:") ? scope.slice(4) : null;
     if (slug) { clearTimeout(rerender.get(slug)); rerender.set(slug, setTimeout(() => { rerender.delete(slug); void warmPaper(slug).catch(() => null); }, 5000)); }
@@ -99,10 +101,10 @@ export async function startUiServer(cfg: ToolkitConfig, opts: { port: number; ho
   // the key a share dialog was shown with: of one slug and one plan, good once, for ten minutes
   const shareKeys = new Map<string, { slug: string; plan: string; until: number }>();
   // a view's answer, held while its key stands: its tag, and its gzip once a client asked for the body
-  const answers = new Map<string, { key: string; etag: string; gz: Buffer | null }>();
+  const answers = new Map<string, { key: string; etag: string; gz: Buffer | null; br: Buffer | null }>();
   const answerOf = (name: string, key: string) => {
     let hit = answers.get(name);
-    if (!hit || hit.key !== key) answers.set(name, hit = { key, etag: `"${createHash("sha1").update(`${BOOT}:${name}:${key}`).digest("base64url")}"`, gz: null });
+    if (!hit || hit.key !== key) answers.set(name, hit = { key, etag: `"${createHash("sha1").update(`${BOOT}:${name}:${key}`).digest("base64url")}"`, gz: null, br: null });
     return hit;
   };
   // per run: the paper's fragment renderer, what it rendered, and the formulas no renderer read
@@ -168,8 +170,12 @@ export async function startUiServer(cfg: ToolkitConfig, opts: { port: number; ho
   const sendView = (req: http.IncomingMessage, res: http.ServerResponse, name: string, key: string, body: () => string) => {
     const hit = answerOf(name, key);
     if (req.headers["if-none-match"] === hit.etag) { res.writeHead(304, { ETag: hit.etag }); res.end(); return; }
-    const headers: Record<string, string> = { "Content-Type": "application/json; charset=utf-8", ETag: hit.etag, "Cache-Control": "no-cache" };
-    if (!/\bgzip\b/.test(String(req.headers["accept-encoding"] ?? ""))) { res.writeHead(200, headers); res.end(body()); return; }
+    const headers: Record<string, string> = { "Content-Type": "application/json; charset=utf-8", ETag: hit.etag, "Cache-Control": "no-cache", Vary: "Accept-Encoding" };
+    const accepts = String(req.headers["accept-encoding"] ?? "");
+    // brotli where the browser takes it (a large paper's view in half gzip's bytes, at quality 5 about
+    // gzip's time), else gzip; each made once per key
+    if (/\bbr\b/.test(accepts)) { hit.br ??= brotliCompressSync(body(), { params: { [zlibConstants.BROTLI_PARAM_QUALITY]: 5 } }); res.writeHead(200, { ...headers, "Content-Encoding": "br" }); res.end(hit.br); return; }
+    if (!/\bgzip\b/.test(accepts)) { res.writeHead(200, headers); res.end(body()); return; }
     hit.gz ??= gzipSync(body());
     res.writeHead(200, { ...headers, "Content-Encoding": "gzip" }); res.end(hit.gz);
   };
@@ -198,10 +204,21 @@ export async function startUiServer(cfg: ToolkitConfig, opts: { port: number; ho
     res.end(gz ? gzipSync(data) : data);
   };
 
-  const toolkitView = async () => {
+  // The toolkit's list is built once per change the watcher reports (a run's files or pulse, the list of
+  // runs): every tab asks for it at every push, and building it reads every run.
+  let toolkitGen = 0;
+  let toolkitBuilt: { gen: number; value: Promise<Awaited<ReturnType<typeof buildToolkitView>>> } | null = null;
+  const toolkitView = () => {
+    if (toolkitBuilt?.gen !== toolkitGen) toolkitBuilt = { gen: toolkitGen, value: buildToolkitView() };
+    const hit = toolkitBuilt;
+    hit.value.catch(() => { if (toolkitBuilt === hit) toolkitBuilt = null; });
+    return hit.value;
+  };
+  const buildToolkitView = async () => {
     const slugs = listRunSlugs(cfg);
     // a run redone on the same paper is history: the later run stands for the paper
-    const runs = (await Promise.all(slugs.map((s) => runSummary(cfg, s)))).filter((r) => r.status !== "superseded");
+    const newer = await newerRuns(cfg, slugs);
+    const runs = (await Promise.all(slugs.map((s) => runSummary(cfg, s, newer)))).filter((r) => r.status !== "superseded");
     runs.sort((a, b) => (rank(a.status) - rank(b.status)) || b.updatedAt - a.updatedAt);
     return {
       toolkit: {
@@ -231,10 +248,12 @@ export async function startUiServer(cfg: ToolkitConfig, opts: { port: number; ho
     });
   };
 
+  /** The paper view as sent: its formulas set apart (`formulas_apart.ts`), drawn by the page as needed. */
+  const paperJson = (value: PaperView | null) => JSON.stringify(value ? formulasApart(value) : value);
   /** The paper rendered and its answer zipped, ahead of the page asking. */
   const warmPaper = async (slug: string) => {
     const { value, key } = await paperView(slug);
-    answerOf(`paper:${slug}`, key).gz ??= gzipSync(JSON.stringify(value));
+    answerOf(`paper:${slug}`, key).gz ??= gzipSync(paperJson(value));
   };
 
   const server = http.createServer(async (req, res) => {
@@ -274,7 +293,14 @@ export async function startUiServer(cfg: ToolkitConfig, opts: { port: number; ho
         req.on("close", () => { clearInterval(ping); clients.delete(res); });
         return;
       }
-      if (p === "/api/toolkit" && req.method === "GET") { sendJson(req, res, await toolkitView()); return; }
+      if (p === "/api/toolkit" && req.method === "GET") {
+        // keyed by the watcher's generation: an unchanged list is a 304 without being built
+        const gen = toolkitGen, hit = answerOf("toolkit", String(gen));
+        if (req.headers["if-none-match"] === hit.etag) { res.writeHead(304, { ETag: hit.etag }); res.end(); return; }
+        const value = await toolkitView();
+        sendView(req, res, "toolkit", String(gen), () => JSON.stringify(value));
+        return;
+      }
       if (p === "/api/demo" || p.startsWith("/api/demo/")) {
         // the demo's tour: where it stands, its Next, and a restart from the first step
         const demo = opts.demo;
@@ -314,7 +340,7 @@ export async function startUiServer(cfg: ToolkitConfig, opts: { port: number; ho
           sendView(req, res, `${sub || "page"}:${slug}`, `${paper?.key}\n${JSON.stringify(part)}`, () => JSON.stringify({ ...part, texHtml: texHtmlFor(slug, part) }));
           return;
         }
-        if (sub === "paper" && req.method === "GET") { const { value, key } = await paperView(slug); sendView(req, res, `paper:${slug}`, key, () => JSON.stringify(value)); return; }
+        if (sub === "paper" && req.method === "GET") { const { value, key } = await paperView(slug); sendView(req, res, `paper:${slug}`, key, () => paperJson(value)); return; }
         if ((sub === "preview" || sub === "action") && req.method === "POST") {
           const body = await readBody(req) as { action?: Action };
           if (!body.action) { fail(res, 400, "no action"); return; }

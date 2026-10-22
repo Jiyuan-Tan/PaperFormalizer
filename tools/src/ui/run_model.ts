@@ -449,6 +449,19 @@ const updatedOf = (cfg: ToolkitConfig, slug: string): number =>
   Math.max(mtime(path.join(runDir(cfg, slug), "pipeline.jsonl")), mtime(path.join(runDir(cfg, slug), "state.json")));
 
 /** The most recently updated other run of the same paper (same source hash), when it is newer than this one. */
+/** For each of `slugs`, the run of the same paper (its source's sha256) updated after it, the latest of
+ *  them — `newerRunOf` for every run in one pass over the runs, not one pass per run. */
+export async function newerRuns(cfg: ToolkitConfig, slugs: string[]): Promise<Map<string, string | null>> {
+  const runs = await Promise.all(slugs.map(async (slug) => ({ slug, sha: (await readState(cfg, slug))?.verify?.source?.sha256, at: updatedOf(cfg, slug) })));
+  const bySha = new Map<string, typeof runs>();
+  for (const r of runs) if (r.sha) bySha.set(r.sha, [...(bySha.get(r.sha) ?? []), r]);
+  return new Map(runs.map((r) => {
+    let best: (typeof runs)[number] | null = null;
+    for (const o of r.sha ? bySha.get(r.sha)! : []) if (o.slug !== r.slug && o.at > r.at && (!best || o.at > best.at)) best = o;
+    return [r.slug, best?.slug ?? null];
+  }));
+}
+
 async function newerRunOf(cfg: ToolkitConfig, slug: string, sha: string | undefined, updatedAt: number): Promise<string | null> {
   if (!sha) return null;
   let best: { slug: string; at: number } | null = null;
@@ -464,7 +477,8 @@ async function newerRunOf(cfg: ToolkitConfig, slug: string, sha: string | undefi
  *  last line of a run that halted, stopped after a stage or finished. */
 const ENDED_AT_WORK = /^(dispatch|dispatch-complete|failed|rewound)$/;
 
-export async function runSummary(cfg: ToolkitConfig, slug: string): Promise<RunSummary> {
+/** `newer`: `newerRuns` of the toolkit's runs, when the caller summarises them all (else looked up for this one). */
+export async function runSummary(cfg: ToolkitConfig, slug: string, newer?: Map<string, string | null>): Promise<RunSummary> {
   const dir = runDir(cfg, slug);
   const state = await readState(cfg, slug);
   const { title, authors } = await titleOf(cfg, slug, state);
@@ -496,7 +510,7 @@ export async function runSummary(cfg: ToolkitConfig, slug: string): Promise<RunS
   const confirming = pd?.confirming ? pd.weakening.length : 0;
   const pending = { weakening: confirming || rcp ? 0 : pd?.weakening.length ?? 0, rewind: Boolean(pd?.rewind), cap: Boolean(pd?.cap), promotion, checkpoint: halted };
   const updatedAt = updatedOf(cfg, slug);
-  const supersededBy = live ? null : await newerRunOf(cfg, slug, verify?.source?.sha256, updatedAt);
+  const supersededBy = live ? null : newer?.has(slug) ? newer.get(slug)! : await newerRunOf(cfg, slug, verify?.source?.sha256, updatedAt);
   const orch = await orchOf(cfg, slug);
   const requests = ((await readJsonCached<OrchRequest[]>(path.join(dir, "orch_requests.json"))) ?? []).filter((r) => r && r.text);
   const reviews = ((await readJsonCached<OrchDecision[]>(path.join(dir, DECISIONS_FILE))) ?? []).filter((d) => d && d.text && !d.review);
