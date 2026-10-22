@@ -46,6 +46,13 @@ const AUX = String.raw`\newlabel{thm:a}{{7}{3}}
 \bibcite{hajek}{{1}{1960}{{H\'ajek}}{{}}}`;
 
 describe("tex_html: the paper page renderer", () => {
+  it("a \\cref inside math reads with its name, as outside math", () => {
+    const tex = String.raw`\newtheorem{assumption}{Assumption}\begin{document}\begin{assumption}\label{asp:a}X.\end{assumption}
+Then $y \le 1 \text{ by \cref{asp:a}}$ and $z \text{ by \ref{asp:a}}$.\end{document}`;
+    const text = renderPaper({ files: { "m.tex": tex }, main: "m.tex" }).html.replace(/<span class="katex-mathml">[^]*?<\/span>/g, "").replace(/<[^>]+>/g, "");
+    expect(text).toMatch(/by\sAssumption\s1(?!\d)/u);
+    expect(text).toMatch(/by\s1(?!\d)/u);
+  });
   const r = renderPaper({ files: { "main.tex": PAPER, "part.tex": String.raw`\subsection{Inputted}Text from a second file.` }, main: "main.tex", aux: AUX });
   it("reads title, authors (without \\thanks), sections and the numbering in the .aux", () => {
     expect(r.title).toBe("A Paper");
@@ -67,7 +74,7 @@ describe("tex_html: the paper page renderer", () => {
     const block = p.html.slice(at, p.html.indexOf('<div class="rv ins cor pending formal'));
     expect(block).toContain('<span class="res-anchor" id="res-thm-cor-fix-0a1b2c3d" data-node="thm:cor-fix-0a1b2c3d"></span>');
     // headed like a printed result; the review's word on it is the small tag
-    expect(block).toMatch(/<span class="env">Corollary 7\.1\.<\/span> <span class="rv-tag">Added by the repair<\/span>/);
+    expect(block).toMatch(/<span class="env">Corollary 7\.1\.<\/span> <span class="rv-tag">Added by the revision<\/span>/);
     expect(block).toContain("the Gaussian case.");
     // its proof is headed and closed like a proof of the paper, inside the block
     expect(block).toMatch(/<div class="proof"><span class="env">Proof\.<\/span> By Theorem.*<span class="qed">∎<\/span><\/div><\/div>\s*$/s);
@@ -1089,7 +1096,7 @@ describe("run status: who a halt waits on", () => {
     writeFileSync(path.join(dir, "state.json"), JSON.stringify({ stage_completed: "V1", verify: { phase: "v1" } }));
     writeFileSync(path.join(dir, "pipeline.jsonl"), JSON.stringify({ timestamp: "2026-10-03T00:00:00Z", stage: "4", status: "checkpoint", message: "PROOF-REVIEW LOOP ESCALATION" }) + "\n");
     writeFileSync(path.join(dir, "logs", ".run.active"), `${process.pid} 2026-10-03T01:00:00Z x\n`);
-    expect(await runSummary(cfg, "back")).toMatchObject({ status: "running", stageIndex: -1, headline: "V1 · repairing the statements sent back", lastEvent: null });
+    expect(await runSummary(cfg, "back")).toMatchObject({ status: "running", stageIndex: -1, headline: "V1 · revising the statements sent back", lastEvent: null });
     // once it logs, the log says where it is
     appendFileSync(path.join(dir, "pipeline.jsonl"), JSON.stringify({ timestamp: "2026-10-03T02:00:00Z", stage: "V1.5", status: "dispatch", message: "V1.5 referee" }) + "\n");
     expect((await runSummary(cfg, "back")).headline).toContain("V1.5");

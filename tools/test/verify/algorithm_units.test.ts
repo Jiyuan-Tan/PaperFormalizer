@@ -384,7 +384,7 @@ describe("a repaired step in the annotated paper, the corrected paper and the pa
     const fig = html.slice(html.indexOf('<figure class="alg"'), html.indexOf("</figure>"));
     expect(fig.match(/<li style="--lvl:\d">/gu)).toHaveLength(10);
     expect(fig).toMatch(/<span class="ln">9<\/span><span class="lt">\s*<div class="rv del"[^>]*><span class="rv-tag">Original<\/span> Compute adaptive Hill estimator/u);
-    expect(fig).toMatch(/<div class="rv ins"[^>]*><span class="rv-tag">Corrected<\/span> Compute the adaptive Hill estimator on all/u);
+    expect(fig).toMatch(/<div class="rv ins"[^>]*><span class="rv-tag">Revised<\/span> Compute the adaptive Hill estimator on all/u);
     const inMark = renderPaper({ files: { "m.tex": "\\begin{document}\\begin{algorithmic}[1]\n\\State \\vsOriginal{\\Return $x$ \\Comment{old}} \\vsCorrected{$y$}\n\\State done\n\\end{algorithmic}\\end{document}" }, main: "m.tex", aux: "" }).html;
     expect(inMark.match(/<li style="--lvl:\d">/gu)).toHaveLength(2);
   });

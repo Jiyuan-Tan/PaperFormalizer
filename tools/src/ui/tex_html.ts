@@ -642,13 +642,13 @@ const FOLD_CHARS = 900;
 const ANNOTATION_BLOCKS: Record<string, { cls: string; tag: string; stmt?: true }> = {
   vsOriginal: { cls: "rv del", tag: "Original", stmt: true },
   vsStep: { cls: "rv del", tag: "Original step" },
-  vsCorrected: { cls: "rv ins", tag: "Corrected", stmt: true },
+  vsCorrected: { cls: "rv ins", tag: "Revised", stmt: true },
   vsClarified: { cls: "rv ins", tag: "Clarified statement", stmt: true },
-  vsCorrectedStep: { cls: "rv ins", tag: "Corrected step" },
-  vsProof: { cls: "rv ins", tag: "Corrected proof (confirmed)" },
-  vsProposed: { cls: "rv ins pending", tag: "Proposed repair — awaiting a ruling", stmt: true },
+  vsCorrectedStep: { cls: "rv ins", tag: "Revised step" },
+  vsProof: { cls: "rv ins", tag: "Revised proof (confirmed)" },
+  vsProposed: { cls: "rv ins pending", tag: "Proposed revision — awaiting a ruling", stmt: true },
   vsProposedProof: { cls: "rv ins pending", tag: "Proof of the proposed statement" },
-  vsProposedStep: { cls: "rv ins pending", tag: "Corrected (for the proposed statement)" },
+  vsProposedStep: { cls: "rv ins pending", tag: "Revised (for the proposed statement)" },
 };
 /** The macros of a block a repair split off a result (`annotate_tex.ts` `SPLIT_MACROS`), and what each
  * says of it: its kind and whether it awaits the owner. An annotated paper written before the kinds
@@ -671,7 +671,7 @@ const ANNOTATION_NOTES: Record<string, { kind: string; label: string }> = {
   vsConditionOwner: { kind: "condition", label: "Bookkeeping condition" },
   vsDetail: { kind: "detail", label: "Proof detail" },
   vsRewind: { kind: "rewind", label: "Proposed correction — awaiting a ruling" },
-  vsCap: { kind: "cap", label: "Repair not settled — awaiting a ruling" },
+  vsCap: { kind: "cap", label: "Revision not settled — awaiting a ruling" },
 };
 /** Names of common theorem-like environments a class defines without a preamble line. */
 const COMMON_THEOREMS: Record<string, string> = {
@@ -800,8 +800,13 @@ function renderMath(ctx: Ctx, tex00: string, display: boolean): string {
   // a label a correction keeps (`\vsLabel`, annotate_tex.ts) sets nothing
   const tex = tex0.replace(/\\vsLabel\s*\{[^{}]*\}/g, "").replace(/\\text\s*\{\s*\\ensuremath\s*\{((?:[^{}]|\{(?:[^{}]|\{[^{}]*\})*\})*)\}\s*\}/g, "$1")
     .replace(/\\begin\s*\{array\}\s*\{((?:[^{}]|\{[^{}]*\})*)\}/g, (_, spec: string) => `\\begin{array}{${spec.replace(/[@!<>]\s*\{[^{}]*\}/g, "")}}`)
-    // a reference inside math (`\text{in Example~\ref{x}}`): its number, which KaTeX cannot look up
-    .replace(/\\(eqref|ref|cref|Cref|autoref)\s*\{([^{}]*)\}/g, (_, cmd: string, l: string) => { const label = labelKey(l); const n = ctx.aux.labels[label] ?? ctx.own[label]; const t = n ? n : "??"; return cmd === "eqref" ? `(${t})` : t; });
+    // a reference inside math (`\text{in Example~\ref{x}}`): its number, which KaTeX cannot look up, and
+    // for \cref its name, as outside math
+    .replace(/\\(eqref|ref|cref|Cref|autoref)\s*\{([^{}]*)\}/g, (_, cmd: string, l: string) => {
+      const label = labelKey(l); const n = ctx.aux.labels[label] ?? ctx.own[label]; const t = n ? n : "??";
+      const name = ["cref", "Cref", "autoref"].includes(cmd) ? ctx.refNames[label] : null;
+      return cmd === "eqref" ? `(${t})` : name ? `\\text{${name}}~${t}` : t;
+    });
   const key = `${display ? "D" : "I"}${tex}`;
   const hit = ctx.mathCache.get(key);
   if (hit !== undefined) return hit;
@@ -1303,7 +1308,7 @@ function render(ctx: Ctx, s: string, inline = false): string {
         u.of = a2.body;
         ctx.umbrellas.names[u.idx]!.push(num ? `Proposition ${num}.${k}` : "");
       }
-      const tag = `<span class="rv-tag">${pending ? "Proposed — awaiting a ruling" : kind === "proposition" ? "Stated apart by the repair" : "Added by the repair"}</span>`;
+      const tag = `<span class="rv-tag">${pending ? "Proposed — awaiting a ruling" : kind === "proposition" ? "Stated apart by the revision" : "Added by the revision"}</span>`;
       out += `<div class="rv ins cor${pending ? " pending" : ""} formal k-${kind}" tabindex="0" data-res="${esc(node)}" data-mark="${ctx.marks}"><span class="res-anchor" id="${esc(id)}" data-node="${esc(node)}"></span>${head} ${tag} ${blockInner(ctx, (stmt ?? "").trim(), true)}`
         + `${why !== undefined ? `<div class="proof"><span class="env">Proof.</span> ${render(ctx, why.trim(), true)}<span class="qed">∎</span></div>` : ""}</div>`;
       continue;

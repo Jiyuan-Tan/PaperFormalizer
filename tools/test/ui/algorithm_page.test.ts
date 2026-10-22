@@ -73,7 +73,7 @@ describe("page: an algorithm's lines", () => {
 
   it("a repaired step keeps its printed and its corrected block in the one step line, the corrected right under the printed", () => {
     const step = lines[8]!.body;
-    expect(step).toMatch(/^\s*<div class="rv del"[^>]*><span class="rv-tag">Original<\/span>[\s\S]*<div class="eq">[\s\S]*<strong>Return<\/strong>[\s\S]*<\/div>\s*<div class="rv ins"[^>]*><span class="rv-tag">Corrected<\/span>[\s\S]*<\/div>\s*$/);
+    expect(step).toMatch(/^\s*<div class="rv del"[^>]*><span class="rv-tag">Original<\/span>[\s\S]*<div class="eq">[\s\S]*<strong>Return<\/strong>[\s\S]*<\/div>\s*<div class="rv ins"[^>]*><span class="rv-tag">Revised<\/span>[\s\S]*<\/div>\s*$/);
     expect(fig.match(/class="rv (?:del|ins)"/g)).toHaveLength(2);
   });
 });
@@ -119,7 +119,7 @@ See Algorithm~\ref{alg:s}.\end{document}` }, main: "m.tex" });
     expect(del).toContain("Original");
     expect(del).toContain("a comment");
     expect(del).toMatch(/return/);
-    expect(ins).toContain("Corrected");
+    expect(ins).toContain("Revised");
     expect(ins).toContain("Draw");
     expect(ins).toMatch(/return/);
     // the corrected caption is its block's heading, not text run into its first line

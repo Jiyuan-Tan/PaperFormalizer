@@ -187,8 +187,8 @@ describe("naming: by kind, one running number per result", () => {
         String.raw`\vsProposedSplitProposition{thm:cor-fix-3}{Theorem~\ref{thm:main}}{R.}`,
     );
     expect(head(html)).toEqual([
-      ["rv ins cor formal k-proposition", "thm:cor-fix-1", "Proposition 5.2.1.", "Stated apart by the repair"],
-      ["rv ins cor formal k-corollary", "thm:cor-fix-2", "Corollary 5.2.2.", "Added by the repair"],
+      ["rv ins cor formal k-proposition", "thm:cor-fix-1", "Proposition 5.2.1.", "Stated apart by the revision"],
+      ["rv ins cor formal k-corollary", "thm:cor-fix-2", "Corollary 5.2.2.", "Added by the revision"],
       ["rv ins cor pending formal k-proposition", "thm:cor-fix-3", "Proposition 5.2.3.", "Proposed — awaiting a ruling"],
     ]);
     // its proof is under the page's proof heading, like a corollary's

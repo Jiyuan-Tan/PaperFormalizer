@@ -526,7 +526,7 @@ describe("a split repair is shown block by block: the printed statement, the cor
     const html = renderPaper({ files: { "main.tex": tex }, main: "main.tex", aux: String.raw`\newlabel{thm:main}{{5.2}{3}}` }).html;
     const blocks = [...html.matchAll(/<div class="(rv [^"]*)"[^>]*>(?:<span class="res-anchor"[^>]*><\/span>)?<span class="(?:rv-tag|env)">(.*?)<\/span>/gu)].map((m) => [m[1], m[2]!.replace(/<[^>]+>/gu, "")]);
     // the result's own proof (and its notes and readings) stay with it; its corollaries come after
-    expect(blocks.slice(0, 4)).toEqual([["rv del", "Original"], ["rv ins", "Corrected"], ["rv ins", "Corrected proof (confirmed)"], ["rv ins cor formal k-corollary", "Corollary 5.2.1."]]);
+    expect(blocks.slice(0, 4)).toEqual([["rv del", "Original"], ["rv ins", "Revised"], ["rv ins", "Revised proof (confirmed)"], ["rv ins cor formal k-corollary", "Corollary 5.2.1."]]);
     const pending = renderPaper({ files: { "main.tex": annotated({ pending: { weakening: [{ node: "thm:main", corrected_statement: null, ops, given_up: "g", detail: "d", witness: "w", corollaries: [COR] }], rewind: null, cap: null } }) }, main: "main.tex", aux: "" }).html;
     expect(pending).toMatch(/<div class="rv ins cor pending formal k-corollary" tabindex="0" data-res="[^"]*"[^>]*>.*<span class="env">Corollary [^<]*\.<\/span> <span class="rv-tag">Proposed — awaiting a ruling<\/span>/u);
     // in every view it is the corrected block it is: no rule of its own for its colour or whether it shows

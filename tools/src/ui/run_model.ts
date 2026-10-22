@@ -501,7 +501,7 @@ export async function runSummary(cfg: ToolkitConfig, slug: string): Promise<RunS
   const requests = ((await readJsonCached<OrchRequest[]>(path.join(dir, "orch_requests.json"))) ?? []).filter((r) => r && r.text);
   const reviews = ((await readJsonCached<OrchDecision[]>(path.join(dir, DECISIONS_FILE))) ?? []).filter((d) => d && d.text && !d.review);
   const unread = (await messagesOf(dir)).filter((m) => m.from === "agent" && !m.seen).length;
-  const decision = pending.weakening ? `${pending.weakening} repair(s) would weaken a main result` : pending.cap ? "repairs did not settle within the cap" : pending.rewind ? "a Lean stage proposes a correction to the paper" : null;
+  const decision = pending.weakening ? `${pending.weakening} revision(s) would weaken a main result` : pending.cap ? "revisions did not settle within the cap" : pending.rewind ? "a Lean stage proposes a correction to the paper" : null;
   const halt = decision ?? (halted ? `halted at ${stageName(last!.stage)}: ${headlineOf(last)}` : null);
   // full auto: the owner's decisions are the attached agent's, carried out as it recommends
   const fullAuto = state?.full_auto === true;
@@ -512,7 +512,7 @@ export async function runSummary(cfg: ToolkitConfig, slug: string): Promise<RunS
   // a superseded run is history — unless its agent still asks something or a ruling awaits review
   if (supersededBy && !requests.length && !reviews.length) { status = "superseded"; headline = `superseded by ${supersededBy}, a later run of the same paper`; }
   else if (requests.length && !live) { status = "needs-you"; headline = `the agent asks you: ${texCut(requests[0]!.text, 160)}`; }
-  else if (live) { status = "running"; headline = starting ? "starting — taking up what you sent" : repairing ? "V1 · repairing the statements sent back" : back ? `${STAGES[stageIndex + 1]?.label ?? "working"} · working` : liveHeadline(last); }
+  else if (live) { status = "running"; headline = starting ? "starting — taking up what you sent" : repairing ? "V1 · revising the statements sent back" : back ? `${STAGES[stageIndex + 1]?.label ?? "working"} · working` : liveHeadline(last); }
   // the owner has decided the round and it is being applied (or stopped part-way: the agent's)
   else if (promotion && applyOf(dir, promotion) === "live") { status = "running"; headline = `applying promotion round ${promotion}: the accepted results are entering your toolkit`; }
   // (the state records the round applied: what is left is the resume that follows an apply — it died before its heartbeat)
@@ -560,16 +560,16 @@ export function stageName(id: string): string {
 
 /** The paper's grade (`report.ts` `paperGrade`) in words. */
 export function gradeWords(g: string): string {
-  return ({ error_free: "error-free", minor: "minor issues", major: "major errors" } as Record<string, string>)[g] ?? g.replace(/_/g, " ");
+  return ({ error_free: "error-free", minor: "minor revisions", major: "major revisions" } as Record<string, string>)[g] ?? g.replace(/_/g, " ");
 }
 
 export function verdictWords(v: string): string {
   return ({
-    repaired: "errors found — all repaired",
+    repaired: "revised — every statement now holds",
     no_error_found: "no error found",
-    errors_found: "errors found",
+    errors_found: "revisions needed",
     not_determined: "not determined — results could not be checked as printed",
-    refuted: "a result is refuted",
+    refuted: "a result does not hold as printed",
   } as Record<string, string>)[v] ?? v.replace(/_/g, " ");
 }
 
