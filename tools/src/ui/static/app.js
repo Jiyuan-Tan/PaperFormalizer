@@ -30,7 +30,7 @@ const app = $("#app");
    paper body of a page the site's build cleaned with the same rules (`trusted`), was cleaned there. */
 const SNAP = (() => {
   const el = document.currentScript, src = el?.dataset.snapshot;
-  return src ? { src, viewer: new URL(".", el.src).href, slug: null, share: null, leanDir: null, views: null, trusted: null, math: null, mathSet: null } : null;
+  return src ? { src, viewer: new URL(".", el.src).href, slug: null, share: null, leanDir: null, views: null, trusted: null, math: null, mathSet: null, bodies: null } : null;
 })();
 if (SNAP) {
   const purify = window.DOMPurify;
@@ -40,7 +40,7 @@ if (SNAP) {
   // An SVG element's markup is cleaned as SVG (the proof map): read as HTML, DOMPurify drops every SVG element in it.
   const SVG = "http://www.w3.org/2000/svg";
   const cleanSvg = (v) => clean(`<svg xmlns="${SVG}">${v}</svg>`).replace(/^<svg[^>]*>/u, "").replace(/<\/svg>$/u, "");
-  const cleaned = (set) => function (v) { if (inside || (SNAP.trusted !== null && v === SNAP.trusted) || SNAP.mathSet?.has(v)) return set.call(this, v); inside = true; let html; try { html = this?.namespaceURI === SVG ? cleanSvg(v) : clean(v); } finally { inside = false; } return set.call(this, html); };
+  const cleaned = (set) => function (v) { if (inside || (SNAP.trusted !== null && v === SNAP.trusted) || SNAP.mathSet?.has(v) || SNAP.bodies?.has(v)) return set.call(this, v); inside = true; let html; try { html = this?.namespaceURI === SVG ? cleanSvg(v) : clean(v); } finally { inside = false; } return set.call(this, html); };
   for (const name of ["innerHTML", "outerHTML"]) {
     const d = Object.getOwnPropertyDescriptor(Element.prototype, name);
     Object.defineProperty(Element.prototype, name, { ...d, set: cleaned(d.set) });
@@ -91,6 +91,8 @@ async function snapLoad() {
     // `.kx` stands for it): formulas are drawn as their part of the paper nears the window
     if (s.sanitized === "site" && Array.isArray(s.paper.math)) { SNAP.math = s.paper.math.map((x) => String(x)); SNAP.mathSet = new Set(SNAP.math); }
     for (const c of Array.isArray(s.paper.comments) ? s.paper.comments : []) if (c && typeof c === "object") { c.html = strict(c.html); if (c.label != null) c.label = strict(c.label); }
+    // and a comment's body, as the build cleaned it, goes into its card as is (`fillBodies`)
+    if (s.sanitized === "site") SNAP.bodies = new Set((Array.isArray(s.paper.comments) ? s.paper.comments : []).map((c) => String(c?.html ?? "")));
     for (const t of Array.isArray(s.paper.toc) ? s.paper.toc : []) if (t && typeof t === "object") t.html = strict(t.html);
   }
   s.texHtml = Object.fromEntries(Object.entries(s.texHtml && typeof s.texHtml === "object" ? s.texHtml : {}).map(([k, v]) => [k, strict(v)]));
@@ -1313,6 +1315,7 @@ function drawCards() {
     // clicked near its end must not send it back to its top)
     const was = els.map((c) => [c.dataset.card, $(".cbody", c)?.scrollTop ?? 0]).filter(([, t]) => t > 0);
     host.innerHTML = now.map(([, html]) => html).join("");
+    fillBodies(host);
     linkedId = null; link(P.open); // the cards are new elements: the open one is marked again
     for (const [id, top] of was) {
       const c = $$(".card", host).find((x) => x.dataset.card === id); const body = c && $(".cbody", c);
@@ -1344,10 +1347,27 @@ function redrawCard(id) {
   linkedId = null; link(P.open);
 }
 /* The card `el` drawn again from `html`: it keeps its place, its open state and where it was scrolled. */
+/** A shared page the site cleaned: each card's body put in as the build cleaned it (`SNAP.bodies`), the
+ *  card's own markup having passed DOMPurify without it. */
+function fillBodies(root) {
+  if (!SNAP?.bodies) return;
+  const byId = new Map((P.paper?.comments ?? []).map((c) => [c.id, c.html]));
+  for (const b of root.querySelectorAll(".cbody[data-body]")) { const h = byId.get(b.dataset.body); if (h !== undefined) b.innerHTML = h; b.removeAttribute("data-body"); }
+  // the build set a card's formulas apart too: drawn as the card nears the window (its first lines show
+  // when closed, so its height hardly changes; the cards are placed again after)
+  if (!SNAP.math || !window.IntersectionObserver) { drawMath(root); return; }
+  cardMathIO ??= new IntersectionObserver((ents) => {
+    let drew = false;
+    for (const en of ents) if (en.isIntersecting) { cardMathIO.unobserve(en.target); drawMath(en.target); drew = true; }
+    if (drew) relayout();
+  }, { rootMargin: "1500px 0px" });
+  for (const c of root.matches?.(".card") ? [root] : root.querySelectorAll(".card")) if (c.querySelector(".kx")) cardMathIO.observe(c);
+}
+let cardMathIO = null;
 function swapCard(el, html) {
   const id = el.dataset.card, top = $(".cbody", el)?.scrollTop ?? 0, cls = el.className, style = el.getAttribute("style");
   el.outerHTML = html;
-  const now = cardEl(id); now.className = cls; if (style) now.setAttribute("style", style);
+  const now = cardEl(id); fillBodies(now); now.className = cls; if (style) now.setAttribute("style", style);
   const body = $(".cbody", now); if (body) body.scrollTop = top;
 }
 function cardHTML(c, r, o = { own: [], atRest: false, draft: null }) {
@@ -1355,7 +1375,7 @@ function cardHTML(c, r, o = { own: [], atRest: false, draft: null }) {
   const editing = o.draft !== null && o.own.length > 0;
   return `<div class="card" data-card="${esc(c.id)}" data-kind="${esc(c.kind)}" data-chip="${CHIP[c.kind] ?? "Findings"}" ${r ? `data-node="${esc(r.id)}"` : ""} ${c.env ? `data-env="${esc(c.env)}"` : ""} tabindex="0">
     <div class="cbyline"><span class="av">PF</span><span class="cname">${c.kind === "note" ? "PaperFormalizer" : c.label}</span>${r ? `<span class="cwhen">${esc(envOf(r.id)?.heading ?? r.id)}</span>` : ""}<span class="ctag ${cls}">${esc(tag)}</span></div>
-    ${editing ? "" : `<div class="cbody">${c.html}</div>`}${c.kind === "reading-owner" ? ownerReadingHTML(o) : ""}${editing || c.kind === "rewind" || c.kind === "cap" ? "" : issueHTML(o)}</div>`;
+    ${editing ? "" : SNAP?.bodies ? `<div class="cbody" data-body="${esc(c.id)}"></div>` : `<div class="cbody">${c.html}</div>`}${c.kind === "reading-owner" ? ownerReadingHTML(o) : ""}${editing || c.kind === "rewind" || c.kind === "cap" ? "" : issueHTML(o)}</div>`;
 }
 /* The foot of a comment that asks no decision: the owner may report an issue with it (optional — a
    note awaiting a ruling is decided instead). `issue`: the one reported on it; `flag`: the open text. */
@@ -1666,6 +1686,7 @@ function link(id) {
 function activate(id, fromCard) {
   P.open = id; link(id);
   const card = cardEl(id), el = fromCard && card ? placeOf(card).el : null;
+  drawMath(card); // an opened card shows all of itself
   if (el) reveal(el, "start");
   layout(); // beside its mark on a wide screen
   if (!fromCard && !wide() && card) card.scrollIntoView({ behavior: "smooth", block: "center" });

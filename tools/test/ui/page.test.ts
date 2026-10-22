@@ -638,6 +638,10 @@ describe("page: a shared paper the site's build cleaned", () => {
     expect([el.innerHTML, seen]).toEqual([v.paper.html, []]);
     el.innerHTML = '<p data-copy="x">other</p>';
     expect([el.innerHTML, seen]).toEqual(["<p>other</p>", ['<p data-copy="x">other</p>']]);
+    // a comment's body as the build cleaned it goes into its card as is
+    expect([...(page.SNAP as unknown as { bodies: Set<string> }).bodies]).toEqual(['<b data-copy="n">n</b>']);
+    el.innerHTML = '<b data-copy="n">n</b>';
+    expect([el.innerHTML, seen.length]).toEqual(['<b data-copy="n">n</b>', 1]);
   });
   it("draws a formula the build set apart from its table, as is; a page not cleaned by the site has no table", async () => {
     const math = ['<span class="katex" data-copy="k">x</span>'];
