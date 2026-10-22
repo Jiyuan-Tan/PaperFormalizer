@@ -2504,7 +2504,7 @@ document.addEventListener("click", async (e) => {
 if (SNAP) {
   // a shared paper: drawn once from its snapshot; what the build wrote in #app stays if that fails
   SNAP.views = snapLoad();
-  SNAP.views.then((v) => { SNAP.slug = v.page.summary.slug; return route(); }).then(() => { if (location.hash === "#report") openReport(); }, (err) => app.insertAdjacentHTML("afterbegin", `<p class="empty-note">The interactive page could not be drawn: ${esc(err.message)}</p>`));
+  SNAP.views.then((v) => { SNAP.slug = v.page.summary.slug; return route(); }).then(() => { if (location.hash === "#report") openReport(); }, (err) => { app.classList.add("snap-failed"); app.insertAdjacentHTML("afterbegin", `<p class="empty-note">The interactive page could not be drawn: ${esc(err.message)}</p>`); });
 } else {
 connect();
 refreshInbox().catch(() => {});
