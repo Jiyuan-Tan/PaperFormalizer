@@ -851,6 +851,12 @@ async function showPaper(slug, first) {
   if (sent === "dropped") toast("The run did not take up your decisions — its log says why. They are kept here to send again.", true);
   const scroll = window.scrollY;
   if (paperChanged) drawPaperBody();
+  if (first && paperChanged) {
+    // the paper's text is painted first: the badges, the map and the margin cards (heavy on a long
+    // paper) are drawn the frame after, so a reader sees the paper while they are
+    await new Promise((r) => requestAnimationFrame(() => requestAnimationFrame(r))); // (the second: after a paint)
+    if (!here() || P.built !== slug || P.paper !== p.data) return;
+  }
   if (detailChanged || paperChanged || sent === "dropped") {
     // a live run changes its detail every few seconds (stage, headline): only the parts whose own
     // inputs changed are redrawn — the margin cards and the map are heavy on a long paper. A part's
