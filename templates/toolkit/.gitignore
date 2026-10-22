@@ -6,3 +6,17 @@ runs/**/dry_run_prompts/
 .toolkit-promote.lock
 # a share in progress: its poll token and the claim link (anyone holding it could confirm the share)
 runs/**/share.json
+# bulky or rewritten by a run: run logs, agent prompt dumps, fetched or downloaded cited sources
+# (the <key>.txt you supply and <key>.unavailable stay tracked), candidate scans, docstring
+# coverage, voided or superseded proposals, temporary files
+runs/**/logs/
+runs/**/discovery/prompts/
+runs/**/discovery/cited_sources/*.arxiv.tex
+runs/**/discovery/cited_sources/*.pdf
+runs/**/formalization/candidates.json
+runs/**/formalization/candidate_scan.json
+runs/**/docstring_coverage.json
+runs/**/proposals/voided/
+runs/**/proposals/statements_before_*.json
+runs/**/proposals/tmp/
+Papers/*/tmp/

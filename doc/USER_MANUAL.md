@@ -26,7 +26,10 @@ pinned; the domain libraries between the `# BEGIN/END domain libraries` markers;
 `Papers` libraries; the `paper_index` / `toolkit_index` executables PaperFormalizer needs, built on
 the template's own index extractor `PaperFormalizerIndexCore.lean` — every `verify` refuses a
 toolkit whose lakefile lacks one), the barrels `Toolkit.lean` / `Toolkit/<Division>.lean` /
-`Papers.lean`, an empty `doc/ledger.json` and a `.gitignore`. The `paperformalizer.json` `init`
+`Papers.lean`, an empty `doc/ledger.json` and a `.gitignore` (it keeps out of git what is bulky
+or a run rewrites: agent replies and prompts, run logs, uploads, fetched or downloaded cited
+sources (the `<key>.txt` and `<key>.unavailable` you supply stay tracked), candidate scans,
+docstring coverage, voided proposals, temporary files, and a share's `share.json`). The `paperformalizer.json` `init`
 writes for a Causalean toolkit:
 
     {
