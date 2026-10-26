@@ -1,5 +1,10 @@
 # PaperFormalizer
 
+[![arXiv](https://img.shields.io/badge/arXiv-2610.31810-b31b1b.svg)](https://arxiv.org/abs/2610.31810)
+
+**Paper:** [PaperFormalizer: Author-in-the-Loop Autoformalization of Research Papers in Lean](https://arxiv.org/abs/2610.31810)
+(arXiv:2610.31810) · **Shared papers:** <https://paperformalizer.org/>
+
 Turn your paper into a Lean-verified version, with you deciding every change. PaperFormalizer
 transcribes a LaTeX paper's results (V1), audits each for faithfulness, ambiguity and correctness
 (V1.5), formalizes and proves them in Lean against Mathlib, the domain libraries you chose and your
@@ -436,6 +441,21 @@ the like are listed in `UPSTREAM.md`). Its upstream `LICENSE` (and `LICENSES/`) 
 in the copy, the authors' headers stay in the files, and its `UPSTREAM.md` records the upstream
 commit and every kind of change made. The changes are provided under the copy's own license.
 
+## Citation
+
+If you use PaperFormalizer in your work, please cite the paper:
+
+```bibtex
+@misc{tan2026paperformalizer,
+  title         = {{PaperFormalizer}: Author-in-the-Loop Autoformalization of Research Papers in {Lean}},
+  author        = {Tan, Jiyuan and Syrgkanis, Vasilis and Blanchet, Jose},
+  year          = {2026},
+  eprint        = {2610.31810},
+  archivePrefix = {arXiv},
+  url           = {https://arxiv.org/abs/2610.31810}
+}
+```
+
 ## License
 
 PaperFormalizer's own code and documents are under the PaperFormalizer License (`LICENSE`), based
@@ -460,6 +480,7 @@ theirs (Acknowledgements above).
 
 ## Documentation
 
+- [arXiv:2610.31810](https://arxiv.org/abs/2610.31810) — the paper describing PaperFormalizer.
 - `doc/USER_MANUAL.md` — running and reading a verification.
 - `doc/PORTING.md` — porting a library that is not offered to the pin and the module system.
 - `.claude/skills/paperformalizer/SKILL.md` — the orchestrator guide (how to run the pipeline and
