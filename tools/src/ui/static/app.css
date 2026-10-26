@@ -501,6 +501,7 @@ mjx-container[jax="SVG"][display="true"] { display: block; text-align: center; }
 .cflag textarea { width: 100%; box-sizing: border-box; font: inherit; font-size: var(--fs-2xs); }
 .cflag .cfine { overflow-wrap: anywhere; }
 .cfine { margin: 0; color: var(--ink-soft); font-size: var(--fs-2xs); line-height: 1.4; }
+.cnoact { margin-top: 0.35rem; font-style: italic; }
 .cacts { display: flex; gap: 0.8rem; align-items: center; margin-top: 0.3rem; }
 .cown textarea { font-family: var(--mono); font-size: var(--fs-2xs); margin-bottom: 0.3rem; }
 .cmore summary { cursor: pointer; font-family: var(--mono); font-size: var(--fs-2xs); color: var(--accent); }

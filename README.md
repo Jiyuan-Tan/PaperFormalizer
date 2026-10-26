@@ -316,10 +316,13 @@ then does, and what you can do yourself, from `tools/`:
 
 Your own paper: its `.tex` file or its directory.
 
-**2. Bring up the page** and open the link it prints after a few seconds
-(`[ui] open: http://127.0.0.1:7341/?token=…`):
+**2. Bring up the page.** The agent opens it in your browser; by hand, `--open` does the same (or
+open the link it prints after a few seconds, `[ui] open: http://127.0.0.1:7341/?token=…`):
 
-    npx tsx bin/paperformalizer.ts ui --toolkit ~/my-toolkit
+    npx tsx bin/paperformalizer.ts ui --toolkit ~/my-toolkit --open
+
+**Keep this page open while the paper runs.** It is where the run asks for your decisions and where
+the agent answers you; the agent's terminal session is kept short, for debugging.
 
 It listens on this computer only. From another computer, forward the port first:
 `ssh -L 7341:127.0.0.1:7341 <host>`. Ctrl+C stops the page; runs keep going.
@@ -374,6 +377,10 @@ GitHub in your browser — identity only, no permission. It is optional; `doc/US
   cannot get itself, such as a cited source it cannot fetch).
 - **A finding is a claim to check.** The agent re-derives each one against your
   paper's text before reporting it; read the witness and decide for yourself.
+- **Clarifications ask nothing of you.** A note marked "Clarification" records how the
+  formalization reads a passage that admits more than one reading, so that the Lean statement is
+  pinned down. It is not an error and needs no action; report an issue on it only if it is not what
+  you meant. What does need you is marked "needs you" on the page.
 - **LaTeX it reads:** the common ways of writing a paper. Plain authors' note macros (a colour
   wrapper around an edited passage, a hidden or to-do note) are read away; anything less plain is
   left as written with a warning, and the agent then makes the paper readable in the run's own copy

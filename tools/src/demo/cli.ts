@@ -4,7 +4,7 @@ import { existsSync, mkdirSync, readdirSync, readFileSync, writeFileSync } from 
 import os from "node:os";
 import path from "node:path";
 import { loadToolkitConfig } from "../toolkit/config.js";
-import { openBrowser, uiToken } from "../ui/cli.js";
+import { openWhenStarted, uiToken } from "../ui/cli.js";
 import { startUiServer } from "../ui/server.js";
 import { DemoDriver, loadDemoScript, TEMPLATE_TOOLKIT_DIR } from "./driver.js";
 
@@ -49,7 +49,7 @@ export async function runDemoCli(argv: string[]): Promise<void> {
   console.log(`[demo] the demo toolkit is ${dir}`);
   console.log(`[demo] open: ${ui.url}`);
   console.log("[demo] Ctrl+C stops the demo; `paperformalizer demo` again goes on where you left it (--restart begins again).");
-  if (argv.includes("--open")) openBrowser(ui.url);
+  if (argv.includes("--open")) openWhenStarted(ui, "demo");
   await new Promise<void>((resolve) => {
     const stop = () => void ui!.close().then(resolve);
     process.once("SIGINT", stop);

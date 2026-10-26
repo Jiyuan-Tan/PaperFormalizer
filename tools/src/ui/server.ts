@@ -74,7 +74,7 @@ const PING_MS = 10_000;
 /** The page's files as they stand on disk: a tab that loaded others runs an older page. */
 const assetsTag = (): string => ["index.html", "app.js", "app.css"].map((f) => signature(path.join(STATIC_DIR, f))).join("|");
 
-export interface UiServer { server: http.Server; url: string; token: string; close: () => Promise<void> }
+export interface UiServer { server: http.Server; url: string; token: string; close: () => Promise<void>; /** tabs holding the page open (one event stream each) */ viewers: () => number }
 
 /** `demo`: the page of `paperformalizer demo` — its tour (`/api/demo`), and what the owner sends taken
  *  by the demo's stand-in agent instead of started (`DemoDriver`). */
@@ -291,6 +291,12 @@ export async function startUiServer(cfg: ToolkitConfig, opts: { port: number; ho
         // an event, not a comment: the page hears it, and takes a silence for a lost connection
         const ping = setInterval(() => res.write(`event: ping\ndata: ${JSON.stringify({ assets: assetsTag() })}\n\n`), PING_MS);
         req.on("close", () => { clearInterval(ping); clients.delete(res); });
+        return;
+      }
+      if (p === "/api/presence" && req.method === "GET") {
+        // how many tabs hold the page open (each keeps one event stream): `ui --open` opens a browser
+        // only when none does
+        sendJson(req, res, { viewers: clients.size });
         return;
       }
       if (p === "/api/toolkit" && req.method === "GET") {
@@ -619,6 +625,7 @@ export async function startUiServer(cfg: ToolkitConfig, opts: { port: number; ho
   })();
   return {
     server, token, url: `http://${host}:${port}/?token=${token}`,
+    viewers: () => clients.size,
     close: async () => { watcher.stop(); for (const t of rerender.values()) clearTimeout(t); for (const c of clients) c.end(); await new Promise<void>((r) => server.close(() => r())); },
   };
 }

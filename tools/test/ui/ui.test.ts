@@ -3,7 +3,7 @@ import { createHash } from "node:crypto";
 import { type ChildProcess, spawn, spawnSync } from "node:child_process";
 import os, { tmpdir } from "node:os";
 import path from "node:path";
-import { afterAll, describe, expect, it } from "vitest";
+import { afterAll, describe, expect, it, vi } from "vitest";
 import { buildArgv, displayCommand, setDecisions } from "../../src/ui/actions.js";
 import { paperNames, paperUses, parseModule } from "../../src/ui/library_model.js";
 import { texCut, closedProofs, liveHeadline, markStarted, ownerReadingsByComment, redoingOf, repairKey, runDetail, newerRuns, runLive, runSummary, stageIndexOf, validSlug } from "../../src/ui/run_model.js";
@@ -14,7 +14,7 @@ import { authorNames, expandDelimited, frontMatter, inlineInputs, katexMacros, p
 import { displayWhole, partAlone, segmentStatement } from "../../src/formalization/nl_links.js";
 import http from "node:http";
 import { MESSAGE_LIMITS, safeUploadName, startUiServer, type UiServer } from "../../src/ui/server.js";
-import { runningUi, writeUiState } from "../../src/ui/cli.js";
+import { openBrowser, openWhenStarted, pageViewers, runningUi, uiToken, writeUiState } from "../../src/ui/cli.js";
 import { ChangeWatcher } from "../../src/ui/watch.js";
 import { derive, deriveRead } from "../../src/ui/fscache.js";
 import { parseChecklist } from "../../src/proposals/checklist.js";
@@ -1393,6 +1393,34 @@ describe("server: 127.0.0.1, a session key, the Host header", () => {
     ui = undefined as unknown as UiServer;
     expect(await runningUi(cfg)).toBeNull();
   });
+  it("`ui --open` knows whether a tab holds the page: each open tab keeps one event stream", async () => {
+    const own = await startUiServer(cfg, { port: 0, token: uiToken(cfg) });
+    const logs: string[] = [];
+    const spy = vi.spyOn(console, "log").mockImplementation((m: unknown) => { logs.push(String(m)); });
+    try {
+      expect(await pageViewers(own.url)).toBe(0);
+      const port = Number(new URL(own.url).port);
+      const tab = await new Promise<http.ClientRequest>((resolve) => {
+        const r = http.get({ host: "127.0.0.1", port, path: "/api/events", headers: { Cookie: `tc_token_${port}=${own.token}` } }, (res) => res.once("data", () => resolve(r)));
+      });
+      expect(await pageViewers(own.url)).toBe(1);
+      expect(own.viewers()).toBe(1);
+      // a UI just started looks again after its grace: a tab that came back is not opened twice
+      openWhenStarted(own, "ui", 10);
+      await vi.waitFor(() => expect(logs).toContain("[ui] the page is already open in 1 browser tab(s)"));
+      tab.destroy();
+      await vi.waitFor(async () => expect(await pageViewers(own.url)).toBe(0));
+      // a wrong key, or no key, gets no count (and the caller falls back to opening)
+      expect(await pageViewers(own.url.replace(/token=[^&]+/, "token=wrong"))).toBeNull();
+      expect((await fetch(`http://127.0.0.1:${port}/api/presence`)).status).toBe(403);
+    } finally {
+      spy.mockRestore();
+      await own.close();
+    }
+    // a Linux machine with no display (a server reached over SSH), or with no launcher, opens nothing
+    expect(openBrowser("http://127.0.0.1:1/", {}, "linux")).toBe(false);
+    expect(openBrowser("http://127.0.0.1:1/", { DISPLAY: ":0", PATH: "" }, "linux")).toBe(false);
+  });
 });
 
 describe("orch.mjs: an interactive agent session attached to a run", () => {
@@ -2126,6 +2154,10 @@ describe("server: the owner reports an issue with a margin comment that asks no 
     ) as (c: unknown, r: unknown, o?: unknown) => string;
     const c = { id: "c1", key: "k", kind: "note", label: "PaperFormalizer", html: "x" };
     for (const kind of ["note", "reading", "reading-owner", "reading-symbol"]) expect(cardHTML({ ...c, kind }, null)).toContain(`data-flag="open">Report an issue</button>`);
+    // a clarification tells the author it asks nothing of them; a finding does not say so
+    for (const kind of ["reading", "reading-symbol"]) expect(cardHTML({ ...c, kind }, null)).toContain("No action needed");
+    for (const kind of ["note", "reading-owner", "condition"]) expect(cardHTML({ ...c, kind }, null)).not.toContain("No action needed");
+    expect(cardHTML({ ...c, kind: "reading-symbol" }, null)).toContain("reads the notation");
     for (const kind of ["rewind", "cap"]) expect(cardHTML({ ...c, kind }, null)).not.toContain("data-flag");
     // an owner's reading being edited shows its editor alone
     const own = [{ id: "ass:pin-owner-1", node: "thm:a", kind: "reading", text: "t", withdraws: 0 }];

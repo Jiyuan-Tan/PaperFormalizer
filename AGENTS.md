@@ -29,7 +29,8 @@ Causalean is one optional domain library (README).
 Follow README "Install". Every domain library (Causalean, StatLean, FoML, optlib, …) is optional:
 never choose for the user — show them `paperformalizer init --list`, ask which they want and where
 the toolkit should live, then run `init` with their answer. While it builds, offer a first-time
-user the demo (README "Try the demo"): start `paperformalizer demo` detached and give them its link.
+user the demo (README "Try the demo"): start `paperformalizer demo --open` detached (it opens the tour in their
+browser) and give them its link as well.
 When the user finishes the tour, stop the demo server you started by its PID; closing its browser
 tab does not stop it. Do not leave a detached demo running after the installation guide is finished.
 A library that is not offered is ported to the pin by `doc/PORTING.md`.
@@ -42,9 +43,11 @@ the file directly. From `tools/`, always `source scripts/node_env.sh` first (nev
 
     npx tsx bin/paperformalizer.ts verify <src> --toolkit <toolkit> --slug <slug> --stop-after V1.5
 
-- At the start of an interaction on a run, bring up the toolkit's local UI and give the user its link
-  (`npx tsx bin/paperformalizer.ts ui --toolkit <toolkit>`, detached; it prints the link of a UI already
-  running and exits), then attach yourself to the run by watching it,
+- At the start of an interaction on a run, bring up the toolkit's local UI and give the user its link on a
+  line of its own (`npx tsx bin/paperformalizer.ts ui --toolkit <toolkit>`, detached; it prints the link of a UI
+  already running and exits). When you launch a run, add `--open`: it opens the page in the user's browser
+  (no second tab when one shows it). Do not leave opening it to the user: a user who never opens the page
+  misses every decision that waits there. Then attach yourself to the run by watching it,
   `node tools/scripts/orch_watch_loop.mjs --toolkit <toolkit> <slug>…` over your unfinished runs (a run in phase `done` is left out)
   (Claude: under the Monitor tool, plus a recurring check-in; Codex: `orch.mjs watch <slug> --toolkit <toolkit>
   --timeout 600`, re-run it). Keep it running while you orchestrate: it reports every halt,

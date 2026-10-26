@@ -321,7 +321,7 @@ export function renderPlainSections(json: VerifyReportJson): string[] {
   L.push("## Clarifications (not errors)", "");
   if (readings.length + sides.length + written.length + withdrawn.length + symbols.length === 0) L.push("None.", "");
   else {
-    L.push("Nothing in this section is an error of the paper. Each item is something the paper determines but does not say, made explicit so that the statements can be read, and formalized, in one way.", "");
+    L.push("Nothing in this section is an error of the paper. Each item is something the paper determines but does not say, made explicit so that the statements can be read, and formalized, in one way. None of them needs action.", "");
     if (readings.length > 0) L.push("**How a statement is read.**", "", ...readings, "");
     if (sides.length > 0) L.push("**Side conditions the proofs use without stating them.**", "", ...sides, "");
     if (symbols.length > 0) L.push("**Notation.**", "", ...symbols.map((s) => `- $${s.symbol}$: ${one(s.reading)}`), "");

@@ -35,7 +35,7 @@ decide", "Verdict semantics".
 
 ## Mechanics
 
-1. Bring up the page and give the user its link — before you launch, and again whenever the link changes.
+1. Bring up the page and give the user its link; when you launch a run, open it in their browser (`ui --open`).
 2. Launch the run detached. A first run on a paper: `--stop-after V1.5`, inspect, `--resume --stop-after F1.5`, then
    continue (`--stop-after F2.5`, `F3` and `F3.5` are refused: stop after F2 or F4).
 3. Watch the run: keep the watch loop running over every unfinished run you are attached to (under a batch job's driver, `batch_orch.mjs`, it watches: act on its one event, end your turn).
@@ -61,7 +61,7 @@ node tools/scripts/orch.mjs <watch|decided|handled|ask|reply|recommend|done|deta
 | **Input** | the paper's directory or archive (`--main` when several files carry `\documentclass`), or its main `.tex`: a bare `.tex` that includes files lying beside it is taken with its directory, and one whose included `.tex` files are missing is refused at launch (it says why in the log and seeds no run: launch again) |
 | an arXiv paper | download the e-print (`https://arxiv.org/e-print/<id>`), untar it into a directory, pass the directory. Read the tex yourself; never a PDF |
 | a run launched on the wrong input, before any stage completed | stop it, remove `runs/<slug>/` (or take another `--slug`) and launch again: `--resume` works from the copy made at launch (`runs/<slug>/source/`) |
-| **The page**, at the start of every interaction on a run | `setsid nohup npx tsx bin/paperformalizer.ts ui --toolkit <toolkit> > <scratch>/ui.log 2>&1 < /dev/null &`, then give the user the link on the log's `open:` line. One page per toolkit: one already up prints its link and exits; when the default port is taken it takes a free one and says so. A user on another machine forwards the port first (`ssh -L <port>:127.0.0.1:<port> <host>`) |
+| **The page**, at the start of every interaction on a run | `setsid nohup npx tsx bin/paperformalizer.ts ui --toolkit <toolkit> [--open] > <scratch>/ui.log 2>&1 < /dev/null &`, with `--open` when you launch a run (not when you take one up); read the log after a few seconds. `--open` opens the page in the user's browser (not when a tab already shows it): the log says `opening the page in your browser`, `already open in N browser tab(s)`, or `could not open a browser on this machine` (a remote machine: the user opens the link on their own computer, after forwarding the port, `ssh -L <port>:127.0.0.1:<port> <host>`). Then give the user the link on the log's `open:` line, on a line of its own (never inside a paragraph), and say whether you opened it for them; if nothing appeared on their screen (a sandbox can keep the browser from opening), they open the link. One page per toolkit: one already up prints its link and exits; when the default port is taken it takes a free one and says so |
 | **Launch**, detached | `setsid nohup npx tsx bin/paperformalizer.ts verify <paper> --toolkit <toolkit> --slug <slug> --stop-after V1.5 > <scratch>/<slug>.log 2>&1 < /dev/null &` (Windows Git Bash has no `setsid`: `nohup … &` then `disown`) |
 | **Resume**, detached | the same command with `--resume`, the `--toolkit` / `--slug` / `--dry-run` the run was started with, and the flag that answers the halt ("Halt options") |
 
@@ -353,8 +353,8 @@ A checkpoint that a pipeline defect caused is a false positive: never report it 
 ## Reporting to the user
 
 The user talks with you on the page; the session is their debugging window: a line per action there. Plainly and
-briefly: what is wrong, why it matters, the fix — in the paper's own names ("Theorem 2", never a node id). What you
-write for the page (a recommendation's why and guidance, an `ask`, a `decided` text, a `reply`, a `--reject-finding` reading) is TeX: math
+briefly: what is wrong, why it matters, the fix — in the paper's own names ("Theorem 2", never a node id); never list
+clarifications (pinned readings) as items to act on: they ask nothing of the user. What you write for the page (a recommendation's why and guidance, an `ask`, a `decided` text, a `reply`, a `--reject-finding` reading) is TeX: math
 in `$…$`, a result by `\ref{<label>}`, the paper's macros, never a formula in plain characters; a path in `\texttt{…}`
 with `\_` for each underscore; a flag or command in `\verb|…|`. In a shell pass the whole text in SINGLE quotes, so
 that `$x` is not expanded (`orch.mjs` refuses a text with an unclosed `$`).

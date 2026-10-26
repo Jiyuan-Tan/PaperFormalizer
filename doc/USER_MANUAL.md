@@ -83,7 +83,8 @@ repository, so `npm run check` runs neither (it header-lints the shipped templat
 
 opens a web page for your toolkit on this computer (Windows, macOS or Linux; any current browser).
 It listens on 127.0.0.1 only and prints a link carrying this session's key — open that link (`--open`
-does it for you); other pages and other machines cannot reach it. Three views, all live (a change
+does it for you, unless a tab already shows the page; the agent passes it when it launches a run); other
+pages and other machines cannot reach it. Three views, all live (a change
 on disk reaches an open page within about a second; nothing needs a reload):
 
 - **Papers** — your papers with their stage and status, and what is waiting for you.
@@ -105,7 +106,7 @@ on disk reaches an open page within about a second; nothing needs a reload):
 
 **Who acts on a run.** You work with an agent in an interactive session (Claude Code or Codex) started
 in this repository: ask it, for example, "Use PaperFormalizer to verify the paper at <path>". It
-starts the run, brings up this page, gives you the link, and attaches itself to the run (the paper's
+starts the run, opens this page in your browser, gives you the link, and attaches itself to the run (the paper's
 page shows "<agent> attached"). From then on it acts at every halt and resumes. What is yours to decide, never the agent's:
 
 - a repair that would weaken a main result (accept, decline, redo with guidance) and the promotion
@@ -155,7 +156,7 @@ Actions run the same CLI you would type, in the background; their output is in t
 
 One UI runs per toolkit: run the command again and it prints the link of the one already running
 (`--new` starts another). The orchestrating agent starts it at the beginning of a session and gives
-you the link. From another computer, forward the port first — `ssh -L 7341:127.0.0.1:7341 <host>` —
+you the link; when it launches a run, it also opens the page in your browser. From another computer, forward the port first — `ssh -L 7341:127.0.0.1:7341 <host>` —
 then open the link (any local port works for the forward).
 
 ## The demo
@@ -371,7 +372,8 @@ run names it):
 `report.md` opens in plain language, naming results as your paper does: **what was wrong and what
 was done** (for each finding: the claim as printed, what is wrong, the counterexample, the correction
 — or the repair that was suggested and your decision on it — what the correction gives up, and
-whether Lean proves it), **clarifications** (readings, side conditions, notation: not errors), and
+whether Lean proves it), **clarifications** (readings, side conditions, notation: not errors, and
+nothing to act on — they record how the formalization reads the paper), and
 **what was proved in Lean, and what was not** (proved, taken from the literature as cited, not
 certified, not formalized; axioms). The technical appendix after it carries the same facts by the
 run's identifiers.

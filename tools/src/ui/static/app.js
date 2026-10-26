@@ -1344,7 +1344,7 @@ function drawCards() {
   const chips = {};
   for (const c of comments) chips[CHIP[c.kind] ?? "Findings"] = (chips[CHIP[c.kind] ?? "Findings"] ?? 0) + 1;
   // most to least consequential; a symbol's reading is a clarification, a condition added to a statement its own group
-  $("#chips").innerHTML = ["Findings", "Bookkeeping", "Clarifications", "Proof details"].filter((k) => chips[k]).map((k) => [k, chips[k]]).map(([k, n]) => `<button class="chip" type="button" data-chip="${k}" aria-pressed="${!P.off.has(k)}" title="${P.off.has(k) ? "Hidden — click to show" : "Click to hide"}">${k} ${n}</button>`).join("");
+  $("#chips").innerHTML = ["Findings", "Bookkeeping", "Clarifications", "Proof details"].filter((k) => chips[k]).map((k) => [k, chips[k]]).map(([k, n]) => `<button class="chip" type="button" data-chip="${k}" aria-pressed="${!P.off.has(k)}" title="${CHIP_HINT[k] ? `${CHIP_HINT[k]} ` : ""}${P.off.has(k) ? "Hidden — click to show" : "Click to hide"}">${k} ${n}</button>`).join("");
   filterCards();
 }
 /* A comment's card as the page state has it now (its reading being edited, its issue being written). */
@@ -1394,8 +1394,16 @@ function cardHTML(c, r, o = { own: [], atRest: false, draft: null }) {
   const editing = o.draft !== null && o.own.length > 0;
   return `<div class="card" data-card="${esc(c.id)}" data-kind="${esc(c.kind)}" data-chip="${CHIP[c.kind] ?? "Findings"}" ${r ? `data-node="${esc(r.id)}"` : ""} ${c.env ? `data-env="${esc(c.env)}"` : ""} tabindex="0">
     <div class="cbyline"><span class="av">PF</span><span class="cname">${c.kind === "note" ? "PaperFormalizer" : c.label}</span>${r ? `<span class="cwhen">${esc(envOf(r.id)?.heading ?? r.id)}</span>` : ""}<span class="ctag ${cls}">${esc(tag)}</span></div>
-    ${editing ? "" : SNAP?.bodies ? `<div class="cbody" data-body="${esc(c.id)}"></div>` : `<div class="cbody">${c.html}</div>`}${c.kind === "reading-owner" ? ownerReadingHTML(o) : ""}${editing || c.kind === "rewind" || c.kind === "cap" ? "" : issueHTML(o)}</div>`;
+    ${editing ? "" : SNAP?.bodies ? `<div class="cbody" data-body="${esc(c.id)}"></div>` : `<div class="cbody">${c.html}</div>`}${c.kind === "reading" || c.kind === "reading-symbol" ? noAction(c.kind) : ""}${c.kind === "reading-owner" ? ownerReadingHTML(o) : ""}${editing || c.kind === "rewind" || c.kind === "cap" ? "" : issueHTML(o)}</div>`;
 }
+/* A clarification records how the formalization reads a passage open to more than one reading: it is
+   for the checker, not a request to the author, and the card says so. */
+const noAction = (kind) => {
+  const what = kind === "reading-symbol" ? "the notation" : "the passage";
+  return SNAP ? `<p class="cfine cnoact">Not an error: this records how the formalization reads ${what}.</p>`
+    : `<p class="cfine cnoact">No action needed: this records how the formalization reads ${what}. Report an issue only if it is not what you meant.</p>`;
+};
+const CHIP_HINT = { Clarifications: "How the formalization reads passages open to more than one reading: not errors; no action needed." };
 /* The foot of a comment that asks no decision: the owner may report an issue with it (optional — a
    note awaiting a ruling is decided instead). `issue`: the one reported on it; `flag`: the open text. */
 function issueHTML({ issue = null, flag = null }) {
