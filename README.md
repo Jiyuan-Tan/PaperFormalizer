@@ -455,7 +455,7 @@ If you use PaperFormalizer in your work, please cite the paper:
 ```bibtex
 @misc{tan2026paperformalizer,
   title         = {{PaperFormalizer}: Author-in-the-Loop Autoformalization of Research Papers in {Lean}},
-  author        = {Tan, Jiyuan and Syrgkanis, Vasilis and Blanchet, Jose},
+  author        = {Tan, Jiyuan and Blanchet, Jose and Syrgkanis, Vasilis},
   year          = {2026},
   eprint        = {2610.31810},
   archivePrefix = {arXiv},
