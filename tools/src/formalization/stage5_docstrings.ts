@@ -16,8 +16,11 @@ import { spawnWithInactivityTimeout } from "../workers/spawn.js";
 import { withLakeBuildLock } from "../shared/build_mutex.js";
 import { mapLimit } from "./reviewer_verdicts.js";
 import { fillTemplate } from "../shared/template.js";
+import { F5_LAKE_TIMEOUT_MS, F5_TIME_LIMIT_TAG } from "../cap_gates.js";
 
-const LAKE_TIMEOUT_MS = 1800_000;
+/** Each lake call of the gate: stopped after an hour, or an hour with no output. Reaching it halts
+ *  F5 with `[f5-time-limit]`, and whether to continue is the user's call (cap_gates.ts). */
+const LAKE_TIMEOUT_MS = F5_LAKE_TIMEOUT_MS;
 /** Docstring passes per F5 entry: the pass, then one retry on the declarations it left defective. */
 const MAX_DOCSTRING_PASSES = 2;
 
@@ -37,7 +40,10 @@ export function lakeFailureSummary(
     .slice(0, 25)
     .join("\n")
     .trim();
-  const killed = r.killedDueToInactivity ? " (killed: no output for 30 min)" : r.killedDueToTotalTimeout ? " (killed: 30 min wall-clock)" : "";
+  const min = Math.round(LAKE_TIMEOUT_MS / 60_000);
+  const killed = r.killedDueToInactivity
+    ? ` ${F5_TIME_LIMIT_TAG} (killed: no output for ${min} min)`
+    : r.killedDueToTotalTimeout ? ` ${F5_TIME_LIMIT_TAG} (killed: ${min} min wall-clock)` : "";
   return `${errs || `lake exited ${r.exitCode}`}${killed}\n(full lake output: ${logPath})`;
 }
 

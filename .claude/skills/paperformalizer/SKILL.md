@@ -98,7 +98,7 @@ attach is yours too.
 | any other ruling that would leave a main result weaker than printed, unless it is bookkeeping | the user | ask first: `orch.mjs ask`; enter their reply with the lever |
 | a ruling that leaves a lemma or a definition weaker, no main result assuming more | you | make it and record it: `orch.mjs decided` |
 | a garden item that retires or removes a result | the user | put it to them in plain words ("V6 and the promotion rounds") |
-| whether to continue the proof loop past its iteration ceiling (the halt says `[iteration-ceiling]`) | the user | ask (`orch.mjs ask`, giving the measure the halt states) and wait; never end the run on your own. Yes → `--resume --clear-gate proof_loop_cap_hit` (the count resets); no → report the run as it stands |
+| whether to continue past a ceiling: the proof loop's 300 iterations (the halt says `[iteration-ceiling]`) or F5's one-hour lake limit (`[f5-time-limit]`) | the user | ask (`orch.mjs ask`, giving what the halt states) and wait; never end the run on your own. Yes → `--resume --clear-gate proof_loop_cap_hit` (the count resets), at F5 a plain `--resume` (lake gets a fresh hour; built modules are kept); no → report the run as it stands, at F5 leave it halted |
 | on a run the user started with `--full-auto` (`state.json` `full_auto`), all of the above | you | recommend on every item as above, with the same care: the recommendation that completes a decision carries it out (a resume with the rulings, or `propose --apply --recommended`) and lists it for the user's review; any other weakening ruling you make, enter and record with `orch.mjs decided` ("Full auto: …"); `ask` only with `--owner-only`, for what only they can give. Never turn it on yourself |
 | everything else | you | decide and resume; on a run the user started with `--debug` (`state.json` `debug_mode`), bring a hard call to them first (`orch.mjs ask`) |
 
@@ -240,7 +240,7 @@ the plan or the paper by hand; a sub-agent driving a run reports a directive's t
 | any other F2.5–F4 halt (a Lean declaration named, `redo-math` on a helper, laundering, strikes) | Lean-side: handle it, `--resume` |
 | a Defer item (plan node `gate:true`) | the run continues and discloses it in the report. To discharge: build it under `Papers/<Slug>/` (never `Toolkit/`), check it, `--from-stage F2.5` |
 | F5 delivery audit REFUSED, or the soundness gate (a `sorry` left) | run the loop again (`--from-stage F2.5`); a `cited-mismatch`: first correct the Lean carrier to the cited source. Never edit a receipt, never delete a statement to pass |
-| F5 docstring gate, crosswalk, or an artifact it cannot read | fix the build or write the listed docstrings to the contract; wire the `-- @node:` anchor or correct the row; restore the artifact by re-running the stage that writes it; then `--resume` |
+| F5 docstring gate (not `[f5-time-limit]`: "Who decides"), crosswalk, or an artifact it cannot read | fix the build or write the listed docstrings to the contract; wire the `-- @node:` anchor or correct the row; restore the artifact by re-running the stage that writes it; then `--resume` |
 | F5 completes | a `F5 nl-links: … WARNING:` line and `nl_links.json` `uncovered` are worth a look before reporting |
 
 Standing directives, yours to write and to clear in `state.json`: `flags.f2_scaffold_directive` (a faithfulness

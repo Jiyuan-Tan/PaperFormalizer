@@ -116,6 +116,14 @@ describe("lakeFailureSummary (F5 build-failure checkpoint text)", () => {
     expect(msg).not.toContain("Command failed");
     expect(msg.length).toBeLessThan(300);
   });
+
+  it("a lake stopped at the one-hour limit is marked [f5-time-limit], with the limit it hit", () => {
+    const wall = lakeFailureSummary({ stdout: "✔ [3/90] Built X\n", stderr: "", exitCode: null, killedDueToTotalTimeout: true }, "/run/docstring_lake.log");
+    expect(wall).toContain("[f5-time-limit] (killed: 60 min wall-clock)");
+    const quiet = lakeFailureSummary({ stdout: "", stderr: "", exitCode: null, killedDueToInactivity: true }, "/run/docstring_lake.log");
+    expect(quiet).toContain("[f5-time-limit] (killed: no output for 60 min)");
+    expect(lakeFailureSummary({ stdout: "error: x.lean:1:1: bad\n", stderr: "", exitCode: 1 }, "/l")).not.toContain("[f5-time-limit]");
+  });
 });
 
 describe("lakeReportsLeanError (a docstring defect vs a lake that did not finish)", () => {

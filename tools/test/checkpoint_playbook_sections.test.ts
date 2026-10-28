@@ -27,6 +27,14 @@ describe("checkpoint playbook", () => {
     expect(of("F5 docstring coverage: 3 declaration(s) still undocumented")).toContain("DOCSTRING GATE");
     // … and the gate's two other halts (their messages do not say "coverage")
     for (const m of ["F5 docstring pass could not be validated — lake did not finish", "F5 docstring pass broke the build; its edits were restored"]) expect(of(m)).toContain("DOCSTRING GATE");
+    // lake stopped at its one-hour limit (either docstring halt): ask the user whether to continue
+    for (const m of [
+      "F5 docstring pass could not be validated — lake did not finish (the edits are kept):\nlake exited null [f5-time-limit] (killed: 60 min wall-clock)",
+      "F5 docstring coverage could not be computed:\nlake exited null [f5-time-limit] (killed: no output for 60 min)",
+    ]) {
+      expect(of(m)).toMatch(/F5 TIME LIMIT[\s\S]*USER's decision[\s\S]*orch\.mjs ask[\s\S]*Yes → `--resume`/);
+      expect(of(m)).not.toContain("DOCSTRING GATE");
+    }
     expect(of("F5 bank-soundness gate REFUSED: sorry in A.lean")).toContain("SOUNDNESS GATE");
     expect(of("F5 crosswalk consistency: 2 row(s) claim a verified Lean match")).toContain("CROSSWALK");
     expect(checkpointGuidance("5", "blocked", {}, false, "F5 cannot read the formalization note at x")).toContain("formalization note");

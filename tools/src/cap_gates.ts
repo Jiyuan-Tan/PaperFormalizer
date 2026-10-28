@@ -46,6 +46,22 @@ export const ITERATION_CEILING_EXIT =
   "for good on your own, and never continue without their answer. Yes → `--resume --clear-gate proof_loop_cap_hit` (every loop " +
   "counter resets: a fresh budget of iterations); no → report the run as it stands. On a run the user started with `--full-auto`, decide it yourself";
 
+/** Marks an F5 halt where lake was stopped at its time limit (`F5_LAKE_TIMEOUT_MS`), in the halt message. */
+export const F5_TIME_LIMIT_TAG = "[f5-time-limit]";
+
+/** F5's lake time limit: the docstring gate's builds, each stopped after an hour, or an hour with no output. */
+export const F5_LAKE_TIMEOUT_MS = 60 * 60_000;
+
+/** The exit of F5's time limit: whether to give lake another hour is the user's call. */
+export const F5_TIME_LIMIT_EXIT =
+  "F5 TIME LIMIT: lake was stopped at its one-hour limit while F5 built the paper's modules for the docstring gate; " +
+  "a large paper can need longer, so this is not an error of the Lean. Whether to continue is the USER's decision: ask them " +
+  "(`orch.mjs ask`, with one line in the session) and wait — never stop the run for good on your own, and never continue without " +
+  "their answer. Yes → `--resume` (lake gets a fresh hour; the modules it already built are kept, and docstrings a pass wrote stay " +
+  "on disk); no → leave the run halted at F5 (V6 writes the report only once F5 completes). On a run the user started with " +
+  "`--full-auto`, decide it yourself. If lake was stopped for no output rather than at the wall clock, check first that nothing " +
+  "else holds the toolkit's build (`ps`)";
+
 export const CAP_GATES: CapGate[] = [
   {
     flag: "general_review_halt",

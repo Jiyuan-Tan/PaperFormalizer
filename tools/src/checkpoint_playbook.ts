@@ -10,7 +10,7 @@
 // STABLE invariants + a pointer to the relevant skill section — keep the pointers matched to the
 // current headings, and each entry to ~2 sentences. Point, don't paste.
 
-import { CAP_GATES, GENERAL_REVIEW_HALT_EXITS, MISSING_ARCHITECTURE_EXIT, capGateGuidance } from "./cap_gates.js";
+import { CAP_GATES, F5_TIME_LIMIT_EXIT, F5_TIME_LIMIT_TAG, GENERAL_REVIEW_HALT_EXITS, MISSING_ARCHITECTURE_EXIT, capGateGuidance } from "./cap_gates.js";
 import type { Stage } from "./types.js";
 
 /** The flags of the run's state a reminder reads: each names the halt it is set by. */
@@ -122,7 +122,9 @@ function f5RefusalGuidance(message: string): string {
   if (/delivery audit could not validate/.test(message)) {
     return "F5 DELIVERY AUDIT could not read an artifact (graph, plan, core or a receipt): restore it by re-running the stage that writes it, then `--resume`." + exit;
   }
-  // (every halt of the docstring gate: coverage short, the pass not validated, the pass breaking the build)
+  // lake stopped at its time limit: not a defect of the Lean, and continuing is the user's call
+  if (message.includes(F5_TIME_LIMIT_TAG)) return `${F5_TIME_LIMIT_EXIT}.${exit}`;
+  // (every other halt of the docstring gate: coverage short, the pass not validated, the pass breaking the build)
   if (/docstring (coverage|pass)/.test(message)) {
     return "F5 DOCSTRING GATE: the message lists the build error or the declarations still undocumented / crosslink-defective. Fix the build, or write those docstrings by hand to the contract (first paragraph the NL translation, a crosslink per hypothesis and the conclusion), then `--resume`; the gate cannot be skipped." + exit;
   }

@@ -1147,6 +1147,12 @@ improving its records can reach it. Whether to continue is the user's decision, 
 `--full-auto`: the agent asks and waits, and on a yes resumes with `--clear-gate proof_loop_cap_hit`,
 which resets the count to a fresh 300.
 
+**F5's time limit.** F5 builds the paper's modules for the docstring gate, and each lake call is
+stopped after an hour (or an hour with no output). A large paper can need longer: the halt then says
+`[f5-time-limit]`, and, as at the iteration ceiling, the agent asks whether to continue. On a yes it
+resumes with `--resume`, which gives lake a fresh hour; the modules already built are kept, so the
+build picks up where it stopped.
+
 ### Promotion rounds: the orchestrator's procedure
 
 What a round offers, what an entry shows and how the user decides it are in "Promoting results into
