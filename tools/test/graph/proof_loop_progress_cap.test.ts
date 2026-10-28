@@ -13,7 +13,8 @@ import {
   NO_PROGRESS_MAX,
   type ProofMeasure,
 } from "../../src/formalization/proof_review_loop.js";
-import { clearCapGate } from "../../src/cap_gates.js";
+import { clearCapGate, resumeBlock, ITERATION_CEILING_TAG, ITERATION_CEILING_EXIT } from "../../src/cap_gates.js";
+import { checkpointGuidance } from "../../src/checkpoint_playbook.js";
 import { resetProofLoopBudgets } from "../../src/formalization/loop_limits.js";
 import { createInitialState, loadState, saveState } from "../../src/state.js";
 import type { StateJson } from "../../src/types.js";
@@ -132,6 +133,32 @@ describe("proof-loop progress budget", () => {
     expect(fills).toBe(2);
     expect(reasonOf(outcome)).toContain(`loop exceeded ${MAX_ITERS} iterations`);
     expect(state.flags.proof_loop_cap_hit).toBeTruthy();
+  });
+
+  it("at the ceiling the orchestrator asks the user, and a yes resets the count", async () => {
+    const state = createInitialState("q");
+    state.flags.proof_loop_counters = { iters: MAX_ITERS - 1, scaffold_rounds: 0, stale: 0, tag_reroutes: 0, node_strikes: {}, review_error_strikes: {} };
+    const { outcome } = await run({ state, measureAt: (n) => ({ open: 1, proved: n }) });
+    expect(reasonOf(outcome)).toContain(ITERATION_CEILING_TAG);
+    // The halt and a refused resume both say to ask the user, not to diagnose a stall.
+    for (const text of [resumeBlock(state.flags)!, checkpointGuidance("3", "blocked", state.flags, false, reasonOf(outcome))!]) {
+      expect(text).toContain(ITERATION_CEILING_EXIT);
+      expect(text).not.toContain("Do NOT simply re-resume");
+    }
+    // The user says yes: the gate is cleared, the loop runs again with a fresh count.
+    clearCapGate(state.flags, "proof_loop_cap_hit");
+    expect(state.flags.proof_loop_counters?.iters).toBe(0);
+    expect(resumeBlock(state.flags)).toBeNull();
+    state.flags.proof_loop_counters = { ...state.flags.proof_loop_counters!, iters: MAX_ITERS - 3 };
+    const again = await run({ state, measureAt: (n) => ({ open: 1, proved: n }) });
+    expect(again.fills).toBe(3);
+  });
+
+  it("a stalled loop keeps the diagnose-first guidance", async () => {
+    const state = createInitialState("q");
+    const { outcome } = await run({ state, measureAt: () => ({ open: 2, proved: 7 }) });
+    expect(reasonOf(outcome)).not.toContain(ITERATION_CEILING_TAG);
+    expect(resumeBlock(state.flags)).toContain("Do NOT simply re-resume");
   });
 
   it("clearing the gate, or a new formalization attempt, starts the measure over", () => {

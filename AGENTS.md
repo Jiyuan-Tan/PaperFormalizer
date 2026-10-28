@@ -74,7 +74,9 @@ the file directly. From `tools/`, always `source scripts/node_env.sh` first (nev
   `orch.mjs decided` one that leaves a lemma's or a definition's verified statement weaker than the
   paper's (the page shows it for the user's review; act on a rejection the watcher reports). So are F-stage directives
   (`flags.scaffold_redirect` in a run's `state.json`, `--clear-gate` on a cap gate): the orchestrating
-  agent writes them itself. What only the user can give (a cited source you cannot access; widening the model
+  agent writes them itself — except at the proof loop's iteration ceiling (the halt says
+  `[iteration-ceiling]`): ask the user whether to continue (`orch.mjs ask`) and wait; on yes,
+  `--resume --clear-gate proof_loop_cap_hit` resets the count. What only the user can give (a cited source you cannot access; widening the model
   workers' sandbox, `codexSandbox`), ask on the page (`orch.mjs ask`), with one line in the session.
 - Fetch cited sources yourself; ask the user only for one you cannot access. For arXiv, read the TeX
   source, never the PDF.

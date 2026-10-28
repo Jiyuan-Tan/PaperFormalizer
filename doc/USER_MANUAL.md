@@ -1142,6 +1142,10 @@ while a proof is open, halts after 20 iterations that beat neither record (fewer
 than ever, or more proved declarations than ever), or at 300 iterations in all. The halt states
 the measure, which is the runner's and not the prover's summary. An F2 pass and `--clear-gate`
 restart it; after a hand edit of the Lean at a halt that lowers the proved count, clear the gate.
+The 300-iteration ceiling (its halt says `[iteration-ceiling]`) is not a stall: a loop still
+improving its records can reach it. Whether to continue is the user's decision, in every mode but
+`--full-auto`: the agent asks and waits, and on a yes resumes with `--clear-gate proof_loop_cap_hit`,
+which resets the count to a fresh 300.
 
 ### Promotion rounds: the orchestrator's procedure
 

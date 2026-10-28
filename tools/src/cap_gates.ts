@@ -35,6 +35,17 @@ export const GENERAL_REVIEW_HALT_EXITS =
   "a defect in the paper's statement → record it (`discovery/patches.json`), then `--resume --from-stage V1.5`. " +
   "A plain resume is refused while the gate is set; `--resume --clear-gate general_review_halt` alone only re-runs the reviewer on the same plan";
 
+/** Marks the proof loop's absolute iteration ceiling in its halt reason (`flags.proof_loop_cap_hit`). */
+export const ITERATION_CEILING_TAG = "[iteration-ceiling]";
+
+/** The exit of the iteration ceiling: unlike the other loop budgets, continuing is the user's call. */
+export const ITERATION_CEILING_EXIT =
+  "the proof loop reached its absolute iteration ceiling. A loop with a proof open that stops beating its records halts first, " +
+  "on the no-progress budget, so this one ran out of iterations rather than stalling. Whether to continue is the USER's decision: " +
+  "ask them (`orch.mjs ask`, with one line in the session), giving the measure the halt states, and wait — never stop the run " +
+  "for good on your own, and never continue without their answer. Yes → `--resume --clear-gate proof_loop_cap_hit` (every loop " +
+  "counter resets: a fresh budget of iterations); no → report the run as it stands. On a run the user started with `--full-auto`, decide it yourself";
+
 export const CAP_GATES: CapGate[] = [
   {
     flag: "general_review_halt",
@@ -73,6 +84,11 @@ export const CAP_GATES: CapGate[] = [
 export const MISSING_ARCHITECTURE_EXIT =
   "build each named declaration under the paper's own tree (its `suggested_location` in `flags.missing_architecture_items`), then `--resume`: the gate opens once every name is found in the toolkit, the papers tree or a base library. An item F2 does not need: delete it from `flags.missing_architecture_items` in state.json and say why in `flags.f2_scaffold_directive`";
 
+/** The guidance for a set cap gate: the iteration ceiling has its own exit (the user decides). */
+export function capGateGuidance(gate: CapGate, value: unknown): string {
+  return gate.flag === "proof_loop_cap_hit" && String(value ?? "").includes(ITERATION_CEILING_TAG) ? ITERATION_CEILING_EXIT : gate.guidance;
+}
+
 /**
  * What refuses the next `--resume` of the F stages, as the halt prints it: the first set cap gate
  * with its `--clear-gate` exit, else a missing-architecture block; null when a resume would run.
@@ -80,7 +96,7 @@ export const MISSING_ARCHITECTURE_EXIT =
 export function resumeBlock(flags: StateFlags): string | null {
   const rec = flags as unknown as Record<string, unknown>;
   for (const gate of CAP_GATES) {
-    if (rec[gate.flag]) return `${gate.flag.toUpperCase()} BLOCKED: ${rec[gate.flag]}\nResolve: ${gate.guidance}.`;
+    if (rec[gate.flag]) return `${gate.flag.toUpperCase()} BLOCKED: ${rec[gate.flag]}\nResolve: ${capGateGuidance(gate, rec[gate.flag])}.`;
   }
   if (!flags.missing_architecture) return null;
   const names = (flags.missing_architecture_items ?? []).map((item) => item.name_suggestion).join(", ");

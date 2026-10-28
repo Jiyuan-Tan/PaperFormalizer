@@ -29,6 +29,7 @@ import { isPaperTmpPath } from "../paths.js";
 import { recordVerifyFinding } from "../verify/findings.js";
 import type { ToolkitConfig } from "../toolkit/config.js";
 import { sweepDeadHelpers, type DeadHelperFinding } from "./dead_helpers.js";
+import { ITERATION_CEILING_TAG } from "../cap_gates.js";
 
 /** Result of the F3.5 unused-hypothesis gate: `blocking` = definite-transitive findings (a real
  *  statement defect — a public theorem forwards a hypothesis only into a bridge where the same
@@ -1120,7 +1121,8 @@ export async function runProofReviewLoop(args: {
     if (counters.iters >= MAX_ITERS) {
       return await capOut(
         "bank-partial",
-        `loop exceeded ${MAX_ITERS} iterations (the absolute ceiling; the Lean tree has ${measureText(m)})`,
+        `${ITERATION_CEILING_TAG} loop exceeded ${MAX_ITERS} iterations (the absolute ceiling; the Lean tree has ${measureText(m)}). ` +
+          "Continuing is the user's call: ask them; on yes, `--resume --clear-gate proof_loop_cap_hit` resets the count",
         "3",
       );
     }

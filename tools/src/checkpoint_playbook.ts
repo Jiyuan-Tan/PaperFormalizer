@@ -10,7 +10,7 @@
 // STABLE invariants + a pointer to the relevant skill section — keep the pointers matched to the
 // current headings, and each entry to ~2 sentences. Point, don't paste.
 
-import { CAP_GATES, GENERAL_REVIEW_HALT_EXITS, MISSING_ARCHITECTURE_EXIT } from "./cap_gates.js";
+import { CAP_GATES, GENERAL_REVIEW_HALT_EXITS, MISSING_ARCHITECTURE_EXIT, capGateGuidance } from "./cap_gates.js";
 import type { Stage } from "./types.js";
 
 /** The flags of the run's state a reminder reads: each names the halt it is set by. */
@@ -92,7 +92,7 @@ function perStageGuidance(
     case "3.5":
     case "4":
       if (flags.proof_loop_cap_hit) {
-        return `PROOF-LOOP CAP (the gate \`proof_loop_cap_hit\` is set: ${flags.proof_loop_cap_hit}): ${CAP_GATES.find((g) => g.flag === "proof_loop_cap_hit")!.guidance}. paperformalizer SKILL §'F stages'.`;
+        return `PROOF-LOOP CAP (the gate \`proof_loop_cap_hit\` is set: ${flags.proof_loop_cap_hit}): ${capGateGuidance(CAP_GATES.find((g) => g.flag === "proof_loop_cap_hit")!, flags.proof_loop_cap_hit)}. paperformalizer SKILL §'F stages'.`;
       }
       return (
         "F2–F4: follow the checkpoint route (hint / build-substrate / fix-source / unclear / bank-partial); keep running while revisions converge. A paper-statement finding comes back as a proposed rewind for you to approve or reject. " +
