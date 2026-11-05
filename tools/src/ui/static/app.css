@@ -82,7 +82,7 @@ body.stale .dot-live { animation: none; }
 .b-vwb { background: var(--verified-wash); color: var(--verified); }
 .b-conditional { background: var(--lean-wash); color: var(--lean); }
 .b-repaired { background: var(--ins-wash); color: var(--ins); }
-.b-refuted, .b-error, .b-needs-you { background: var(--del-wash); color: var(--del); }
+.b-refuted, .b-error, .b-needs-you, .b-failed { background: var(--del-wash); color: var(--del); }
 .b-pending, .b-agent { background: var(--axiom-wash); color: var(--axiom); }
 .b-neutral, .b-idle, .b-superseded { background: var(--parchment-deep); color: var(--ink-soft); }
 .b-running { background: var(--lean-wash); color: var(--lean); }
@@ -115,13 +115,16 @@ textarea { width: 100%; min-height: 4.2rem; resize: vertical; }
 .stg.done { background: var(--verified); }
 .stg.current { background: var(--lean); animation: pulse 1.6s ease-in-out infinite; }
 .stg.halt { background: var(--accent-bright); }
+.stg.failed { background: var(--del); }
 .vstages { list-style: none; margin: 0; padding: 0; font-size: var(--fs-xs); }
 .vstages li { display: grid; grid-template-columns: 14px 2.6rem 1fr; gap: 0.45rem; align-items: baseline; padding: 0.14rem 0; color: var(--ink-faint); }
 .vstages .ic { width: 9px; height: 9px; border-radius: 50%; border: 1.5px solid var(--rule); align-self: center; }
 .vstages .done .ic { background: var(--verified); border-color: var(--verified); }
 .vstages .current .ic { background: var(--lean); border-color: var(--lean); animation: pulse 1.6s infinite; }
 .vstages .halt .ic { background: var(--accent-bright); border-color: var(--accent-bright); box-shadow: 0 0 0 3px var(--accent-wash); }
+.vstages .failed .ic { background: var(--del); border-color: var(--del); box-shadow: 0 0 0 3px var(--del-wash); }
 .vstages .done, .vstages .current, .vstages .halt { color: var(--ink); }
+.vstages .failed { color: var(--del); }
 .vstages code { font-size: 0.68rem; color: var(--ink-soft); }
 
 /* toolkit page */
@@ -434,6 +437,12 @@ span.rv { padding: 0 0.15rem; }
 .m-original .rv.ins, .m-original .cmark, .m-original .pv-rail .card { display: none; }
 .rail-off { display: none; font-size: var(--fs-sm); color: var(--ink-faint); font-style: italic; }
 .m-original .rail-off { display: block; }
+/* Report (`m-report`): the run's report (`#report-body`) in place of the paper — no mark, no comment. */
+#report-body { display: none; }
+.m-report #report-body { display: block; }
+.m-report #paper-body, .m-report #render-check, .m-report .rtool .chips, .m-report .rtool .nav-changes, .m-report .pv-rail .card { display: none; }
+.m-report .rail-off { display: block; }
+.report-where { font-size: var(--fs-sm); color: var(--ink-faint); overflow-wrap: anywhere; }
 /* two marks told apart by shape as well as colour: a finding is a filled red dot, a
    clarification a hollow gold ring */
 .cmark { display: inline-block; box-sizing: border-box; width: 0.6rem; height: 0.6rem; border-radius: 50%; background: transparent; border: 2px solid var(--mark-clarify); margin: 0 0.15rem; vertical-align: 0.12em; cursor: pointer; }

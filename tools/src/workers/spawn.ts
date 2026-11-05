@@ -1,7 +1,7 @@
 import { execa } from "execa";
 import { spawn as cpSpawn } from "node:child_process";
 import path from "node:path";
-import { haltIfStopping, isStopping, registerChild } from "../shared/child_registry.js";
+import { CALL_TAG_ENV, haltIfStopping, isStopping, newCallTag, reapCallTag, registerChild } from "../shared/child_registry.js";
 
 export interface SpawnWithTimeoutOpts {
   cwd?: string;
@@ -18,6 +18,11 @@ export interface SpawnWithTimeoutOpts {
   input?: string;
   /** Registry label (`shared/child_registry.ts`); kind defaults to the command's basename. */
   child?: { kind: string; tag?: string };
+  /**
+   * This call's `CALL_TAG_ENV` (default: a new one): a caller that starts a process outside the
+   * child's environment — codex's MCP servers — hands it the same tag, so it is reaped with the call.
+   */
+  callTag?: string;
   liveness?: {
     intervalMs: number;
     /**
@@ -87,9 +92,11 @@ export async function spawnWithInactivityTimeout(
 ): Promise<SpawnWithTimeoutResult> {
   // A stop signal has arrived: start nothing (parks until the stop handler exits the process).
   await haltIfStopping();
+  // every process of this call's tree carries the tag: what outlives the call is reaped (below)
+  const callTag = opts.callTag ?? newCallTag();
   const child = execa(cmd, args, {
     cwd: opts.cwd,
-    env: opts.env,
+    env: { ...opts.env, [CALL_TAG_ENV]: callTag },
     reject: false,
     input: opts.input,
     // POSIX: own process group so killTree can SIGKILL the whole tree.
@@ -310,5 +317,8 @@ export async function spawnWithInactivityTimeout(
     // Never leave the execa promise unhandled (reject:false means it resolves,
     // but guard anyway) — and make sure the tree is gone if we bailed via buffers.
     void child.catch(() => {});
+    // The group kill misses a descendant in a session of its own (codex starts its MCP servers so):
+    // one hung on NFS never reads its closed stdin and ran for hours, holding Mathlib's git lock.
+    await reapCallTag(callTag).catch(() => 0);
   }
 }

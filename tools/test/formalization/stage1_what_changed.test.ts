@@ -203,6 +203,18 @@ describe("F1 re-plan after the core moved", () => {
     expect(await readFile(pipelineLogPath(repoRoot, QID), "utf8")).toContain("WHOLE CONTEXT — F1 revise has no readable record of the core its plan was written against");
   });
 
+  it("a directive with no plan on disk (an F1 halt wrote none) still reaches the planner, which writes a fresh plan", async () => {
+    const state = createInitialState(QID);
+    state.stage_completed = "V1.5";
+    state.flags.f1_revise_directive = "build the Levi-Civita connection under Papers/";
+    const run = deps();
+    await runStage1({ ctx: ctx(), state, deps: run.deps });
+    const prompt = run.prompt();
+    expect(prompt).toContain("DIRECTIVE (from the runner or the orchestrator — write the plan as it says):\nbuild the Levi-Civita connection under Papers/");
+    expect(prompt).not.toContain("REVISION HEAD");
+    expect(prompt).toContain(`Write the formalization plan JSON to ${planPath(repoRoot, QID)}.`);
+  });
+
   it("a plan that grew by accretion is listed for compaction in the same pass, by entry, without its core records", async () => {
     const state = createInitialState(QID);
     state.stage_completed = "V1.5";

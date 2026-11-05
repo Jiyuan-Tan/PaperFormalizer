@@ -255,7 +255,7 @@ async function runPipelineInner(
     // attention over a long run) — both on the checkpoint line it reads and on
     // the console it sees after `--resume`.
     // (by the stage of the RESULT: a combined handler halts for another stage than its slot's)
-    const guidance = checkpointGuidance(result.stage, result.status, state.flags, state.auto_mode, result.message);
+    const guidance = checkpointGuidance(result.stage, result.status, state.flags, state.auto_mode, result.message, state.persist);
     await appendPipelineLog(ctx, {
       stage: loggedStage,
       status: result.status,

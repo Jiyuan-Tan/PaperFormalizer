@@ -102,7 +102,9 @@ on disk reaches an open page within about a second; nothing needs a reload):
   bullets, the same in all three views (All markup, Corrected, Original); a very long displayed
   definition is folded under the words that lead to it. The page reads a sentence's group off its
   form; every sentence is shown, word for word and in place. A promotion round is decided at the end of the paper and
-  written into its checklist.
+  written into its checklist. Once the run has written its report, a **Report** tab beside the three
+  views shows it typeset in place of the paper, with the path it is saved at
+  (`runs/<slug>/report.md` in the toolkit); the finished run's status box links to it.
 
 **Who acts on a run.** You work with an agent in an interactive session (Claude Code or Codex) started
 in this repository: ask it, for example, "Use PaperFormalizer to verify the paper at <path>". It
@@ -182,7 +184,7 @@ the element it points at, and how it ends.
 
     npx tsx bin/paperformalizer.ts verify <paper.tex|dir|archive> [--toolkit <path>] [--slug s]
         [--main relpath] [--targets label,label] [--resume] [--from-stage <stage>] [--fresh-review]
-        [--from-transcript] [--stop-after <stage>] [--clear-gate <flag>]... [--defer-proposals] [--debug | --full-auto] [--dry-run]
+        [--from-transcript] [--stop-after <stage>] [--clear-gate <flag>]... [--defer-proposals] [--debug | --full-auto] [--persist | --no-persist] [--dry-run]
         [--reject-rewind "<reason>"] [--clear-patch-cap] [--accept-cap]
         [--accept-repair [<node>,…]] [--decline-repair "[<node>,…: ]<reason>"] [--redo-repair "<node>: <guidance>"]...
         [--reject-finding "[<node>: [bookkeeping: ]]<reading>"]... [--add-condition "<node>: <condition>"]...
@@ -217,6 +219,13 @@ its full account is (the orchestrator guide's "Halt options" table says who rule
   the decision is carried out as "Accept all recommendations" would, and each one appears under
   "Review the agent's decisions" (Approve, or Reject with what to do instead). The page marks the run
   "full auto" and does not count these halts as waiting for you; you may still decide an item first.
+- `--persist` (persists across resumes; works with a resume too) says you want the paper's theorems
+  established, however long that takes. Without it, a run whose Lean needs a theory nobody has built
+  can end as incomplete (your decision, or the agent's on a full-auto run). With it, the agent looks
+  for a proof that avoids the gap and otherwise builds the theory, goes past the proof loop's ceiling
+  and F5's lake limit itself, and `--from-stage V6` is refused until F5 completes. It only keeps the
+  run going: anything that would weaken a main result is still yours, and it can use a lot of
+  model time. `--resume --no-persist` lifts it (yours alone).
 - `--dry-run` walks every stage without model calls or Lean builds (a smoke test of the wiring). A
   dry-run state is marked as such: a live run refuses to continue it (re-run from `--from-stage V1`
   without `--dry-run`, or use a fresh slug), and a dry run never touches a live run's state.
@@ -666,7 +675,7 @@ plain English, and each phrase links to the Lean hypothesis it states (`[phrase]
 conclusion as `[phrase](goal)`), as in Causalean — the paper page and the library show the two side by
 side, row by row. F5 enforces it on a paper's modules and the study and promotion prompts state it;
 `npx tsx bin/paperformalizer.ts docstrings [--toolkit <path>] [--modules M1,M2]` brings the toolkit's
-existing docstrings to it (docstring edits only, validated by a build; review the diff and commit).
+existing docstrings to it (docstring edits only, checked from the source text and confirmed by one build; review the diff and commit).
 Run it when no verify run is building the toolkit: the edits rebuild every module importing them.
 F5 also links each paper result to its Lean theorem row by row (`runs/<slug>/nl_links.json`): for
 every Lean hypothesis, the sentences or formulas of the paper that state it, and the paper text no
@@ -1146,6 +1155,19 @@ The 300-iteration ceiling (its halt says `[iteration-ceiling]`) is not a stall: 
 improving its records can reach it. Whether to continue is the user's decision, in every mode but
 `--full-auto`: the agent asks and waits, and on a yes resumes with `--clear-gate proof_loop_cap_hit`,
 which resets the count to a fresh 300.
+
+**F5's docstring build.** A docstring pass is checked from the source text, not by a build: each
+file is compared, character and column (a declaration's own head line may shift with an inline
+docstring), with its docstrings taken out before and after the pass (comments read as Lean reads
+them), and each docstring must stand on a declaration the index reports or where the file had one. The edit of a file that changed anything else (a statement, a
+proof, a comment) or put a docstring elsewhere is undone, kept under `docstring_rejected/pass<N>/`,
+and its declarations go to the next pass; coverage and crosslinks are read from the docstrings now
+on disk. One build of the paper's modules then confirms the edits after the last pass, while the
+crosswalk and the links are written: it must be green, the statement fingerprint of each of the
+run's declarations must be the one taken before the pass (on a toolkit with a `candidate_scan`
+exe; one that cannot be taken after the build halts the run with the edits kept), and the index's
+own coverage must hold. Only then does the paper enter `Papers.lean`; a red build or a moved
+statement restores the files byte for byte (the rejected versions under `docstring_rejected/build/`).
 
 **F5's time limit.** F5 builds the paper's modules for the docstring gate, and each lake call is
 stopped after an hour (or an hour with no output). A large paper can need longer: the halt then says

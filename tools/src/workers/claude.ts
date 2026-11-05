@@ -8,7 +8,7 @@ import { localConfig, leanProjectPathFor } from "../local_config.js";
 import { redactSecrets, resolveProviderAuth, workerEnv, type AuthMode } from "../auth.js";
 import type { ClaudeModel } from "../models.js";
 import { claudeRoles, codexRoleModel, type ClaudeRolesRunner } from "../claude_roles.js";
-import { runCodex } from "../shared/codex.js";
+import { MACHINE_RULES, runCodex } from "../shared/codex.js";
 import type { ModelTokenUsage } from "../token_usage.js";
 import { sharedLeanLspUrl } from "../shared/shared_lean_lsp_env.js";
 import { assertPromptFits } from "../shared/prompt_budget.js";
@@ -386,7 +386,7 @@ async function runClaudeCli(input: ClaudeRunInput): Promise<string> {
     // Carries ANTHROPIC_API_KEY in api mode; identical to process.env otherwise.
     env: workerEnv(),
     inactivityTimeoutMs: input.inactivityTimeoutMs ?? 20 * 60 * 1000,
-    input: input.prompt,
+    input: `${input.prompt}\n\n${MACHINE_RULES}`,
     child: { kind: "claude" },
   });
   const usage = extractClaudeTokenUsage(result.stdout);

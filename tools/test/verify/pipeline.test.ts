@@ -121,6 +121,33 @@ describe("runVerifyPipeline", () => {
     expect(again.phase).toBe("done");
   });
 
+  it("--persist refuses a report before the Lean is complete, changing nothing; only --no-persist lets one through", async () => {
+    const repoRoot = await tmpRepo();
+    const trace = newTrace();
+    const halted = await runVerifyPipeline({ ...baseArgs(repoRoot, trace), persist: true, runFormalization: fakeFormalization(newTrace(), "2") });
+    const before = await loadState(repoRoot, QID);
+    expect(before).toMatchObject({ persist: true, stage_completed: "2" });
+    await expect(runVerifyPipeline({ ...baseArgs(repoRoot, trace), resume: true, fromStage: "V6" })).rejects.toThrow(/--from-stage V6 is refused, nothing changed: this run is on --persist/);
+    expect((await loadState(repoRoot, QID)).verify!.phase).toBe(halted.phase);
+    // The flag given with the refused entry counts too, on a run that did not have it.
+    const other = await tmpRepo();
+    await runVerifyPipeline({ ...baseArgs(other, newTrace()), runFormalization: fakeFormalization(newTrace(), "2") });
+    await expect(runVerifyPipeline({ ...baseArgs(other, newTrace()), resume: true, fromStage: "V6", persist: true })).rejects.toThrow(/this run is on --persist/);
+    // The owner's lever ends the run as any other, and lifts the flag.
+    const ended = await runVerifyPipeline({ ...baseArgs(repoRoot, trace), resume: true, fromStage: "V6", noPersist: true });
+    expect(ended.phase).toBe("done");
+    expect((await loadState(repoRoot, QID)).persist).toBe(false);
+  });
+
+  it("--persist leaves a report alone once the Lean is complete", async () => {
+    const repoRoot = await tmpRepo();
+    await runVerifyPipeline({ ...baseArgs(repoRoot, newTrace()), persist: true, runFormalization: fakeFormalization(newTrace(), "5") });
+    const trace = newTrace();
+    const again = await runVerifyPipeline({ ...baseArgs(repoRoot, trace), resume: true, fromStage: "V6" });
+    expect(trace.stages.some((x) => x.startsWith("V6"))).toBe(true);
+    expect(again.phase).toBe("done");
+  });
+
   it.each([null, "V1", "V1.5"])("preserves outstanding page requests when resuming from %s", async (fromStage) => {
     const repoRoot = await tmpRepo();
     await runVerifyPipeline({ ...baseArgs(repoRoot, newTrace()), stopAfter: "V1" });

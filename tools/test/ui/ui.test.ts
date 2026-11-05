@@ -6,7 +6,7 @@ import path from "node:path";
 import { afterAll, describe, expect, it, vi } from "vitest";
 import { buildArgv, displayCommand, setDecisions } from "../../src/ui/actions.js";
 import { paperNames, paperUses, parseModule } from "../../src/ui/library_model.js";
-import { texCut, closedProofs, liveHeadline, markStarted, ownerReadingsByComment, redoingOf, repairKey, runDetail, newerRuns, runLive, runSummary, stageIndexOf, validSlug } from "../../src/ui/run_model.js";
+import { texCut, closedProofs, liveHeadline, markStarted, ownerReadingsByComment, redoingOf, repairKey, runDetail, newerRuns, runLive, runSummary, stageIndexOf, stageStates, failedStageOf, validSlug } from "../../src/ui/run_model.js";
 import { gunzipSync } from "node:zlib";
 import { readFileSync } from "node:fs";
 import { brotliDecompressSync } from "node:zlib";
@@ -1129,6 +1129,40 @@ describe("run status: who a halt waits on", () => {
     // … and done when the event completes it
     expect(stageIndexOf("formalization", "1.5", "2", "completed")).toBe(4);
   });
+  it("a failed run's progress is red at the stage it failed at, not complete", async () => {
+    const ev = (stage: string, status: string) => ({ at: "x", stage, status, message: "m" });
+    const refuted = (stage: string) => ({ node: "thm:a", stage, kind: "refuted" as const, detail: "d", witness: null });
+    // with a report: the earliest stage whose finding fails the run (an F stage's "F3" is stage "3")
+    const v = (findings: object[]) => ({ phase: "failed", findings }) as never;
+    expect(failedStageOf(v([refuted("F3"), refuted("V1.5")]), true, "V6", null)).toBe(1);
+    expect(failedStageOf(v([refuted("F3"), { ...refuted("V1.5"), descoped: true }]), true, "V6", null)).toBe(6);
+    // ended as failed at a halt: where its log ends (the next stage when that event completes it)
+    expect(failedStageOf(undefined, false, "V1.5", ev("1", "checkpoint"))).toBe(2);
+    expect(failedStageOf(undefined, false, "V1.5", ev("2", "completed"))).toBe(5);
+    expect(failedStageOf(undefined, false, "1.5", null)).toBe(4);
+    // a refutation at V1.5 went to its report: the Lean stages never ran
+    expect(stageStates({ stageIndex: 0, failedAt: 1, live: false, status: "failed", verdict: "errors_found" })).toEqual(["done", "failed", ...Array(8).fill("todo"), "done"]);
+    // a refutation in F3: the stages after it ran
+    expect(stageStates({ stageIndex: 10, failedAt: 6, live: false, status: "failed", verdict: "errors_found" })).toEqual([...Array(6).fill("done"), "failed", ...Array(4).fill("done")]);
+    // a run ended as failed at its F1 halt got no further
+    const dir = path.join(root, "runs", "skipped");
+    mkdirSync(dir, { recursive: true });
+    writeFileSync(path.join(dir, "state.json"), JSON.stringify({ stage_completed: "V1.5", verify: { phase: "failed", findings: [] } }));
+    writeFileSync(path.join(dir, "pipeline.jsonl"), JSON.stringify({ timestamp: "2026-10-03T02:00:00Z", stage: "1", status: "checkpoint", message: "F1 blocked-infeasible: no plan" }) + "\n");
+    const d = await runDetail(cfg, "skipped");
+    expect(d.summary).toMatchObject({ status: "failed", failedAt: 2, stageIndex: 1 });
+    expect(d.stages.map((x) => x.state)).toEqual(["done", "done", "failed", ...Array(8).fill("todo")]);
+    // its Lean out of reach, it was ended with its report (`--from-stage V6`): checked nothing in Lean, so failed at F1
+    const ended = path.join(root, "runs", "ended");
+    mkdirSync(ended, { recursive: true });
+    writeFileSync(path.join(ended, "state.json"), JSON.stringify({ stage_completed: "V1.5", verify: { phase: "done", findings: [] } }));
+    writeFileSync(path.join(ended, "report.json"), JSON.stringify({ run: { early_stop: true }, verdict: "no_error_found" }));
+    writeFileSync(path.join(ended, "pipeline.jsonl"), JSON.stringify({ timestamp: "2026-10-03T02:00:00Z", stage: "V6", status: "completed", message: "report" }) + "\n");
+    const e = await runDetail(cfg, "ended");
+    expect(e.summary).toMatchObject({ status: "failed", failedAt: 2, stageIndex: 1 });
+    expect(e.summary.headline).toMatch(/^stopped at F1, no Lean · /);
+    expect(e.stages.map((x) => x.state)).toEqual(["done", "done", "failed", ...Array(7).fill("todo"), "done"]);
+  });
   it("a receipt its confirming pass has not settled is not the owner's yet: no decision card, the run is to be resumed", async () => {
     const dir = path.join(root, "runs", "unconf");
     mkdirSync(dir, { recursive: true });
@@ -1168,9 +1202,9 @@ describe("run status: who a halt waits on", () => {
     expect(done.results.map((r) => r.bucket)).toEqual(["verified"]);
     // the drawer lists every condition the report gives the result under, not V1.5's side conditions alone
     expect(done.results[0]!.conditions.map((c) => c.id)).toEqual(["ass:bk-1", "ass:filler:1", "gate:g"]);
-    // a run that ended in its report without Lean (a refutation at V1.5: phase `failed`) is done, with its verdict
+    // a run that ended in its report without Lean (a refutation at V1.5: phase `failed`) is failed, with its verdict
     const refuted = await at("V1.5", "failed");
-    expect(refuted.summary).toMatchObject({ status: "done", verdict: "no_error_found" });
+    expect(refuted.summary).toMatchObject({ status: "failed", verdict: "no_error_found" });
     const back = await at("V1", "v1");
     expect(back.summary).toMatchObject({ verdict: null, buckets: null });
     expect(back.results.map((r) => r.bucket)).toEqual([null]);
@@ -1357,6 +1391,17 @@ describe("server: 127.0.0.1, a session key, the Host header", () => {
     expect(svg.headers.get("content-type")).toBe("image/svg+xml");
     expect(svg.headers.get("content-security-policy")).toContain("sandbox");
     expect((await fetch(`${base}/api/runs/r1/asset/..%2Fstate.json.png`, { headers: { Cookie: cookie } })).status).toBe(404);
+    // the run's report and where it is saved (the page's Report tab): only once V6 has written it —
+    // one on file from before the run was sent back is not served
+    writeFileSync(path.join(root, "runs", "r1", "report.md"), "# stale");
+    expect((await fetch(`${base}/api/runs/r1/report`, { headers: { Cookie: cookie } })).status).toBe(404);
+    mkdirSync(path.join(root, "runs", "r3"), { recursive: true });
+    writeFileSync(path.join(root, "runs", "r3", "state.json"), JSON.stringify({ stage_completed: "V6" }));
+    writeFileSync(path.join(root, "runs", "r3", "report.md"), "# Correctness report — r3\n");
+    const rep = await fetch(`${base}/api/runs/r3/report`, { headers: { Cookie: cookie } });
+    expect(await rep.json()).toEqual({ path: path.join(root, "runs", "r3", "report.md"), md: "# Correctness report — r3\n" });
+    expect((await fetch(`${base}/api/runs/r3/report`, { headers: { Cookie: cookie, "If-None-Match": rep.headers.get("etag")! } })).status).toBe(304);
+    rmSync(path.join(root, "runs", "r3"), { recursive: true, force: true });
     // a run name that is not a directory name is refused; a POST without the page's header too
     expect((await fetch(`${base}/api/runs/a:b/delegate`, { method: "POST", headers: { Cookie: cookie, "X-TC": "1" }, body: "{}" })).status).toBe(404);
     expect((await fetch(`${base}/api/runs/r1/delegate`, { method: "POST", headers: { Cookie: cookie }, body: "{}" })).status).toBe(403);

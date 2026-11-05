@@ -14,7 +14,7 @@ import {
 import { MODELS } from "../models.js";
 import type { ModelTokenUsage } from "../token_usage.js";
 import { sharedLeanLspUrl } from "./shared_lean_lsp_env.js";
-import { terminateChildrenOfKind } from "./child_registry.js";
+import { CALL_TAG_ENV, newCallTag, RUN_TAG_ENV, terminateChildrenOfKind } from "./child_registry.js";
 import { assertPromptFits } from "./prompt_budget.js";
 import {
   acquireCodexCallSlot,
@@ -216,7 +216,19 @@ export function effectiveSandboxMode(
  * disable is robust whether or not the global `~/.codex/config.toml` defines
  * `lean-lsp`.
  */
-function leanLspCodexFlags(input: CodexRunInput): string[] {
+/**
+ * Said to every agent (codex and claude workers), after its prompt. An F3 agent whose Lean tools hung on
+ * a stalled NFS mount (2026-11-04) built its own: a 64 GB RAM disk in a private mount namespace, a
+ * downloaded toolchain, Mathlib's oleans and sources copied 128 at a time — load on the machine and the
+ * mount every other run shares. A broken environment is the owner's to fix: the agent says so.
+ */
+export const MACHINE_RULES =
+  "[Machine rules] This machine and its file system are shared with other runs and other people. Do not work around the environment: " +
+  "do not download toolchains or packages, copy the toolkit's `.lake` (its packages, builds or sources), mount anything, create namespaces " +
+  "(`unshare`), RAM disks or preloaded libraries, or run more than 4 heavy processes at once. If Lean or its tools are missing or hang " +
+  "(no lean-lsp tools, `lake env lean` or `lake build` stuck), stop and report it in your answer, in the form the task asks for, instead of building a substitute.";
+
+function leanLspCodexFlags(input: CodexRunInput, callTag?: string): string[] {
   if (input.leanLsp === false) return [];
   const cfg = localConfig();
   const projectPath = (input.leanProjectPath ?? leanProjectPathFor(input.cwd)).replace(/\\/g, "/");
@@ -233,9 +245,16 @@ function leanLspCodexFlags(input: CodexRunInput): string[] {
     ];
     return kv.map((s) => `-c ${shellQuote(s)}`);
   }
+  // codex starts the server with a cleared environment, in a session of its own: neither the runner's
+  // tag nor the call's reaches it, so a server hung on NFS (its `lake serve`, its `git diff` holding
+  // Mathlib's index lock) outlived the call for hours. `env` sets them in front of it (POSIX), so the
+  // call's end and the runner's stop find it (`reapCallTag`, `terminateChildren`).
+  const tags = [[CALL_TAG_ENV, callTag], [RUN_TAG_ENV, process.env[RUN_TAG_ENV]]].filter((t): t is [string, string] => Boolean(t[1])).map(([k, v]) => `${k}=${v}`);
+  const wrap = process.platform !== "win32" && tags.length > 0;
+  const argv = [...(wrap ? [...tags, cfg.leanLspMcpBinary] : []), "--lean-project-path", projectPath];
   const kv = [
-    `mcp_servers.lean-lsp.command=${JSON.stringify(cfg.leanLspMcpBinary)}`,
-    `mcp_servers.lean-lsp.args=["--lean-project-path", ${JSON.stringify(projectPath)}]`,
+    `mcp_servers.lean-lsp.command=${JSON.stringify(wrap ? "/usr/bin/env" : cfg.leanLspMcpBinary)}`,
+    `mcp_servers.lean-lsp.args=[${argv.map((a) => JSON.stringify(a)).join(", ")}]`,
     `mcp_servers.lean-lsp.env.MCP_TIMEOUT=${JSON.stringify(String(cfg.mcpTimeoutMs))}`,
   ];
   return kv.map((s) => `-c ${shellQuote(s)}`);
@@ -565,6 +584,8 @@ async function runCodexOnce(input: CodexRunInput): Promise<{ stdout: string; std
   // marker at its end) as JSON — escapes at most double it
   const markerHead = 512 * 1024 + 2 * Buffer.byteLength(input.prompt);
   let started = false;
+  // the call's tag, handed to its MCP server too (`leanLspCodexFlags`): what it leaves is reaped with the call
+  const callTag = newCallTag();
   const result = await (async () => { try {
   const cmd = [
     // `codex exec` is non-interactive, so approval remains `never`; this selects
@@ -637,11 +658,11 @@ async function runCodexOnce(input: CodexRunInput): Promise<{ stdout: string; std
           "-c multi_agent.max_concurrent_threads_per_session=4",
         ]
       : []),
-    ...leanLspCodexFlags(input),
+    ...leanLspCodexFlags(input, callTag),
   ].join(" ");
   const script = `${setup} && ${cmd}`;
 
-  const promptWithMarker = `${input.prompt}\n\n[${marker}] — machine tag for run-liveness tracking; ignore.`;
+  const promptWithMarker = `${input.prompt}\n\n${MACHINE_RULES}\n\n[${marker}] — machine tag for run-liveness tracking; ignore.`;
   return await spawnWithInactivityTimeout(bashBinary(), ["-lc", script], {
     cwd: input.cwd,
     // Carries OPENAI_API_KEY + the dedicated CODEX_HOME in api mode; identical
@@ -657,6 +678,7 @@ async function runCodexOnce(input: CodexRunInput): Promise<{ stdout: string; std
     inactivityTimeoutMs: input.inactivityTimeoutMs ?? 25 * 60 * 1000,
     input: promptWithMarker,
     child: { kind: "codex", tag: marker },
+    callTag,
     liveness: {
       intervalMs: 15_000,
       check: async ({ hasOutput }) => {

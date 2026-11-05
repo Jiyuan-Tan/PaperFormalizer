@@ -103,4 +103,15 @@ describe("spawnWithInactivityTimeout", () => {
     // Fired near the 2s cap, NOT the 60s inactivity timeout.
     expect(Date.now() - start).toBeLessThan(20_000);
   }, 30_000);
+
+  // (Linux: the call's leftovers are found by their environment in /proc)
+  it.runIf(process.platform === "linux")("reaps a descendant that left the call's process group (a session of its own, as codex starts its MCP servers)", async () => {
+    const r = await spawnWithInactivityTimeout(bashBinary(), ["-c", "setsid sleep 300 > /dev/null 2>&1 < /dev/null & echo $!"], { inactivityTimeoutMs: 60_000 });
+    const pid = Number(r.stdout.trim());
+    expect(pid).toBeGreaterThan(0);
+    const alive = () => { try { process.kill(pid, 0); return true; } catch { return false; } };
+    // gone once the call has returned (an init-reparented zombie lingers a moment at most)
+    for (let k = 0; k < 40 && alive(); k++) await new Promise((res) => setTimeout(res, 50));
+    expect(alive()).toBe(false);
+  }, 30_000);
 });

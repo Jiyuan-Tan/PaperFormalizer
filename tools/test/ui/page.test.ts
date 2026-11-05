@@ -1004,6 +1004,28 @@ describe("page: the whole script draws a run from what the server sends", () => 
     await page.showPaper!("p1", false);
     expect(at("#status").html).toContain(`id="resume-plain">Resume the run</button>`);
     expect(at("#status").html).toContain("No agent session is attached");
+    // (no report yet: no Report tab, nothing in the status box points at one)
+    expect(at('#markup [data-m="report"]').hidden).toBe(true);
+    expect(at("#status").html).not.toContain("data-open-report");
+
+    // the run finished with its report: the status box says where it is saved and opens it in the Report
+    // tab, beside the markup views — the report typeset in place of the paper, under its path on disk
+    payloads["/api/runs/p1"] = { ...detail, summary: { ...detail.summary, live: false, status: "done", verdict: "repaired", buckets: { repaired: 1 }, headline: "revised", orch: null }, repairs: [], halt: null, pending: null };
+    payloads["/api/runs/p1/report"] = { path: "/tk/runs/p1/report.md", md: "# Correctness report — p1\n\nAll **fine**." };
+    await page.showPaper!("p1", false);
+    expect(at('#markup [data-m="report"]').hidden).toBe(false);
+    expect(at("#status").html).toContain("<code>runs/p1/report.md</code>");
+    expect(at("#status").html).toContain(`<button class="btn" type="button" data-open-report>Read the report</button>`);
+    await (at("#article").listeners as Map<string, (e: unknown) => Promise<void>>).get("click")!({ target: { id: "", closest: (s: string) => (s === "[data-open-report]" ? {} : null) } });
+    await new Promise((r) => setTimeout(r, 0));
+    expect(at("#pv").cls.has("m-report")).toBe(true);
+    expect(at("#report-body").html).toContain("Saved at <code>/tk/runs/p1/report.md</code>");
+    expect(last("#report-md")).toContain('<section class="rpart" data-i="0"');
+    // a run sent back has no report: the tab goes, and the paper is shown again
+    payloads["/api/runs/p1"] = { ...detail, summary: { ...detail.summary, live: false, status: "needs-you", verdict: null, orch: null }, repairs: [], halt: null, pending: null };
+    await page.showPaper!("p1", false);
+    expect(at('#markup [data-m="report"]').hidden).toBe(true);
+    expect([at("#pv").cls.has("m-report"), at("#pv").cls.has("m-all")]).toEqual([false, true]);
 
     // it halts with a NEW proposal for the same theorem: the earlier ruling is not carried over to it
     const next = { ...item, proposed: "The rate is $n^{-1/3}$." };

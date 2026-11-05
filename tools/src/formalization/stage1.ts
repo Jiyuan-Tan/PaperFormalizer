@@ -207,6 +207,11 @@ export async function runStage1(args: {
     !!f1Directive ||
     hasLaterStageHistory;
   const patching = isRevise && existsSync(paths.plan);
+  // A directive reaches the planner whether or not a plan is on disk to patch: an F1 halt
+  // (blocked-infeasible) writes none, and the orchestrator's ruling on it is still owed.
+  const directiveBlock = f1Directive
+    ? `DIRECTIVE (from the runner or the orchestrator — ${patching ? "fix the plan" : "write the plan"} as it says):\n${f1Directive}\n`
+    : "";
   let reviseBlock = "";
   /** The nodes a patch is about (`reviseAffectedNodeIds`), shown in full. */
   let affected = new Set<string>();
@@ -235,9 +240,7 @@ export async function runStage1(args: {
       hygieneBlock,
       await readPrompt(args.ctx, "stage1_head_revise.txt"),
       "",
-      f1Directive
-        ? `DIRECTIVE (from the runner or the orchestrator — fix the plan as it says):\n${f1Directive}\n`
-        : "",
+      directiveBlock,
       `Prior plan to patch (read the entries you edit, then Edit in place): ${paths.plan}`,
       "",
     ].filter(Boolean).join("\n");
@@ -289,7 +292,7 @@ export async function runStage1(args: {
   const prompt = [
     syntaxFixBlock,
     correctionBlock(args.priorReview ?? null, args.attempt ?? 1),
-    reviseBlock,
+    patching ? reviseBlock : directiveBlock,
     (await readPrompt(args.ctx, "stage1_template.txt")).replaceAll(
       "{{HEADER_CONTRACT}}",
       () => LEAN_HEADER_CONTRACT,
@@ -314,7 +317,7 @@ export async function runStage1(args: {
     deps: args.deps,
     stage: "1",
     label: "F1 plan author",
-    promptSources: ["stage1_template.txt", ...(isRevise ? ["stage1_head_revise.txt"] : []), corePath],
+    promptSources: ["stage1_template.txt", ...(patching ? ["stage1_head_revise.txt"] : []), corePath],
     input: {
       prompt,
       model: MODEL_PLAN.stage1.model,

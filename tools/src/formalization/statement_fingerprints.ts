@@ -56,6 +56,25 @@ export function parseStatementFingerprints(text: string, leanSubdir: string): St
   return byShort.size > 0 ? { byShort, byFile, leanSubdir: leanSubdir.split(/[\\/]+/).filter(Boolean).join("/"), modules: [] } : null;
 }
 
+/** Where `after` differs from `before` on the run's own declarations (those in `before`'s Lean
+ *  dir and its root module; a closure fingerprint moves with every statement it rests on, the toolkit's included,
+ *  while a declaration another run adds or promotes meanwhile is not this run's): a fingerprint
+ *  moved, a declaration gone, one new (`name (file)` each). Empty when every statement is as it
+ *  was. Pure. */
+export function statementChanges(before: StatementFingerprints, after: StatementFingerprints): string[] {
+  const own = (file: string) => file.startsWith(`${before.leanSubdir}/`) || file === `${before.leanSubdir}.lean`;
+  const flat = (fp: StatementFingerprints) => new Map([...fp.byFile.entries()].filter(([f]) => own(f)).flatMap(([, ds]) => ds).map((d) => [d.name, d] as const));
+  const [b, a] = [flat(before), flat(after)];
+  const out: string[] = [];
+  for (const [name, d] of b) {
+    const now = a.get(name);
+    if (!now) out.push(`${name} (${d.file}) is gone`);
+    else if (now.hash !== d.hash) out.push(`${name} (${d.file}) states something else`);
+  }
+  for (const [name, d] of a) if (!b.has(name)) out.push(`${name} (${d.file}) is new`);
+  return out;
+}
+
 /** `file` of the run's Lean dir as the scan names it. */
 const scanFile = (fp: StatementFingerprints, file: string): string => `${fp.leanSubdir}/${file.replace(/\\/g, "/")}`;
 
@@ -95,9 +114,15 @@ async function lakeExec(args: string[], cwd: string): Promise<{ code: number | n
  * A build stopped by its timeout (a stalled lake, not a red tree) is retried once before that:
  * without the retry one stall turned every target of the F5 audit into a finding.
  */
-export async function takeStatementFingerprints(toolkitRoot: string, leanDir: string, exec: FingerprintExec = lakeExec): Promise<StatementFingerprints | null> {
+export async function takeStatementFingerprints(
+  toolkitRoot: string,
+  leanDir: string,
+  exec: FingerprintExec = lakeExec,
+  /** The log's tag, and what the caller does without them. */
+  log: { tag: string; without: string } = { tag: "f4", without: "every target is reviewed" },
+): Promise<StatementFingerprints | null> {
   const none = (why: string): null => {
-    console.warn(`[f4] statement fingerprints unavailable — every target is reviewed: ${why}`);
+    console.warn(`[${log.tag}] statement fingerprints unavailable — ${log.without}: ${why}`);
     return null;
   };
   const leanSubdir = path.relative(toolkitRoot, leanDir).split(path.sep).join("/");
@@ -122,7 +147,7 @@ export async function takeStatementFingerprints(toolkitRoot: string, leanDir: st
     const failure = await withLakeBuildLock(toolkitRoot, async () => {
       let build = await exec(["build", ...modules, "candidate_scan"], toolkitRoot);
       if (build.killed) {
-        console.warn("[f4] `lake build` for the statement fingerprints was stopped by its timeout — retrying once");
+        console.warn(`[${log.tag}] \`lake build\` for the statement fingerprints was stopped by its timeout — retrying once`);
         build = await exec(["build", ...modules, "candidate_scan"], toolkitRoot);
       }
       if (build.code !== 0) return `\`lake build\` of the run's modules and candidate_scan ${build.killed ? "timed out" : "failed"}:\n${tail(build.output)}`;

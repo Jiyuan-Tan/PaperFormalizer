@@ -39,7 +39,8 @@ function autoBanner(stage: Stage): string {
  * Returns `undefined` for stages that never need a human decision (so the
  * pipeline log stays quiet on ordinary `completed` transitions). When
  * `autoMode` is set, an AUTO-MODE banner is prepended so the orchestrator does
- * not forget the run is autonomous.
+ * not forget the run is autonomous. On a `--persist` run the PERSIST banner goes first: it overrides
+ * every exit below that would end the run.
  */
 export function checkpointGuidance(
   stage: Stage,
@@ -47,6 +48,7 @@ export function checkpointGuidance(
   flags: HaltFlags = {},
   autoMode = false,
   message = "",
+  persist = false,
 ): string | undefined {
   // Only checkpoints and blocks hand control back to the orchestrator.
   if (status !== "checkpoint" && status !== "blocked") return undefined;
@@ -55,14 +57,25 @@ export function checkpointGuidance(
   const at: Stage = stage === "5" && /PROOF-REVIEW ESCALATION UNRESOLVED/.test(message) ? "2.5" : stage;
   const base = (at === "1" || at === "1.5") && flags.f1_blocked ? F1_BLOCKED_GUIDANCE : perStageGuidance(at, flags, message);
   if (base === undefined) return undefined;
-  return autoMode ? autoBanner(at) + base : base;
+  return (persist ? PERSIST_BANNER : "") + (autoMode ? autoBanner(at) + base : base);
 }
+
+/** A `--persist` run: the owner's standing answer to every "stop here?", ahead of the guidance it overrides. */
+const PERSIST_BANNER =
+  "⚙ PERSIST — the owner wants this paper's theorems established, however long that takes; this overrides every exit below that would end the run. " +
+  "Missing machinery is work to do, not a reason to stop: first look for a proof route that avoids it (an obstacle is often a helper of an agent's plan, `provenance: agent-introduced` in `graph.json`, not a result of the paper), then build what is still missing under `Papers/<Slug>/` or with a `study`. " +
+  "A report before F5 completes is refused. Go past the proof loop's ceiling and F5's lake limit yourself (`--resume --clear-gate proof_loop_cap_hit`, at F5 a plain `--resume`). A ruling that would weaken a main result stays the owner's.\n\n";
+
+/** A halt the run cannot get past: the Lean it needs is out of reach (F1 `blocked`, F2's missing architecture). */
+const END_FAILED_EXIT =
+  "Machinery out of reach (the planner says `blocked-infeasible`, or a missing item is a whole theory — not a few definitions or lemmas a run builds under `Papers/<Slug>/`), which you confirm by searching Mathlib, the base libraries and the toolkit → end the run with its report: `--resume --from-stage V6` (no result is checked in Lean; the run shows as failed at this stage), after you post the reason on the page (on a full-auto run yours; else ask the user first). Never leave such a run halted, nor edit `state.json` by hand";
 
 /** F1 answered `blocked` (first plan, or a re-plan inside the F1.5 loop): no plan was written. */
 const F1_BLOCKED_GUIDANCE =
   "F1 BLOCKED: the planner wrote no usable plan — the message says what is missing, contradictory or out of reach; a plan on disk is the earlier one, or the file that did not parse. " +
   "A defect of the paper's statement or of the core → record it (`discovery/patches.json`; a transcription defect in `discovery/core_refs.json`) and `--resume --from-stage V1.5` (`V1` for the transcription). " +
-  "An obstacle you can settle for the planner → your directive in `flags.f1_revise_directive`, then `--resume`. A resume plans again before any review; never write the plan by hand. paperformalizer SKILL §'F stages'.";
+  "An obstacle you can settle for the planner → your directive in `flags.f1_revise_directive`, then `--resume`. A resume plans again before any review; never write the plan by hand. " +
+  `${END_FAILED_EXIT}. paperformalizer SKILL §'F stages'.`;
 
 function perStageGuidance(
   stage: Stage,
@@ -83,7 +96,7 @@ function perStageGuidance(
     case "2":
       // The one F2 halt with a rule of its own; any other is the scaffolder not completing.
       return flags.missing_architecture
-        ? `F2 MISSING ARCHITECTURE (every resume is refused while an item is unbuilt): ${MISSING_ARCHITECTURE_EXIT}. paperformalizer SKILL §'F stages'.`
+        ? `F2 MISSING ARCHITECTURE (every resume is refused while an item is unbuilt): ${MISSING_ARCHITECTURE_EXIT}. ${END_FAILED_EXIT}. paperformalizer SKILL §'F stages'.`
         : "F2 DID NOT COMPLETE: the message is the scaffolder's reason; nothing advanced. `--resume` scaffolds again — put what it needs told in `flags.f2_scaffold_directive` first (it stays until you clear it); a defect of the plan is F1's (`--resume --from-stage F1`), one of the paper's statement a V1.5 finding. paperformalizer SKILL §'F stages'.";
 
     // (the proof-review loop runs in the F2.5 slot; its halt carries the phase that escalated)
@@ -96,7 +109,7 @@ function perStageGuidance(
       }
       return (
         "F2–F4: follow the checkpoint route (hint / build-substrate / fix-source / unclear / bank-partial); keep running while revisions converge. A paper-statement finding comes back as a proposed rewind for you to approve or reject. " +
-        "Use fix-source only when the paper is wrong (a report finding, never an edit to the source); unclear is undetermined, so investigate. After hand de-laundering, re-run the loop (`--from-stage F2.5`) through F5 and record added_assumptions. paperformalizer SKILL §'F stages'."
+        "Use fix-source only when the paper is wrong (a report finding, never an edit to the source); unclear is undetermined, so investigate. Ending the run here (`--from-stage V6`) is not a checkpoint ruling: it is the owner's unless the run is on full auto, and a run on `--persist` refuses it. After hand de-laundering, re-run the loop (`--from-stage F2.5`) through F5 and record added_assumptions. paperformalizer SKILL §'F stages'."
       );
 
     case "5":

@@ -22,6 +22,7 @@ import path from "node:path";
 import { createInterface } from "node:readline/promises";
 import { gzipSync } from "node:zlib";
 import { verifyRunDir } from "../paths.js";
+import { untaggedEnv } from "../shared/child_registry.js";
 import { writeJsonAtomic } from "../shared/json_atomic.js";
 import { loadToolkitConfig } from "../toolkit/config.js";
 import { BUNDLE_DIR, isBlockingTodo, PAPER_DIR, type TodoItem } from "./bundle.js";
@@ -457,7 +458,8 @@ export function shareOutcome(r: ShareRecord): string {
 /** Opens an address in the browser, best effort (nothing waits on it, a failure is silent). */
 const openBrowser = (url: string): void => {
   const cmd = process.platform === "darwin" ? "open" : process.platform === "win32" ? "explorer" : "xdg-open";
-  try { execFile(cmd, [url], { timeout: 10_000, windowsHide: true }, () => {}).unref(); } catch { /* no browser */ }
+  // (untagged: the browser outlives this process, whose exit reaps what carries its tag)
+  try { execFile(cmd, [url], { timeout: 10_000, windowsHide: true, env: untaggedEnv() }, () => {}).unref(); } catch { /* no browser */ }
 };
 
 /** `paperformalizer share <slug>`: show what will be published, ask, send, then wait for the

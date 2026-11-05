@@ -1013,6 +1013,30 @@ export function planAnnotations(input: AnnotationInput): AnnotationPlan {
     if (rejectedRepair(s.id) || pendingWeak.has(s.id) || unfixable.some((u) => u.node === s.id) || input.findings.some((f) => f.node === s.id && f.kind === "refuted")) return false;
     return (!!patchOf.get(s.cited_in) && !rejectedRepair(s.cited_in)) || pendingWeak.has(s.cited_in);
   };
+  /** A published result a proof invokes by citation, repaired with text of its own, whose printed passage
+   * the host's adopted proof ops replace whole, in place and changed: the host's corrected step is what
+   * the paper shows. The host's environment, else null. */
+  const revisedByHost = (s: CoreStatement): TexEnv | null => {
+    const patch = patchOf.get(s.id);
+    const hostPatch = s.cited_in ? patchOf.get(s.cited_in) : undefined;
+    if (!s.cited_in || !patch || (patch.ops ?? []).length > 0 || !hostPatch || rejectedRepair(s.id) || pendingWeak.has(s.id) || rejectedRepair(s.cited_in) || pendingWeak.has(s.cited_in)) return null;
+    const host = transcribed.statements.find((x) => x.id === s.cited_in);
+    const env = host ? statementPassage(host)?.env : undefined;
+    const reg = env ? units.region(env.id, "proof") : undefined;
+    const printed = s.statement.trim();
+    const at = reg ? input.flatText.indexOf(printed, reg.start) : -1;
+    if (!host || !env || !reg || at < 0 || at + printed.length > reg.end || !aligned(env, "proof")?.map) return null;
+    // the ops as the proof pass places them (none overlapping, all resolved)
+    const { changes, problems } = resolveOps((hostPatch.ops ?? []).filter(isProofOp), { units, passage: unitPassage(passageSrc, host.id) }, host.id);
+    if (problems.length > 0) return null;
+    const over = changes.filter((c) => c.start < at + printed.length && at < c.end);
+    for (let i = at; i < at + printed.length; i++) if (!/\s/u.test(input.flatText[i]!) && !over.some((c) => c.start <= i && i < c.end)) return null;
+    // (an op that reprints the passage — an insertion after it — leaves it as printed)
+    const bare = (x: string): string => x.replace(/\s+/gu, "");
+    return over.some((c) => bare(c.tex).includes(bare(printed))) ? null : env;
+  };
+  /** The cited results `revisedByHost`: their note is placed after the host's proof, their proof note nowhere. */
+  const hostRevised = new Set<string>();
   const andList = (xs: string[]): string => (xs.length <= 1 ? xs.join("") : `${xs.slice(0, -1).join(", ")} and ${xs.at(-1)}`);
   /** A corrected statement stored without ops (a hand-written file, a receipt): one replacement of the
    * whole printed statement. */
@@ -1039,6 +1063,21 @@ export function planAnnotations(input: AnnotationInput): AnnotationPlan {
     const kind: AnnotationKind = weak ? "awaiting decision" : consequence ? "corrected proof" : patch && !rejectedPatch ? (clar ? "clarification" : "error (repaired)") : open ? "not determined" : "error (not repaired)";
     const err = errorText(s.id);
     if (!p && carriedByHost(s)) continue;
+    const hostEnv = !p && patch && !consequence ? revisedByHost(s) : null;
+    if (hostEnv && patch) {
+      // What was wrong with the citation, after the host's proof (the corrected paper drops the note).
+      const tags = proofTags(hostEnv);
+      const orig = hostEnv.proofLines ? input.files[hostEnv.proofLines.file] : undefined;
+      const place = tags ? { file: tags.file, at: tags.end } : hostEnv.proofLines && orig !== undefined ? { file: hostEnv.proofLines.file, at: lineStarts(orig)[hostEnv.proofLines.to] ?? orig.length } : null;
+      if (place) {
+        const w = clar ? null : weakening(s.id, patch);
+        const note = noteOf({ explain: `For ${refText(s.id)}: ${explanation(s.id, patch.owner_explanation, null, { omitGivesUp: w !== null })}`, tail: "", givesUp: clar ? null : givesUpOf(s.id, w, patch, weakeningBy(s.id, patch)), decision: null });
+        const r = pushEdit(place.file, place.at, 1, ` ${tagOf(s.id, kind)}\\vsNote{${displayed(note)}}`);
+        records.push({ node: s.id, file: place.file, line: lineOf(input.files[place.file]!, r.at), kind, located_by: "host-revised", summary: `${err ? firstSentences(err.detail, 1) : kind} (corrected in the proof of ${s.cited_in})`, extended: r.moved ? [r.moved] : [] });
+        hostRevised.add(s.id);
+        continue;
+      }
+    }
     if (!p) {
       unlocated.push({ node: s.id, kind, reason: "no environment of envs.json carries this statement", placed: null });
       log.push(`annotated paper: ${s.id} not located (no environment carries it)`);
@@ -1177,7 +1216,7 @@ export function planAnnotations(input: AnnotationInput): AnnotationPlan {
     type ProofItem = { s: CoreStatement; env: TexEnv; note: string; pending: boolean; proofOnly: boolean; ops: PatchOp[]; umbrella: boolean; fallback?: boolean };
     const items: ProofItem[] = [];
     for (const st of transcribed.statements) {
-      if (shadowed.has(st.id)) continue;
+      if (shadowed.has(st.id) || hostRevised.has(st.id)) continue;
       const w = pendingWeak.get(st.id);
       const sug = w ? unfixable.find((u) => u.node === st.id)?.suggested_repair ?? null : null;
       const patch = patchOf.get(st.id);

@@ -52,8 +52,21 @@ export interface ChildrenFile {
 
 /** Environment variable every child inherits, naming the runner that spawned it. */
 export const RUN_TAG_ENV = "PAPERFORMALIZER_RUN_TAG";
+/**
+ * Environment variable naming ONE spawn (`spawnWithInactivityTimeout`): every process of that call's
+ * tree carries it, so what is left once the call has settled — a server the agent CLI started in a
+ * session of its own (codex's MCP servers: `lean-lsp-mcp → lake serve → git`), hung on NFS and never
+ * reading its closed stdin — is found and stopped (`reapCallTag`) instead of running for hours.
+ */
+export const CALL_TAG_ENV = "PAPERFORMALIZER_CALL_TAG";
 /** Grace between SIGTERM and SIGKILL. */
 export const STOP_GRACE_MS = 2_000;
+
+let callCount = 0;
+/** A tag no other call of any runner carries (`CALL_TAG_ENV`). */
+export function newCallTag(): string {
+  return `${process.pid}-${Date.now().toString(36)}-${++callCount}-${Math.random().toString(36).slice(2, 8)}`;
+}
 
 const children = new Map<number, ChildRecord>();
 let stopping = false;
@@ -292,6 +305,78 @@ function taggedProcesses(runTag: string | undefined, exceptGroups: Set<number> =
   return out;
 }
 
+/** A PaperFormalizer runner (`bin/paperformalizer.ts …`, an installed `paperformalizer`): a run of its own,
+ *  with its own stop handlers — never reaped as another's leftover, even when it inherited a tag. */
+function isRunner(pid: number): boolean {
+  return /(?:^|[\s/])(?:bin\/paperformalizer\.[cm]?[jt]s|paperformalizer)(?:\s|$)/.test(processCmdline(pid) ?? "");
+}
+
+/** `env` without this registry's tags: for a process meant to outlive the run (a browser opened for the
+ *  owner), which the reaps would otherwise take for a leftover of it. */
+export function untaggedEnv(env: NodeJS.ProcessEnv = process.env): NodeJS.ProcessEnv {
+  const { [RUN_TAG_ENV]: _run, [CALL_TAG_ENV]: _call, ...rest } = env;
+  return rest;
+}
+
+/** Whether a thread of `pid` waits on the disk (state D): reading its environment would wait with it — the
+ *  read takes the memory map's lock — and freeze this process (`/proc/<pid>/stat` takes no such lock). */
+function waitsOnDisk(pid: number): boolean {
+  try {
+    return readdirSync(`/proc/${pid}/task`).some((t) => {
+      try { const s = readFileSync(`/proc/${pid}/task/${t}/stat`, "utf8"); return s.slice(s.lastIndexOf(")") + 2, s.lastIndexOf(")") + 3) === "D"; } catch { return false; }
+    });
+  } catch {
+    return false;
+  }
+}
+
+/**
+ * Our processes (Linux `/proc`; elsewhere none) whose environment sets `name`, with its value. A process with
+ * a thread waiting on the disk is passed over (`waitsOnDisk`): one hung on NFS is found at a later scan, or
+ * ends when its parent, reaped, is gone.
+ */
+function processesWithEnv(name: string): Array<{ pid: number; value: string }> {
+  if (!existsSync("/proc/self/stat")) return [];
+  const prefix = `${name}=`;
+  const out: Array<{ pid: number; value: string }> = [];
+  for (const entry of readdirSync("/proc")) {
+    const pid = Number(entry);
+    if (!Number.isInteger(pid) || pid <= 0 || pid === process.pid) continue;
+    if (waitsOnDisk(pid)) continue;
+    try {
+      // (another user's process: unreadable, skipped)
+      const hit = readFileSync(`/proc/${pid}/environ`, "utf8").split("\0").find((e) => e.startsWith(prefix));
+      if (hit) out.push({ pid, value: hit.slice(prefix.length) });
+    } catch {
+      /* gone, or not ours */
+    }
+  }
+  return out;
+}
+
+/**
+ * Stop what is left of one settled call (`CALL_TAG_ENV=tag`): a descendant that left the call's process
+ * group — a codex MCP server and what it started — outlives the group kill. Returns how many were alive.
+ */
+export async function reapCallTag(tag: string, graceMs: number = STOP_GRACE_MS): Promise<number> {
+  const left = processesWithEnv(CALL_TAG_ENV).filter((p) => p.value === tag && !isRunner(p.pid));
+  return left.length ? await terminate(left.map((p) => ({ pid: p.pid, groupLeader: false })), graceMs) : 0;
+}
+
+/**
+ * Stop the leftovers of runners that are gone (SIGKILLed, crashed, a job ended under them): a process
+ * carrying a runner tag (`<pid>-<start id>`) whose runner pid is no longer that process. Run at every
+ * runner's start, so one machine's later runs clean up after its earlier ones. A tag without a
+ * comparable start id is left alone. Returns how many were alive.
+ */
+export async function reapDeadRunners(graceMs: number = STOP_GRACE_MS): Promise<number> {
+  const dead = processesWithEnv(RUN_TAG_ENV).filter(({ pid, value }) => {
+    const m = /^(\d+)-(.+:\d+)$/.exec(value);
+    return m !== null && processStartId(Number(m[1])) !== m[2] && !isRunner(pid);
+  });
+  return dead.length ? await terminate(dead.map((p) => ({ pid: p.pid, groupLeader: false })), graceMs) : 0;
+}
+
 /**
  * Terminate every registered child (SIGTERM, grace, SIGKILL), plus any descendant carrying this
  * runner's tag outside the registered groups; returns how many were alive.
@@ -323,7 +408,12 @@ export function installStopHandlers(opts: { graceMs?: number; log?: (line: strin
   if (handlersInstalled) return;
   handlersInstalled = true;
   process.env[RUN_TAG_ENV] = `${process.pid}-${processStartId(process.pid) ?? Date.now()}`;
+  // (a runner started inside another's call — an agent's backgrounded resume — must not hand that call's
+  // tag to what it starts: the call's end would reap them)
+  delete process.env[CALL_TAG_ENV];
   const log = opts.log ?? ((line: string) => console.error(line));
+  // what earlier runners on this machine left running when they died
+  void reapDeadRunners().then((n) => { if (n > 0) log(`[paperformalizer] stopped ${n} process(es) left by runners that are gone`); }, () => {});
   const onSignal = (sig: NodeJS.Signals): void => {
     const code = 128 + (os.constants.signals[sig] ?? 15);
     if (stopping) {
@@ -345,7 +435,11 @@ export function installStopHandlers(opts: { graceMs?: number; log?: (line: strin
   process.on("exit", () => {
     const left = liveChildren().filter(recordAlive);
     for (const r of left) signalRecord(r, "SIGKILL");
-    if (left.length > 0) log(`[paperformalizer] exit: stopped ${left.length} child process(es)`);
+    // … and what left their groups (a codex MCP server in a session of its own), as the stop path does
+    const tag = process.env[RUN_TAG_ENV];
+    const escaped = processesWithEnv(RUN_TAG_ENV).filter((p) => p.value === tag && !left.some((r) => r.pid === p.pid) && !isRunner(p.pid));
+    for (const p of escaped) signalRecord({ pid: p.pid, groupLeader: false }, "SIGKILL");
+    if (left.length + escaped.length > 0) log(`[paperformalizer] exit: stopped ${left.length + escaped.length} child process(es)`);
     clearChildrenFile();
   });
 }

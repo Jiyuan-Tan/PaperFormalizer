@@ -81,6 +81,8 @@ export const stateSchema = z
     debug_mode: z.boolean().default(false),
     // `--full-auto`: the owner's decisions are delegated too (see SharedState.full_auto).
     full_auto: z.boolean().default(false),
+    // `--persist`: the run may not end before its Lean is complete (see SharedState.persist).
+    persist: z.boolean().default(false),
     // The CLI that runs this run's claude roles, recorded at its first decision (`claude_roles.ts`).
     claude_roles: z.enum(["claude", "codex"]).optional(),
     flags: z.object({

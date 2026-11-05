@@ -177,6 +177,13 @@ export interface SharedState {
    * one on every item (`orch.mjs recommend`), and each is listed for the owner's review. Latching.
    */
   full_auto?: boolean;
+  /**
+   * Persist — set by `verify --persist`. The owner wants the paper's theorems established, however long
+   * that takes: missing machinery is built, a report before F5 completes is refused, and the agent goes
+   * past the iteration and lake ceilings itself. A weakening stays the owner's. Latching; `--no-persist`
+   * (the owner's alone) lifts it.
+   */
+  persist?: boolean;
   /** The CLI that runs this run's claude roles, recorded at the run's first decision and kept by
    *  a resume unless an explicit setting says otherwise (`claude_roles.ts`). */
   claude_roles?: "claude" | "codex";

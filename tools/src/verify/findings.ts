@@ -25,6 +25,14 @@ export function openFindingKind(e: Pick<PaperError, "kind" | "undetermined"> | u
 }
 
 /**
+ * A finding that fails the run: a refutation not repaired by a confirmed minimal patch nor descoped
+ * as an unfixable side result, or an ambiguity the paper leaves open at V1.5 (not a descoping note).
+ */
+export function failsRun(f: VerifyFinding): boolean {
+  return (f.kind === "refuted" && !f.patch?.confirmed && !f.descoped) || (f.kind === "unresolved" && f.stage === "V1.5" && !f.descoped);
+}
+
+/**
  * Append `f` to `state.verify.findings` with the current timestamp, unless an entry with the
  * same `(node, stage, kind, detail)` is already there. Throws when `state.verify` is missing:
  * the run was not seeded by the verify runner, and silently dropping the finding would hide it

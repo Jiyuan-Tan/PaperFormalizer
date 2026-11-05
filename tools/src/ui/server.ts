@@ -18,7 +18,7 @@ import { derive, readJsonCached, signature } from "./fscache.js";
 import { formulasApart } from "./formulas_apart.js";
 import { readLibrary } from "./library_model.js";
 import { ASSET_EXT, MATH_OVERRIDES_FILE, runPaper, texStrings, type Fragment, type PaperView } from "./page_snapshot.js";
-import { applyOf, renderCheckpointOf, checklistPath, DECISIONS_FILE, listRunSlugs, newerRuns, markApplying, markStarted, OBJECTIONS_FILE, START_REQUEST_FILE, MESSAGES_FILE, drawersOf, pageOf, runDetail, runDir, runLive, runSummary, validSlug, type MessageFile, type OrchDecision, type OrchMessage, type OwnerObjection } from "./run_model.js";
+import { applyOf, renderCheckpointOf, checklistPath, DECISIONS_FILE, listRunSlugs, newerRuns, markApplying, markStarted, OBJECTIONS_FILE, START_REQUEST_FILE, MESSAGES_FILE, drawersOf, pageOf, reportCurrent, runDetail, runDir, runLive, runSummary, validSlug, type MessageFile, type OrchDecision, type OrchMessage, type OwnerObjection } from "./run_model.js";
 import { writeJsonAtomic } from "../shared/json_atomic.js";
 import { clearMessages, nextMessageId, updateMessages } from "../../scripts/messages_store.mjs";
 import { planFingerprint, pollShare, readShare, sharePaper, sharePlan, shareRecordView, shareView, type ShareDeps } from "../verify/share.js";
@@ -26,6 +26,7 @@ import type { MathFailure } from "./tex_html.js";
 import { TIKZ_DIR } from "./tikz.js";
 import { ChangeWatcher } from "./watch.js";
 import type { DemoDriver } from "../demo/driver.js";
+import { VERIFY_FILES } from "../verify/types.js";
 
 const STATIC_DIR = path.join(path.dirname(fileURLToPath(import.meta.url)), "static");
 /** The PaperFormalizer checkout, where the owner starts an interactive agent session. */
@@ -600,6 +601,15 @@ export async function startUiServer(cfg: ToolkitConfig, opts: { port: number; ho
           if (!batch) { fail(res, 404, `no round ${round} for ${slug}`); return; }
           const decisions = await writeChecklistDecisions(checklistPath(cfg, slug, round), batch, body.decisions ?? {});
           sendJson(req, res, { decisions });
+          return;
+        }
+        if (sub === "report" && req.method === "GET") {
+          // the run's report (`report.md`, written by V6), and where it is on disk: the page's Report tab.
+          // A report on file from before the run was sent back describes another state of it: none.
+          const file = path.join(runDir(cfg, slug), VERIFY_FILES.reportMd);
+          if (!reportCurrent(await readJsonCached(path.join(runDir(cfg, slug), "state.json"))) || !existsSync(file)) { fail(res, 404, `${slug} has no report yet: V6 writes it at the end of the run`); return; }
+          const st = statSync(file);
+          sendJson(req, res, { path: file, md: readFileSync(file, "utf8") }, `report:${slug}:${st.mtimeMs}:${st.size}`);
           return;
         }
         if (sub === "asset" && req.method === "GET") { fail(res, 404, "name the file"); return; }

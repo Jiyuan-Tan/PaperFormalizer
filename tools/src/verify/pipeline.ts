@@ -70,7 +70,7 @@ import { existsSync } from "node:fs";
 import { mkdir, readFile, rename, rm } from "node:fs/promises";
 import path from "node:path";
 import { appendPipelineLog } from "../log.js";
-import { FROM_STAGE_USAGE, fromStageRefusal, resolveStageHaltId, STAGE_HALT_IDS, STAGE_HALT_ID_TO_INTERNAL, STOP_AFTER_USAGE, STAGE_ORDER, stopAfterRefusal, type StageHaltId } from "../constants.js";
+import { formatStageLabel, FROM_STAGE_USAGE, fromStageRefusal, resolveStageHaltId, STAGE_HALT_IDS, STAGE_HALT_ID_TO_INTERNAL, STOP_AFTER_USAGE, STAGE_ORDER, stopAfterRefusal, type StageHaltId } from "../constants.js";
 import { leanModulePrefix, statePath, verifyRunDir } from "../paths.js";
 import { removePapersBarrelImport } from "../toolkit/barrels.js";
 import { createVerifyInitialState, loadState, saveState } from "../state.js";
@@ -99,6 +99,7 @@ import { FragmentRouter, type RenderSite } from "./fragment_routing.js";
 import { isWithdrawn, readPatchFile, readTranscribedCore, rebuildPatchedCore } from "./patches.js";
 import type { CompileTex } from "./annotated_paper.js";
 import { dryRunRefusal } from "./dry_run.js";
+import { failsRun } from "./findings.js";
 import {
   MAX_REFINEMENT_ROUNDS,
   MIN_PATCH_BACKSTOP,
@@ -162,6 +163,10 @@ export interface VerifyPipelineArgs {
   /** `--full-auto` (implies auto mode; latching onto `state.full_auto`): the owner's decisions take the
    *  agent's recommendations. */
   fullAuto?: boolean;
+  /** `--persist` (latching onto `state.persist`): the run may not end before its Lean is complete. */
+  persist?: boolean;
+  /** `--no-persist`: lifts `state.persist`, the owner's alone. */
+  noPersist?: boolean;
   dryRun: boolean;
   /** `--clear-gate <flag>` values (with `--resume`): each cap gate is cleared as the run is entered. */
   clearGates?: string[];
@@ -267,13 +272,7 @@ async function defaultRunFormalization(
  * (reported; no key result rests on it); any other refutation does. An ambiguity the paper leaves
  * open (V1.5 `unresolved`, not a descoping note) fails it too. */
 function reportTerminalPhase(verify: VerifyState): "done" | "failed" {
-  return verify.findings.some(
-    (f) =>
-      (f.kind === "refuted" && !f.patch?.confirmed && !f.descoped) ||
-      (f.kind === "unresolved" && f.stage === "V1.5" && !f.descoped),
-  )
-    ? "failed"
-    : "done";
+  return verify.findings.some(failsRun) ? "failed" : "done";
 }
 
 function verifyBlock(state: StateJson, stateFile: string): VerifyState {
@@ -307,6 +306,9 @@ function envStopAfter(): StageHaltId | null {
   if (refusal) throw new Error(refusal.replace("--stop-after ", () => "PAPERFORMALIZER_STOP_AFTER="));
   return id;
 }
+
+/** The cursor of a run whose Lean is complete: past these a report is not an early one (`--persist`). */
+const LEAN_COMPLETE_STAGES: ReadonlySet<string> = new Set(["5", "V6"]);
 
 /**
  * Drive a verify run to its next stopping point: `done` / `failed`, an F-stage
@@ -398,6 +400,12 @@ export async function runVerifyPipeline(given: VerifyPipelineArgs): Promise<Veri
    * the run as done. */
   const checkEntry = async (): Promise<void> => {
     await readPatchFile(runDir);
+    if (args.fromStage === "V6" && !args.noPersist && (args.persist || state.persist === true) && !LEAN_COMPLETE_STAGES.has(state.stage_completed)) {
+      throw new Error(
+        `--from-stage V6 is refused, nothing changed: this run is on --persist (the owner wants its theorems established, however long that takes) and its Lean is unfinished (last stage completed: ${formatStageLabel(state.stage_completed)}). ` +
+          "Missing machinery is work to do: look for a proof route that avoids it, else build it, and go on. Only the owner lifts this: ask them (`orch.mjs ask --owner-only`), and on their yes `--resume --no-persist`.",
+      );
+    }
     if (args.fromTranscript) {
       const checked = await fromTranscriptRefusal(runDir, state);
       if (checked.refusal !== null) throw new Error(checked.refusal);
@@ -475,6 +483,9 @@ export async function runVerifyPipeline(given: VerifyPipelineArgs): Promise<Veri
   }
   // `--full-auto` latches onto the state: the owner's decisions take the agent's recommendations from here on.
   if (args.fullAuto && state.full_auto !== true) { state.full_auto = true; state.debug_mode = false; await saveState(repoRoot, qid, state); }
+  // `--persist` latches too: from here on the run may not end before its Lean is complete; `--no-persist` lifts it.
+  if (args.persist && state.persist !== true) { state.persist = true; await saveState(repoRoot, qid, state); }
+  if (args.noPersist && state.persist === true) { state.persist = false; await saveState(repoRoot, qid, state); }
   // `--debug` (`auto: false`) latches too: auto mode stays off for the run. A full-auto run is never in debug mode.
   if (args.auto === false && state.debug_mode !== true) {
     if (state.full_auto === true) log("--debug ignored: this run is in full auto, which it keeps across resumes");

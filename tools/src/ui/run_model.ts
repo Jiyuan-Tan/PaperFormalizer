@@ -20,6 +20,7 @@ import { leanNameLeaf } from "../presentation/lean_decl_name.js";
 import { applyLinks, eachRow, leanDefs, linksRefusal, type PageDef, type PageSegment, type PageView } from "./lean_view.js";
 import { deriveRead, readCached, readJsonCached, signature } from "./fscache.js";
 import { applyPidLine, heartbeatAgeMs, heartbeatLiveness, livenessOf } from "../shared/run_heartbeat.js";
+import { failsRun } from "../verify/findings.js";
 import { readShare, shareableOf, shareRecordView, type Shareable, type ShareView } from "../verify/share_record.js";
 import { frontMatter, labelAnchor, nodeAnchor, readPreamble, resolveDigitIfs, stripComments } from "./tex_html.js";
 
@@ -38,7 +39,7 @@ export const STAGES: ReadonlyArray<{ id: string; label: string }> = [
  * decision to review, or a halt with no agent attached. "superseded": a later run verifies the same
  * paper (same source hash); this one is history.
  */
-export type RunStatus = "running" | "needs-you" | "agent" | "done" | "idle" | "superseded";
+export type RunStatus = "running" | "needs-you" | "agent" | "done" | "failed" | "idle" | "superseded";
 
 export interface RunEvent { at: string; stage: string; status: string; message: string; guidance?: string }
 
@@ -48,6 +49,8 @@ export interface RunSummary {
   authors: string;
   stage: string;
   stageIndex: number;
+  /** The index in `STAGES` of the stage a failed run failed at (drawn red), else null. */
+  failedAt: number | null;
   phase: string;
   live: boolean;
   status: RunStatus;
@@ -275,6 +278,34 @@ export function stageIndexOf(phase: string, completed: string, lastEventStage: s
   return Math.max(at("V1.5"), at(completed));
 }
 
+/**
+ * The index in `STAGES` of the stage a failed run failed at: with a report, the earliest stage whose
+ * finding fails it (`failsRun`; an F stage's `"F3"` is stage `"3"`), else (a report written before
+ * Lean, `--from-stage V6` at a halt) the stage after its completed one; with none (a run ended as
+ * failed at a halt) the stage its log ends in — the next one when that event completes it.
+ */
+export function failedStageOf(verify: VerifyState | undefined, reported: boolean, completed: string, last: RunEvent | null): number {
+  const at = (id: string): number => STAGES.findIndex((s) => s.id === id);
+  if (reported) {
+    const hit = (verify?.findings ?? []).filter(failsRun).map((f) => at(f.stage.replace(/^F(?=\d)/, ""))).filter((i) => i >= 0);
+    if (hit.length) return Math.min(...hit);
+  }
+  const logged = !reported && last ? at(last.stage) : -1;
+  const i = logged >= 0 ? (last!.status === "completed" ? logged + 1 : logged) : at(completed) + 1;
+  return Math.min(Math.max(i, 0), STAGES.length - 1);
+}
+
+/** Each stage's state in a run's progress: a failed run's stage is `failed`, and its report is done
+ *  once written, whatever stages it skipped. Mirrored by the runs table (app.js). */
+export function stageStates(s: Pick<RunSummary, "stageIndex" | "failedAt" | "live" | "status" | "verdict">): Array<"done" | "current" | "todo" | "halt" | "failed"> {
+  return STAGES.map((_, i) => {
+    if (s.failedAt !== null && i === s.failedAt) return "failed";
+    if (i <= s.stageIndex || (s.failedAt !== null && i === STAGES.length - 1 && s.verdict !== null)) return "done";
+    if (i === s.stageIndex + 1) return s.live || s.status === "running" ? "current" : s.status === "needs-you" || s.status === "agent" ? "halt" : "todo";
+    return "todo";
+  });
+}
+
 /** Written by the UI when it starts a run: `<pid> <ISO time>`. A runner takes a while to come up
  *  and write its heartbeat; until then this is what says the run is on its way. */
 export const STARTED_FILE = "logs/.ui.started";
@@ -494,7 +525,7 @@ export async function runSummary(cfg: ToolkitConfig, slug: string, newer?: Map<s
   const repairing = back && (phase === "init" || phase === "v1");
   // The Lean stages loop (scaffold → review → fill → review) without re-recording the completed stage,
   // so the last finished stage is the one before the last event's when that is further along.
-  const stageIndex = repairing ? -1 : stageIndexOf(phase, stage, last?.stage ?? null, last?.status ?? null);
+  let stageIndex = repairing ? -1 : stageIndexOf(phase, stage, last?.stage ?? null, last?.status ?? null);
   const verify = state?.verify;
   const pd = verify ? pendingDecisions(verify, await readPatches(cfg, slug)) : null;
   // a round is in front of the owner once its checklist exists; before that the round is still to run
@@ -503,7 +534,13 @@ export async function runSummary(cfg: ToolkitConfig, slug: string, newer?: Map<s
   // (`failed`: a run that ended in its report without Lean — a refutation at V1.5 — is done too)
   const done = stage === "V6" || phase === "done" || phase === "failed";
   // (a report on file from before the run was sent back describes another state of it)
-  const report = reportCurrent(state) ? await readJsonCached<{ verdict?: string; paper_grade?: { grade?: string }; summary?: Record<string, number> }>(path.join(dir, "report.json")) : null;
+  const report = reportCurrent(state) ? await readJsonCached<{ verdict?: string; paper_grade?: { grade?: string }; summary?: Record<string, number>; run?: { early_stop?: boolean } }>(path.join(dir, "report.json")) : null;
+  // a report written before Lean (a refutation at V1.5, or `--from-stage V6` at a halt whose Lean is
+  // out of reach) checked nothing in Lean: the run failed, at the stage it stopped
+  const earlyStop = report?.run?.early_stop === true;
+  const failedAt = phase === "failed" || (phase === "done" && earlyStop) ? failedStageOf(verify, report !== null, stage, last) : null;
+  // drawn up to the stage it failed at, unless its Lean stages all ran (a refutation found in F3)
+  if (failedAt !== null && (!report || earlyStop)) stageIndex = failedAt - 1;
   const halted = !live && last !== null && (last.status === "checkpoint" || last.status === "blocked");
   // A receipt the confirming V1.5 pass has not settled is not the owner's yet: the runner refuses a ruling on it.
   const rcp = renderCheckpointOf(verify);
@@ -543,7 +580,9 @@ export async function runSummary(cfg: ToolkitConfig, slug: string, newer?: Map<s
   else if (promotionPhase) { status = orch ? "agent" : "needs-you"; toResume = true; headline = `promotion round ${promotionPhase} is not prepared yet${halted ? ` (${headlineOf(last)})` : ""} — ${orch ? "the agent resumes the run" : "resume the run"}`; }
   else if (halt && !done) { status = orch ? "agent" : "needs-you"; headline = `${halt}${orch ? "" : " — no agent attached"}`; }
   else if (reviews.length) { status = "needs-you"; headline = `review ${reviews.length} decision(s) the agent made`; }
-  else if (done) { status = "done"; headline = `${report?.verdict ? verdictWords(report.verdict) : "report written"}${report?.paper_grade?.grade ? ` · paper: ${gradeWords(report.paper_grade.grade)}` : ""}`; }
+  // a failed run (a refutation in its report, a report before Lean, or one ended as failed at a halt) is shown as failed, not done
+  else if (done && phase === "failed" && !report) { status = "failed"; headline = last ? `halted at ${stageName(last.stage)}: ${headlineOf(last)}` : "failed"; }
+  else if (done) { status = failedAt !== null ? "failed" : "done"; headline = `${earlyStop && failedAt !== null && failedAt > 1 ? `stopped at ${stageName(STAGES[failedAt]!.id)}, no Lean · ` : ""}${report?.verdict ? verdictWords(report.verdict) : "report written"}${report?.paper_grade?.grade ? ` · paper: ${gradeWords(report.paper_grade.grade)}` : ""}`; }
   // No runner, and it left its heartbeat behind (killed, in any stage) or its log ends on a stage
   // at work: it was killed or crashed — no halt, no finish. (A Lean-stage line under a run since
   // sent back to V1 or V1.5 is history, not where it ended: the phase says where it was.)
@@ -554,14 +593,14 @@ export async function runSummary(cfg: ToolkitConfig, slug: string, newer?: Map<s
   }
   else { status = "idle"; headline = last ? `stopped after ${stageName(last.stage)}` : "not started"; }
   return {
-    slug, title, authors, stage, stageIndex, phase, live, status, headline, lastEvent: last, pending,
+    slug, title, authors, stage, stageIndex, failedAt, phase, live, status, headline, lastEvent: last, pending,
     redoing: redoingOf(verify),
     ...(toResume ? { toResume } : {}),
     verdict: report?.verdict ?? null,
     buckets: report?.summary ? Object.fromEntries(Object.entries(report.summary).filter(([, v]) => typeof v === "number" && v > 0)) : null,
     updatedAt, supersededBy, orch, fullAuto, requests, unread, reviews, tokens: await tokenTotals(dir),
     share: ((sh) => (sh ? shareRecordView(sh) : null))(await readShare(dir)),
-    shareable: status === "done" ? await shareableOf(dir) : null,
+    shareable: status === "done" || (status === "failed" && report) ? await shareableOf(dir) : null,
   };
 }
 
@@ -648,7 +687,7 @@ export interface ResultView {
 
 export interface RunDetail {
   summary: RunSummary;
-  stages: Array<{ id: string; label: string; state: "done" | "current" | "todo" | "halt" }>;
+  stages: Array<{ id: string; label: string; state: "done" | "current" | "todo" | "halt" | "failed" }>;
   halt: RunEvent | null;
   pending: PendingDecisions | null;
   source: { input: string | null; main: string | null };
@@ -920,10 +959,8 @@ export async function runDetail(cfg: ToolkitConfig, slug: string, opts: { lean: 
   const last = events.at(-1) ?? null;
   const halt = !summary.live && last && (last.status === "checkpoint" || last.status === "blocked") ? last : null;
 
-  const stages = STAGES.map((s, i) => ({
-    id: s.id, label: s.label,
-    state: (i <= summary.stageIndex ? "done" : i === summary.stageIndex + 1 ? (summary.live || summary.status === "running" ? "current" : summary.status === "needs-you" || summary.status === "agent" ? "halt" : "todo") : "todo") as "done" | "current" | "todo" | "halt",
-  }));
+  const states = stageStates(summary);
+  const stages = STAGES.map((s, i) => ({ id: s.id, label: s.label, state: states[i] }));
 
   const core = await readJsonCached<CoreFile>(path.join(dir, "discovery", "core.json"));
   // The paper's results: the corrected core's, plus any the transcription holds that it dropped

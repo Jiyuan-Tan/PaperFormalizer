@@ -1,8 +1,9 @@
 // F5 docstring-coverage step. Coverage is authored HERE — the guaranteed-final
-// Lean-edit point of the run.
+// Lean-edit point of the run. A pass is checked from the source text; one build confirms the
+// edits after the last pass (docstring_text_check.ts).
 
 import { createHash } from "node:crypto";
-import { mkdir, readdir, readFile, writeFile } from "node:fs/promises";
+import { mkdir, readdir, readFile, rename, writeFile } from "node:fs/promises";
 import { existsSync } from "node:fs";
 import path from "node:path";
 import { MODEL_PLAN } from "../constants.js";
@@ -12,7 +13,8 @@ import { isPaperTmpPath } from "../paths.js";
 import { dispatchAgent } from "../framework/agent_dispatch.js";
 import { CodexRunError } from "../shared/codex.js";
 import { crosslinkNames, linksGoal, parseNlCrosslinks, sourceBinders } from "../shared/nl_crosslinks.js";
-import { spawnWithInactivityTimeout } from "../workers/spawn.js";
+import { spawnWithInactivityTimeout, type SpawnWithTimeoutResult } from "../workers/spawn.js";
+import { checkDocstringEdit, type DeclAfterEdit } from "./docstring_text_check.js";
 import { withLakeBuildLock } from "../shared/build_mutex.js";
 import { mapLimit } from "./reviewer_verdicts.js";
 import { fillTemplate } from "../shared/template.js";
@@ -129,8 +131,6 @@ export function crosslinkDefect(e: { kind?: unknown; doc?: unknown; source?: unk
   return null;
 }
 
-/** Dotted module names for every .lean source in the run dir (find-derived, sorted; the
- * disposable `tmp/` agent workspace is excluded — it is not part of the published run). */
 /** Two docstrings in a row (only whitespace between) do not parse: the docstring pass wrote a new
  * one above a declaration's existing one instead of replacing it. Keep one — the one carrying the
  * NL↔Lean crosslinks (`](hyp:…)` / `](goal)`) the page needs, else the one nearest the declaration.
@@ -249,6 +249,8 @@ export function restoreDocstringTags(before: string, after: string): { text: str
   return { text, restored };
 }
 
+/** Dotted module names for every .lean source in the run dir (sorted; the disposable `tmp/` agent
+ * workspace is excluded — it is not part of the published run). */
 export function moduleNamesFor(leanSubdir: string, relFiles: string[]): string[] {
   const prefix = leanSubdir.replace(/\//g, ".");
   return relFiles
@@ -334,6 +336,14 @@ export interface DocstringTarget {
   /** Modules the caller built green in this entry, with the tree unchanged since: the pre-pass
    *  build covers only the others (F5 builds them for the statement fingerprints just before). */
   builtModules?: readonly string[];
+  /** Test seams: how lake runs (default: `lake -d <root> …` under the toolkit's build lock, with the
+   *  gate's time limit) and how a docstring call is dispatched (default: `dispatchAgent`). */
+  runLake?: LakeRun;
+  dispatch?: (args: Parameters<typeof dispatchAgent>[0]) => Promise<unknown>;
+  /** The statement check around the passes (F5: the statement fingerprints). `before` runs once a
+   *  pass is about to, on the tree the passes start from: a reason means the check cannot be had and
+   *  no pass runs. `after` runs once the confirming build is green. */
+  statements?: StatementHooks;
 }
 
 /** One docstring call. A call the worker watchdog killed (hung, no output) leaves its declarations
@@ -351,20 +361,80 @@ export async function unlessKilled(label: string, call: () => Promise<unknown>):
   }
 }
 
+/** The statement check after the confirming build: null when every statement is as it was (or the
+ *  toolkit cannot tell), `changed` naming what moved, `unavailable` when it could not be done. */
+export type StatementCheck = { changed: string } | { unavailable: string } | null;
+
+/** See `DocstringTarget.statements`. */
+export interface StatementHooks {
+  before: () => Promise<string | null>;
+  after: () => Promise<StatementCheck>;
+}
+
+/** One lake invocation of the gate (`lake <args>` in the toolkit), as the spawn reports it. */
+export type LakeRun = (args: string[]) => Promise<SpawnWithTimeoutResult>;
+
+/** What `documentModules` decided. `confirm`, when set, is the one build of the modules that
+ *  confirms docstring edits checked from the source text only: start it at once; it resolves to a
+ *  block reason or null (coverage holds, recorded clean) and never rejects. The caller must wait for
+ *  it before it treats the modules as delivered. */
+export interface DocstringOutcome {
+  block: string | null;
+  confirm?: () => Promise<string | null>;
+}
+
+/** An entry of the paper index the gate reads (`lake exe paper_index`). `line` is where the
+ *  declaration starts (at its docstring when it has one). */
+interface IndexEntry {
+  name: string;
+  file: string;
+  line: number;
+  kind: string;
+  doc?: unknown;
+  source?: unknown;
+}
+
+/** The entries' declarations that need the docstring pass: undocumented, or crosslink-defective. */
+function defectsOf(entries: readonly IndexEntry[]): UndocumentedDecl[] {
+  return entries.flatMap((e) => {
+    const base = { name: e.name, file: e.file, line: e.line, kind: e.kind };
+    if (!e.doc) return [base];
+    // Documented, but its NL↔Lean crosslink annotations are missing or defective — same hard
+    // gate, fixed by the same docstring pass.
+    const problem = crosslinkDefect(e);
+    return problem ? [{ ...base, problem }] : [];
+  });
+}
+
+/** Write `content` to `abs` whole: a reader never sees half of it. */
+async function writeWhole(abs: string, content: string): Promise<void> {
+  const tmp = `${abs}.pf-tmp-${process.pid}`;
+  await writeFile(tmp, content, "utf8");
+  await rename(tmp, abs);
+}
+
 /**
  * Bring every declaration of `modules` to the docstring contract: documented, with NL↔Lean
- * crosslinks (see crosslinkDefect). Returns null when that holds; otherwise a block reason.
- * Codex documents the gaps in batched calls (docstring edits only); the rebuild validates the
- * edits (restored byte-for-byte on a build failure) and a re-extraction confirms coverage.
+ * crosslinks (see crosslinkDefect). Codex documents the gaps in batched calls (docstring edits
+ * only). A pass is checked from the source text, with no build (docstring_text_check.ts): the edit
+ * of a file that changed anything but docstrings, or put one outside the declarations' slots, is
+ * undone and its declarations go to the next pass; coverage is read from the docstrings now on
+ * disk against the index taken before the first pass. Lean confirms the edits once, after the last
+ * pass (`confirm`): the build, `statements.after`, then the index's own coverage. A red build or a
+ * changed statement restores the files as the gate found them, byte for byte.
  */
-export async function documentModules(t: DocstringTarget): Promise<string | null> {
-  if (t.modules.length === 0) return null;
+export async function documentModules(t: DocstringTarget): Promise<DocstringOutcome> {
+  if (t.modules.length === 0) return { block: null };
   await mkdir(t.outDir, { recursive: true });
+  const root = t.ctx.repoRoot;
+  const files = [...new Set(t.modules.map((m) => `${m.split(".").join("/")}.lean`))].filter((f) => existsSync(path.join(root, f)));
+  const readAll = async (): Promise<Map<string, string>> =>
+    new Map(await Promise.all(files.map(async (f) => [f, await readFile(path.join(root, f), "utf8")] as const)));
   // Incremental: a check that came back clean records the sources' fingerprint; while no module
   // source changes (and the gate does not), the build + index are skipped.
   const cleanFile = path.join(t.outDir, "docstring_clean.json");
   const fingerprint = async () => docstringFingerprint(await Promise.all(t.modules.map(async (module) => {
-    const f = path.join(t.ctx.repoRoot, `${module.split(".").join("/")}.lean`);
+    const f = path.join(root, `${module.split(".").join("/")}.lean`);
     return { module, text: existsSync(f) ? await readFile(f, "utf8") : "" };
   })));
   const recordClean = async () => writeFile(cleanFile, JSON.stringify({ fingerprint: await fingerprint(), modules: t.modules.length }) + "\n", "utf8");
@@ -372,29 +442,30 @@ export async function documentModules(t: DocstringTarget): Promise<string | null
     const last = JSON.parse(await readFile(cleanFile, "utf8")) as { fingerprint?: unknown };
     if (last.fingerprint === await fingerprint()) {
       console.log(`[${t.label}] docstring coverage: no module source changed since the last clean check — skipped`);
-      return null;
+      return { block: null };
     }
   } catch {
     // no record (or unreadable): check from scratch
   }
   const indexOut = path.join(t.outDir, "docstring_coverage.json");
   const lakeLog = path.join(t.outDir, "docstring_lake.log");
-  const root = t.ctx.repoRoot;
+  const rejectedDir = path.join(t.outDir, "docstring_rejected");
+  const runLake: LakeRun = t.runLake ?? ((lakeArgs) =>
+    withLakeBuildLock(root, () => spawnWithInactivityTimeout("lake", ["-d", root, ...lakeArgs], {
+      cwd: root,
+      env: process.env,
+      inactivityTimeoutMs: LAKE_TIMEOUT_MS,
+      maxTotalMs: LAKE_TIMEOUT_MS,
+    })));
   // Full stdout+stderr of every lake call lands in `lakeLog` (overwritten per call); a failure
   // throws only the diagnostic lines, so the checkpoint message carries the Lean error itself.
-  const lake = (lakeArgs: string[]) =>
-    withLakeBuildLock(root, async () => {
-      const r = await spawnWithInactivityTimeout("lake", ["-d", root, ...lakeArgs], {
-        cwd: root,
-        env: process.env,
-        inactivityTimeoutMs: LAKE_TIMEOUT_MS,
-        maxTotalMs: LAKE_TIMEOUT_MS,
-      });
-      await writeFile(lakeLog, `$ lake ${lakeArgs.join(" ")}\n${r.stdout}\n${r.stderr}`, "utf8");
-      if (r.exitCode !== 0) throw new LakeFailure(lakeFailureSummary(r, lakeLog), lakeReportsLeanError(r));
-    });
+  const lake = async (lakeArgs: string[]) => {
+    const r = await runLake(lakeArgs);
+    await writeFile(lakeLog, `$ lake ${lakeArgs.join(" ")}\n${r.stdout}\n${r.stderr}`, "utf8");
+    if (r.exitCode !== 0) throw new LakeFailure(lakeFailureSummary(r, lakeLog), lakeReportsLeanError(r));
+  };
   // Build first: paper_index reads OLEANS and silently emits an empty index over stale ones.
-  const extractUndocumented = async (modulesToBuild: readonly string[]): Promise<UndocumentedDecl[]> => {
+  const index = async (modulesToBuild: readonly string[]): Promise<IndexEntry[]> => {
     if (modulesToBuild.length > 0) await lake(["build", ...modulesToBuild]);
     await lake(["exe", "paper_index", "--",
       "--prefix", t.prefix, "--src-root", root, "--modules", t.modules.join(","), "--out", indexOut]);
@@ -402,73 +473,151 @@ export async function documentModules(t: DocstringTarget): Promise<string | null
       entries?: { name?: unknown; file?: unknown; line?: unknown; kind?: unknown; doc?: unknown; source?: unknown }[];
     };
     if (!Array.isArray(idx.entries)) throw new Error(`docstring extraction produced no entries array (${indexOut})`);
-    return idx.entries.flatMap((e) => {
-      if (typeof e.name !== "string" || typeof e.file !== "string") return [];
-      const base = { name: e.name, file: e.file, line: typeof e.line === "number" ? e.line : 0,
-        kind: typeof e.kind === "string" ? e.kind : "decl" };
-      if (!e.doc) return [base];
-      // Documented, but its NL↔Lean crosslink annotations are missing
-      // or defective — same hard gate, fixed by the same docstring pass.
-      const problem = crosslinkDefect(e);
-      return problem ? [{ ...base, problem }] : [];
-    });
+    return idx.entries.flatMap((e) => typeof e.name === "string" && typeof e.file === "string"
+      ? [{ name: e.name, file: e.file, line: typeof e.line === "number" ? e.line : 0,
+        kind: typeof e.kind === "string" ? e.kind : "decl", doc: e.doc, source: e.source }]
+      : []);
   };
+  // Put files back as `to` has them, keeping what is replaced (the only evidence of what the
+  // model wrote) under docstring_rejected/<tag>/. NEVER `git checkout` here: it reverts to HEAD and
+  // destroys unrelated uncommitted work.
+  const restore = async (to: ReadonlyMap<string, string>, tag: string, only?: readonly string[]) => {
+    for (const [f, content] of to) {
+      if (only && !only.includes(f)) continue;
+      const abs = path.join(root, f);
+      const now = await readFile(abs, "utf8").catch(() => null);
+      if (now === content) continue;
+      if (now !== null) {
+        try {
+          const keep = path.join(rejectedDir, tag, f);
+          await mkdir(path.dirname(keep), { recursive: true });
+          await writeFile(keep, now, "utf8");
+        } catch (keepErr) {
+          // Evidence is best-effort; the restore below must run regardless.
+          console.warn(`[${t.label}] could not keep rejected ${f}: ${keepErr instanceof Error ? keepErr.message : String(keepErr)}`);
+        }
+      }
+      await writeWhole(abs, content);
+    }
+  };
+  const residualBlock = (residual: readonly UndocumentedDecl[]) =>
+    `${t.label} docstring coverage: ${residual.length} declaration(s) still undocumented or crosslink-defective after the docstring pass — ` +
+    residual.slice(0, 12).map((e) => `${e.file}:${e.line} ${e.name}${e.problem ? ` (${e.problem})` : ""}`).join(", ") +
+    (residual.length > 12 ? ` (+${residual.length - 12} more)` : "") +
+    `. Fix them (the docstring contract: first paragraph = the NL translation, with ` +
+    `[phrase](hyp:name)/[phrase](goal) crosslinks covering every hypothesis and the conclusion) then resume.`;
+  const notComputed = (err: unknown) =>
+    `${t.label} docstring coverage could not be computed:\n${err instanceof Error ? err.message : String(err)}\n` +
+    `Resolve the build/extraction error then resume; the docstring gate cannot be skipped.`;
+  const notFinished = (err: Error) =>
+    `${t.label} docstring pass could not be validated — lake did not finish (the edits are kept):\n${err.message}\n` +
+    `Resume to validate them again; fix the build or toolchain first if the failure is not transient.`;
+  const undoneAll = (why: string) =>
+    `${t.label} docstring pass ${why}; its edits were restored byte-for-byte ` +
+    `(rejected versions kept under ${path.join(rejectedDir, "build")}). ` +
+    `Document the declarations by hand (first paragraph = NL translation) then resume.`;
 
-  let undoc: UndocumentedDecl[];
+  // The index and the files it was taken from: every pass is checked against them, and they are
+  // what a failed confirmation restores (the tree as its last green build had it).
+  let baseline: { texts: Map<string, string>; entries: IndexEntry[] };
   try {
     const built = new Set(t.builtModules ?? []);
-    undoc = await extractUndocumented(t.modules.filter((m) => !built.has(m)));
+    const entries = await index(t.modules.filter((m) => !built.has(m)));
+    baseline = { texts: await readAll(), entries };
   } catch (err) {
-    return (
-      `${t.label} docstring coverage could not be computed:\n${err instanceof Error ? err.message : String(err)}\n` +
-      `Resolve the build/extraction error then resume; the docstring gate cannot be skipped.`
-    );
+    return { block: notComputed(err) };
   }
+  let undoc = defectsOf(baseline.entries);
   if (undoc.length === 0) {
     await recordClean();
-    return null;
+    return { block: null };
+  }
+  const declLines = (f: string) => baseline.entries.filter((e) => e.file === f).map((e) => e.line);
+  const vouched = (f: string, text: string) => checkDocstringEdit(baseline.texts.get(f) ?? "", text, declLines(f));
+
+  /** The one build that confirms text-checked edits, then the statements, then Lean's own coverage. */
+  const confirm = async (): Promise<string | null> => {
+    try {
+      let entries: IndexEntry[];
+      try {
+        entries = await index(t.modules);
+      } catch (err) {
+        if (!(err instanceof LakeFailure)) return notComputed(err);
+        if (!err.leanError) return notFinished(err);
+        await restore(baseline.texts, "build");
+        return `${undoneAll("broke the build")}\n${err.message}`;
+      }
+      const statements = t.statements ? await t.statements.after() : null;
+      if (statements && "changed" in statements) {
+        await restore(baseline.texts, "build");
+        return `${undoneAll("changed what a declaration states")}\nstatements changed: ${statements.changed}`;
+      }
+      if (statements) {
+        return `${t.label} docstring pass could not be validated — ${statements.unavailable} (the edits are kept).\n` +
+          `Resume to validate them again; fix the build or toolchain first if the failure is not transient.`;
+      }
+      const residual = defectsOf(entries);
+      if (residual.length > 0) return residualBlock(residual);
+      await recordClean();
+      return null;
+    } catch (err) {
+      return notComputed(err);
+    }
+  };
+
+  const unchecked = t.statements ? await t.statements.before() : null;
+  if (unchecked) {
+    return {
+      block: `${t.label} docstring pass not started — ${unchecked}; nothing was edited.\n` +
+        `Resume to try again; fix the build or toolchain first if the failure is not transient.`,
+    };
   }
   const template = await readPrompt(t.ctx, "stage5_docstrings.txt");
-
+  const dispatch = t.dispatch ?? dispatchAgent;
   // One pass and, when it leaves defects (a crosslink naming no binder), a second on exactly those.
   for (let pass = 1; ; pass += 1) {
-    // Snapshot the exact bytes of every target file BEFORE the codex pass, so a build-failure
-    // rollback restores only this pass's docstring edits. NEVER `git checkout` here: it reverts
-    // to HEAD and destroys unrelated uncommitted work this pass did not author.
-    const snapshot = new Map<string, string>();
-    for (const f of new Set(undoc.map((e) => e.file))) {
-      snapshot.set(f, await readFile(path.join(root, f), "utf8"));
-    }
+    // The exact bytes before the pass: what an edit the text check refuses is undone to.
+    const snapshot = await readAll();
     const lanes = docstringLanes(undoc);
     const calls = lanes.reduce((n, l) => n + l.length, 0);
     console.log(`[${t.label}] docstring pass ${pass}: ${undoc.length} declaration(s) in ${calls} call(s)`);
-    let k = 0;
-    // after a killed call the pass dispatches nothing new: a hang that hits every call (a tool that
-    // never comes up) would otherwise cost every call its full watchdog time; the residual pass retries
-    let killed = false;
-    await mapLimit(lanes, DOCSTRING_CONCURRENCY, async (lane) => {
-      for (const batch of lane) {
-        if (killed) return;
-        k += 1;
-        const label = `${t.label} docstrings ${k}/${calls}`;
-        if (!(await unlessKilled(label, () => dispatchAgent({
-          ctx: t.ctx,
-          deps: t.deps,
-          stage: "5",
-          label,
-          prompt: fillTemplate(template, { package_root: root, decl_list: declListFor(batch) }),
-          promptSources: ["stage5_docstrings.txt"],
-          model: MODEL_PLAN.stage5.model,
-          reasoningEffort: MODEL_PLAN.stage5.effort,
-        })))) killed = true;
-      }
-    });
-    for (const f of snapshot.keys()) {
+    try {
+      let k = 0;
+      // after a killed call the pass dispatches nothing new: a hang that hits every call (a tool
+      // that never comes up) would otherwise cost every call its full watchdog time; the residual
+      // pass retries
+      let killed = false;
+      await mapLimit(lanes, DOCSTRING_CONCURRENCY, async (lane) => {
+        for (const batch of lane) {
+          if (killed) return;
+          k += 1;
+          const label = `${t.label} docstrings ${k}/${calls}`;
+          if (!(await unlessKilled(label, () => dispatch({
+            ctx: t.ctx,
+            deps: t.deps,
+            stage: "5",
+            label,
+            prompt: fillTemplate(template, { package_root: root, decl_list: declListFor(batch) }),
+            promptSources: ["stage5_docstrings.txt"],
+            model: MODEL_PLAN.stage5.model,
+            reasoningEffort: MODEL_PLAN.stage5.effort,
+          })))) killed = true;
+        }
+      });
+    } catch (err) {
+      // a pass that failed is checked by nothing: none of its edits stay
+      await restore(snapshot, `pass${pass}`);
+      throw err;
+    }
+    const listed = new Set(undoc.map((e) => e.file));
+    for (const [f, before] of snapshot) {
       const abs = path.join(root, f);
-      const { text: whole, closed } = closeUnterminatedDocstrings(await readFile(abs, "utf8"));
+      const now = await readFile(abs, "utf8");
+      if (now === before && !listed.has(f)) continue;
+      const { text: whole, closed } = closeUnterminatedDocstrings(now);
       const { text: single, collapsed } = collapseAdjacentDocstrings(whole);
       const { text: placed, moved } = docstringAfterScopePrefix(single);
-      const { text: tagged, restored } = restoreDocstringTags(snapshot.get(f)!, placed);
+      const { text: tagged, restored } = restoreDocstringTags(before, placed);
       const { text, fixed } = normalizeDocstringEndings(tagged);
       if (closed > 0 || collapsed > 0 || moved > 0 || restored > 0 || fixed > 0) await writeFile(abs, text, "utf8");
       if (closed > 0) console.warn(`[${t.label}] ${f}: ${closed} docstring(s) left open were closed`);
@@ -476,62 +625,56 @@ export async function documentModules(t: DocstringTarget): Promise<string | null
       if (collapsed > 0) console.warn(`[${t.label}] ${f}: ${collapsed} declaration(s) carried two docstrings — kept the crosslinked one`);
       if (restored > 0) console.warn(`[${t.label}] ${f}: ${restored} tag line(s) the docstring pass dropped were put back`);
     }
-    let residual: UndocumentedDecl[];
-    try {
-      residual = await extractUndocumented(t.modules);
-    } catch (err) {
-      if (err instanceof LakeFailure && !err.leanError) {
-        // Lake did not finish or broke on its own: the docstrings are not the defect and stay
-        // on disk (no clean record is written, so the resume re-checks them).
-        return (
-          `${t.label} docstring pass could not be validated — lake did not finish (the edits are kept):\n${err.message}\n` +
-          `Resume to validate them again; fix the build or toolchain first if the failure is not transient.`
-        );
+
+    // The text check, file by file against the baseline. A file it refuses goes back to the
+    // snapshot (the passes before were checked), its declarations to the next pass.
+    const declsOf = new Map<string, (line: number) => DeclAfterEdit>();
+    for (const [f, now] of await readAll()) {
+      if (now === baseline.texts.get(f)) continue;
+      let r = vouched(f, now);
+      if (r.status !== "ok") {
+        const why = r.status === "code-changed" ? "changed text outside docstrings" : "put a docstring where no declaration starts (or two on one, or left one open)";
+        console.warn(`[${t.label}] ${f}:${r.line}: the docstring pass ${why} — its edits of this file were undone (kept under ${path.join(rejectedDir, `pass${pass}`)})`);
+        const back = snapshot.get(f)!;
+        await restore(new Map([[f, back]]), `pass${pass}`);
+        if (back === baseline.texts.get(f)) continue;
+        r = vouched(f, back);
+        if (r.status !== "ok") throw new Error(`${f}: the text check refuses the file an earlier pass left (${r.status} at line ${r.line})`);
       }
-      // Keep the rejected edit (the only evidence of what the model wrote) before restoring.
-      const rejectedDir = path.join(t.outDir, "docstring_rejected");
-      for (const [f, content] of snapshot) {
-        const abs = path.join(root, f);
-        try {
-          const keep = path.join(rejectedDir, f);
-          await mkdir(path.dirname(keep), { recursive: true });
-          await writeFile(keep, await readFile(abs, "utf8"), "utf8");
-        } catch (keepErr) {
-          // Evidence is best-effort; the restore below must run regardless.
-          console.warn(`[${t.label}] could not keep rejected ${f}: ${keepErr instanceof Error ? keepErr.message : String(keepErr)}`);
-        }
-        await writeFile(abs, content, "utf8");
-      }
-      return (
-        `${t.label} docstring pass broke the build; its edits were restored byte-for-byte ` +
-        `(rejected versions kept under ${rejectedDir}):\n${err instanceof Error ? err.message : String(err)}\n` +
-        `Document the declarations by hand (first paragraph = NL translation) then resume.`
-      );
+      declsOf.set(f, r.declAt);
     }
+    // Coverage from the docstrings on disk: the index's entry, with the docstring now in its slot
+    // (an index doc with no docstring in the source, e.g. `@[inherit_doc]`, stands) and its line
+    // in the edited file (the next pass's prompt names it).
+    const residual = defectsOf(baseline.entries.map((e) => {
+      const declAt = declsOf.get(e.file);
+      if (!declAt) return e;
+      const d = declAt(e.line);
+      return { ...e, line: d.line, doc: d.doc !== undefined || d.hadDoc ? d.doc : e.doc };
+    }));
+    const unconfirmed = declsOf.size > 0;
     if (residual.length > 0) {
       if (pass < MAX_DOCSTRING_PASSES) {
         console.warn(`[${t.label}] docstring pass ${pass}: ${residual.length} declaration(s) still undocumented or crosslink-defective — one more pass on those`);
         undoc = residual;
         continue;
       }
-      return (
-        `${t.label} docstring coverage: ${residual.length} declaration(s) still undocumented or crosslink-defective after the docstring pass — ` +
-        residual.slice(0, 12).map((e) => `${e.file}:${e.line} ${e.name}${e.problem ? ` (${e.problem})` : ""}`).join(", ") +
-        (residual.length > 12 ? ` (+${residual.length - 12} more)` : "") +
-        `. Fix them (the docstring contract: first paragraph = the NL translation, with ` +
-        `[phrase](hyp:name)/[phrase](goal) crosslinks covering every hypothesis and the conclusion) then resume.`
-      );
+      // The hand fix starts from a tree that builds, with Lean's own list.
+      return { block: unconfirmed ? await confirm() : residualBlock(residual) };
     }
-    await recordClean();
-    return null;
+    if (!unconfirmed) {
+      await recordClean();
+      return { block: null };
+    }
+    console.log(`[${t.label}] docstring pass ${pass}: the edits change docstrings only (checked from the source text); one build confirms them`);
+    return { block: null, confirm };
   }
 }
 
 /**
  * Ensure every declaration in the run's Lean modules carries a contract docstring (see
- * documentModules). Returns `null` when coverage holds; otherwise a block reason for the F5
- * caller (same contract as the crosswalk emit). Runs BEFORE the crosswalk emit: docstring
- * insertion shifts line numbers, and the banked crosswalk must record the post-docstring lines.
+ * documentModules). Runs BEFORE the crosswalk emit: docstring insertion shifts line numbers, and
+ * the banked crosswalk must record the post-docstring lines.
  */
 export async function ensureDocstringCoverage(args: {
   ctx: PipelineContext;
@@ -539,7 +682,9 @@ export async function ensureDocstringCoverage(args: {
   deps: StageDeps;
   /** See `DocstringTarget.builtModules`. */
   builtModules?: readonly string[];
-}): Promise<string | null> {
+  /** See `DocstringTarget.statements`. */
+  statements?: StatementHooks;
+}): Promise<DocstringOutcome> {
   const paths = artifactPaths(args.ctx, args.state);
   const relFiles = (await readdir(paths.leanDir, { recursive: true }).catch((err: NodeJS.ErrnoException) => {
     if (err.code === "ENOENT") return [] as string[]; // no Lean dir — nothing to document
@@ -553,5 +698,6 @@ export async function ensureDocstringCoverage(args: {
   return documentModules({
     ctx: args.ctx, deps: args.deps, modules, prefix,
     outDir: paths.formalizationDir, label: "F5", builtModules: args.builtModules,
+    statements: args.statements,
   });
 }

@@ -24,7 +24,7 @@ import { warmUpLeanOrThrow } from "../shared/lean_warmup.js";
 export const USAGE =
   "Usage: paperformalizer verify <paper.tex|dir|archive> [--toolkit <path>] [--slug s] [--main relpath] " +
   "[--targets label,label] [--resume] " +
-  "[--from-stage <stage>] [--fresh-review] [--from-transcript] [--stop-after <stage>] [--clear-gate <flag>]... [--defer-proposals] [--debug | --full-auto] [--dry-run]\n" +
+  "[--from-stage <stage>] [--fresh-review] [--from-transcript] [--stop-after <stage>] [--clear-gate <flag>]... [--defer-proposals] [--debug | --full-auto] [--persist | --no-persist] [--dry-run]\n" +
   "  <paper.tex>: a .tex that includes files lying beside it is taken with its directory (the file the main one);\n" +
   "  one whose included .tex files are missing is refused — pass the paper's directory or an archive\n" +
   "  --defer-proposals: skip toolkit promotion round A (after F1); the paper's cited results stay assumptions\n" +
@@ -33,6 +33,8 @@ export const USAGE =
   "  --full-auto (kept across resumes): the owner's decisions are delegated as well — a repair that\n" +
   "  would weaken a main result and the promotion rounds take the agent's recommendation on each item, listed for\n" +
   "  the owner's review on the page\n" +
+  "  --persist (kept across resumes): the owner wants the paper's theorems established, however long that takes: missing\n" +
+  "  theory is built, and a report before F5 completes (--from-stage V6) is refused. --no-persist lifts it: the owner's alone\n" +
   "  verify --stop --slug <s> [--toolkit <path>] (no other flag; the paper in place of --slug names the same run):\n" +
   "  stop the run's live runner and child processes recorded in runs/<slug>/logs/children.json — each pid only if\n" +
   "  its start time still matches — then clear the file\n" +
@@ -143,6 +145,9 @@ export interface VerifyArgs {
   debug: boolean;
   /** `--full-auto`: the owner's decisions take the agent's recommendations (`SharedState.full_auto`). */
   fullAuto: boolean;
+  /** `--persist` / `--no-persist`: the run may not end before its Lean is complete (`SharedState.persist`). */
+  persist: boolean;
+  noPersist: boolean;
   /** `--defer-proposals`: skip toolkit promotion round A. */
   deferProposals: boolean;
   dryRun: boolean;
@@ -191,6 +196,9 @@ function parseVerifyArgs(argv: string[]): VerifyArgs {
   // `verify --resume paper.tex` and `verify paper.tex --resume` behave alike.
   const resume = takeFlag("--resume");
   const fullAuto = takeFlag("--full-auto");
+  const persist = takeFlag("--persist");
+  const noPersist = takeFlag("--no-persist");
+  if (persist && noPersist) throw usageError("--persist and --no-persist exclude each other.");
   // auto mode is the default: `--auto` is accepted and changes nothing; `--debug` turns it off
   const autoFlag = takeFlag("--auto");
   const debug = takeFlag("--debug");
@@ -335,7 +343,7 @@ function parseVerifyArgs(argv: string[]): VerifyArgs {
   }
 
   if (stop) {
-    const others = Object.entries({ resume, auto: autoFlag, debug, fullAuto, deferProposals, dryRun, freshReview, fromTranscript, main, targets, fromStage, stopAfter, answers: answers.length > 0, clearGates: clearGates.length > 0 })
+    const others = Object.entries({ resume, auto: autoFlag, debug, fullAuto, persist, noPersist, deferProposals, dryRun, freshReview, fromTranscript, main, targets, fromStage, stopAfter, answers: answers.length > 0, clearGates: clearGates.length > 0 })
       .filter(([, v]) => v !== false && v !== null)
       .map(([k]) => k);
     if (others.length > 0) throw usageError(`--stop combines only with --toolkit and --slug (got ${others.join(", ")}).`);
@@ -349,7 +357,7 @@ function parseVerifyArgs(argv: string[]): VerifyArgs {
     if (fromStage || freshReview) throw usageError("--from-transcript already re-enters at a fresh V1.5; it does not combine with --from-stage or --fresh-review.");
     if (answers.length > 0) throw usageError(`--from-transcript clears every halt; it does not combine with ${answers.join(", ")}.`);
   }
-  return { input, toolkit, slug, main, targets, resume, fromStage, stopAfter, clearGates, freshReview, fromTranscript, rejectRewind, clearPatchCap, acceptCap, acceptRepair, declineRepair, redoRepair, rejectFinding, addCondition, editReading, removeReading, umbrella, auto, debug, fullAuto, deferProposals, dryRun, stop };
+  return { input, toolkit, slug, main, targets, resume, fromStage, stopAfter, clearGates, freshReview, fromTranscript, rejectRewind, clearPatchCap, acceptCap, acceptRepair, declineRepair, redoRepair, rejectFinding, addCondition, editReading, removeReading, umbrella, auto, debug, fullAuto, persist, noPersist, deferProposals, dryRun, stop };
 }
 
 function stageIndex(stage: VerifyFromStage): number {
@@ -457,6 +465,8 @@ async function runVerifyLocked(
       clearGates: parsed.clearGates,
       auto: parsed.auto,
       ...(parsed.fullAuto ? { fullAuto: true } : {}),
+      ...(parsed.persist ? { persist: true } : {}),
+      ...(parsed.noPersist ? { noPersist: true } : {}),
       ...(parsed.deferProposals ? { deferProposals: true } : {}),
       dryRun: parsed.dryRun,
       freshReview: parsed.freshReview,

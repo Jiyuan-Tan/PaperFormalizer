@@ -14,10 +14,11 @@ import { coreJsonPath, readFormalizationCore } from "../core/core_io.js";
 import { PlanSchema } from "./plan/schema.js";
 import { auditCitedReview, auditDelivery, citedLeanEvidence, splitCitedFindingsForVerify } from "./delivery_audit.js";
 import { auditConvergenceReview } from "./convergence_evidence.js";
-import { takeStatementFingerprints } from "./statement_fingerprints.js";
+import { statementChanges, takeStatementFingerprints, type StatementFingerprints } from "./statement_fingerprints.js";
 import { parseAnnotatedDecls } from "../graph/extractor.js";
 import { parseJsonWithEscapeRepair } from "../shared/codex_json.js";
-import { ensureDocstringCoverage } from "./stage5_docstrings.js";
+import { ensureDocstringCoverage, type StatementHooks } from "./stage5_docstrings.js";
+import { readLakefileTargets } from "../toolkit/lakefile.js";
 import { emitNlLinks } from "./nl_links.js";
 import { recordVerifyFinding } from "../verify/findings.js";
 import { leanModulePrefix } from "../paths.js";
@@ -132,6 +133,8 @@ export async function runStage5(args: {
   /** The run's modules the convergence audit built green in this entry (none when it did not get
    *  that far): the docstring pass skips its own pre-pass build of them. */
   let builtModules: readonly string[] = [];
+  /** The statement fingerprints of that build: the docstring pass must leave every one as it is. */
+  let printsBefore: StatementFingerprints | null = null;
   // Re-run the same omission contract used by F2. F4 receipts are
   // mandatory here; any later plan/graph edit invalidates their evidence hashes.
   {
@@ -185,6 +188,7 @@ export async function runStage5(args: {
           // The fingerprint build is a green build of the run's modules: the docstring pass
           // below starts from it instead of building the unchanged tree again.
           if (fp) builtModules = fp.modules;
+          printsBefore = fp;
           return fp;
         },
       }));
@@ -210,91 +214,139 @@ export async function runStage5(args: {
   // (the final Lean-edit point), BEFORE the bank-soundness scan below (the docstring pass
   // edits Lean, and the token scan must cover the final text) and BEFORE the crosswalk emit
   // (docstring insertion shifts line numbers; the banked crosswalk records post-docstring lines).
+  // The pass is checked from the source text; the one build that confirms its edits runs while
+  // the steps below do, and every exit from here waits for it: a halt it finds comes first, and
+  // nothing is delivered (the `Papers.lean` barrel) before it is green.
+  let confirming: Promise<string | null> = Promise.resolve(null);
   {
-    const docstringBlock = await ensureDocstringCoverage({ ...args, builtModules });
-    if (docstringBlock) {
-      return { stage: "5", status: "checkpoint", advance: false, message: docstringBlock };
+    const leanDir = artifactPaths(args.ctx, args.state).leanDir;
+    const log = { tag: "F5", without: "the docstring pass does not start" };
+    const statements: StatementHooks = {
+      // The audit takes the fingerprints only when it has targets: take them here otherwise (the
+      // tree is built, so this is the scan). Only a toolkit with no `candidate_scan` goes without.
+      before: async () => {
+        printsBefore ??= await takeStatementFingerprints(args.ctx.repoRoot, leanDir, undefined, log);
+        if (printsBefore) return null;
+        if (!readLakefileTargets(args.ctx.repoRoot).exes.has("candidate_scan")) {
+          console.warn("[F5] the toolkit has no `candidate_scan` exe: the docstring edits rest on the text check and the build alone");
+          return null;
+        }
+        return "the statement fingerprints before the pass could not be taken (see the log)";
+      },
+      after: async () => {
+        if (!printsBefore) return null; // a toolkit with no `candidate_scan`
+        const after = await takeStatementFingerprints(args.ctx.repoRoot, leanDir, undefined, { ...log, without: "the edits are not confirmed" });
+        if (!after) return { unavailable: "the statement fingerprints after the docstring pass could not be taken (see the log)" };
+        const changes = statementChanges(printsBefore, after);
+        return changes.length > 0 ? { changed: `${changes.slice(0, 8).join("; ")}${changes.length > 8 ? ` (+${changes.length - 8} more)` : ""}` } : null;
+      },
+    };
+    const docstrings = await ensureDocstringCoverage({ ...args, builtModules, statements });
+    if (docstrings.block) {
+      return { stage: "5", status: "checkpoint", advance: false, message: docstrings.block };
+    }
+    if (docstrings.confirm) {
+      confirming = docstrings.confirm().catch((err: unknown) =>
+        `F5 docstring pass could not be validated: ${err instanceof Error ? err.message : String(err)}`);
     }
   }
-  // Soundness gate: refuse to complete while the artifact (or any reachable
-  // file of the same package) still contains a real `sorry` or a
-  // cheat token (`axiom`/`opaque`/`unsafe`/`admit`). Text-based scan;
-  // catches the false-completion class where F3's in-subdir count was clean
-  // but a dependency stub was not. Runs AFTER the docstring pass so an edit
-  // that pass made cannot introduce a token behind the scan's back.
-  {
-    const paths = artifactPaths(args.ctx, args.state);
-    const issues = await bankSoundnessIssues(paths.leanDir, args.ctx.repoRoot);
-    if (issues.length > 0) {
-      return {
-        stage: "5",
-        status: "checkpoint",
-        advance: false,
-        message:
-          `F5 bank-soundness gate REFUSED: ${issues.slice(0, 10).join("; ")}` +
-          (issues.length > 10 ? ` (+${issues.length - 10} more)` : "") +
-          ". Resolve (prove the stubs / remove the cheat tokens) then resume.",
-      };
-    }
-  }
-  // F3→note sync warning: surface any load-bearing F3-added premise whose label
-  // is absent from the note, so the orchestrator confirms it is reflected before
-  // the report (a totality gate cannot catch a non-H<n> binder).
-  const noteSyncWarnings: string[] = [];
-  {
-    const paths = artifactPaths(args.ctx, args.state);
-    // Fail CLOSED. The report consumes this note, so an unreadable one is a
-    // blocking defect — and degrading it to "" would ALSO make every load-bearing premise look
-    // unsynced, or (with no premises) emit a clean run over a note that is not there at all.
-    let noteMd: string;
-    try {
-      noteMd = await readFile(paths.md, "utf8");
-    } catch (e) {
-      return {
-        stage: "5",
-        status: "blocked",
-        advance: false,
-        message:
-          `F5 cannot read the formalization note at ${paths.md} ` +
-          `(${e instanceof Error ? e.message : String(e)}). The report consumes this note, and ` +
-          `the F3→note premise-sync check cannot run without it.`,
-      };
-    }
-    for (const a of unsyncedLoadBearingAssumptions(args.state, noteMd)) {
-      const w =
-        `F3-added load-bearing premise '${a.label}' (${a.classification ?? "?"}, source ${a.source ?? "?"}) ` +
-        `is not found by label in the note — CONFIRM it is reflected in the note's "Load-bearing hypotheses" ` +
-        `before reporting (the report consumes the note; a totality gate is blind to non-H<n>/instance binders).`;
-      noteSyncWarnings.push(w);
-      args.state.design_decisions[`note_sync:${a.label}`] = w;
-    }
-  }
-
-  const crosswalkBlock = await emitCompleteCrosswalk(args);
-  if (crosswalkBlock) {
-    return { stage: "5", status: "checkpoint", advance: false, message: crosswalkBlock };
-  }
-  // Paper ↔ Lean links row by row (advisory: the report and the paper page read them; a
-  // failure is logged and F5 goes on).
-  try {
-    console.log(`[paperformalizer] F5 nl-links: ${await emitNlLinks(args)}`);
-  } catch (err) {
-    console.warn(`[paperformalizer] F5 nl-links skipped: ${err instanceof Error ? err.message : String(err)}`);
-  }
-  // Everything above IS the deliverable (docstring coverage, soundness scan, note sync, full
-  // tex↔Lean crosswalk).
-  const paths = artifactPaths(args.ctx, args.state);
-  const barrel = await registerInPapersBarrel(args.ctx, args.state, paths.leanDir);
-  const baseMsg =
-    "F5 complete: docstring coverage, soundness scan, note sync and the full tex↔Lean crosswalk are done." +
-    (barrel.warning ? `\n\n⚠ ${barrel.warning}` : "");
-  return {
-    stage: "5",
-    status: "completed",
-    completedStage: "5",
-    message:
-      noteSyncWarnings.length > 0
-        ? `${baseMsg}\n\n⚠ NOTE-SYNC — verify before reporting:\n- ${noteSyncWarnings.join("\n- ")}`
-        : baseMsg,
+  const settle = async (r: StageResult): Promise<StageResult> => {
+    const block = await confirming;
+    if (!block) return r;
+    return {
+      stage: "5",
+      status: r.status === "completed" ? "checkpoint" : r.status,
+      advance: false,
+      message: r.status === "completed" ? block : `${block}\n\n${r.message}`,
+    };
   };
+  // A throw below must not leave the confirming build running unattended.
+  try {
+    // Soundness gate: refuse to complete while the artifact (or any reachable
+    // file of the same package) still contains a real `sorry` or a
+    // cheat token (`axiom`/`opaque`/`unsafe`/`admit`). Text-based scan;
+    // catches the false-completion class where F3's in-subdir count was clean
+    // but a dependency stub was not. Runs AFTER the docstring pass so an edit
+    // that pass made cannot introduce a token behind the scan's back.
+    {
+      const paths = artifactPaths(args.ctx, args.state);
+      const issues = await bankSoundnessIssues(paths.leanDir, args.ctx.repoRoot);
+      if (issues.length > 0) {
+        return settle({
+          stage: "5",
+          status: "checkpoint",
+          advance: false,
+          message:
+            `F5 bank-soundness gate REFUSED: ${issues.slice(0, 10).join("; ")}` +
+            (issues.length > 10 ? ` (+${issues.length - 10} more)` : "") +
+            ". Resolve (prove the stubs / remove the cheat tokens) then resume.",
+        });
+      }
+    }
+    // F3→note sync warning: surface any load-bearing F3-added premise whose label
+    // is absent from the note, so the orchestrator confirms it is reflected before
+    // the report (a totality gate cannot catch a non-H<n> binder).
+    const noteSyncWarnings: string[] = [];
+    {
+      const paths = artifactPaths(args.ctx, args.state);
+      // Fail CLOSED. The report consumes this note, so an unreadable one is a
+      // blocking defect — and degrading it to "" would ALSO make every load-bearing premise look
+      // unsynced, or (with no premises) emit a clean run over a note that is not there at all.
+      let noteMd: string;
+      try {
+        noteMd = await readFile(paths.md, "utf8");
+      } catch (e) {
+        return settle({
+          stage: "5",
+          status: "blocked",
+          advance: false,
+          message:
+            `F5 cannot read the formalization note at ${paths.md} ` +
+            `(${e instanceof Error ? e.message : String(e)}). The report consumes this note, and ` +
+            `the F3→note premise-sync check cannot run without it.`,
+        });
+      }
+      for (const a of unsyncedLoadBearingAssumptions(args.state, noteMd)) {
+        const w =
+          `F3-added load-bearing premise '${a.label}' (${a.classification ?? "?"}, source ${a.source ?? "?"}) ` +
+          `is not found by label in the note — CONFIRM it is reflected in the note's "Load-bearing hypotheses" ` +
+          `before reporting (the report consumes the note; a totality gate is blind to non-H<n>/instance binders).`;
+        noteSyncWarnings.push(w);
+        args.state.design_decisions[`note_sync:${a.label}`] = w;
+      }
+    }
+
+    const crosswalkBlock = await emitCompleteCrosswalk(args);
+    if (crosswalkBlock) {
+      return settle({ stage: "5", status: "checkpoint", advance: false, message: crosswalkBlock });
+    }
+    // Paper ↔ Lean links row by row (advisory: the report and the paper page read them; a
+    // failure is logged and F5 goes on).
+    try {
+      console.log(`[paperformalizer] F5 nl-links: ${await emitNlLinks(args)}`);
+    } catch (err) {
+      console.warn(`[paperformalizer] F5 nl-links skipped: ${err instanceof Error ? err.message : String(err)}`);
+    }
+    // Everything above IS the deliverable (docstring coverage, soundness scan, note sync, full
+    // tex↔Lean crosswalk), once the build confirming the docstrings is green.
+    const confirmBlock = await confirming;
+    if (confirmBlock) return { stage: "5", status: "checkpoint", advance: false, message: confirmBlock };
+    const paths = artifactPaths(args.ctx, args.state);
+    const barrel = await registerInPapersBarrel(args.ctx, args.state, paths.leanDir);
+    const baseMsg =
+      "F5 complete: docstring coverage, soundness scan, note sync and the full tex↔Lean crosswalk are done." +
+      (barrel.warning ? `\n\n⚠ ${barrel.warning}` : "");
+    return {
+      stage: "5",
+      status: "completed",
+      completedStage: "5",
+      message:
+        noteSyncWarnings.length > 0
+          ? `${baseMsg}\n\n⚠ NOTE-SYNC — verify before reporting:\n- ${noteSyncWarnings.join("\n- ")}`
+          : baseMsg,
+    };
+  } catch (err) {
+    await confirming;
+    throw err;
+  }
 }

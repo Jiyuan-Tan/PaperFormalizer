@@ -241,6 +241,8 @@ describe("F1.5 without the intervention judge (2026-10-07)", () => {
       const g = checkpointGuidance(stage, "checkpoint", state.flags, false, halted.message)!;
       expect(g).toContain("F1 BLOCKED");
       expect(g).toContain("A resume plans again before any review");
+      // machinery out of reach: the run ends with its report, not left halted
+      expect(g).toMatch(/blocked-infeasible[\s\S]*--resume --from-stage V6/);
       expect(g).not.toContain("CONSOLIDATED CKPT 1");
     }
     // the resume: F1 first; blocked again, nothing is reviewed

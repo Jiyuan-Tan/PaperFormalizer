@@ -99,7 +99,7 @@ async function snapLoad() {
   SNAP.share = await fetch("share.json", { credentials: "same-origin" }).then((x) => (x.ok ? x.json() : null)).catch(() => null);
   const pick = (r, keep) => Object.fromEntries(Object.entries(r).filter(([k]) => SNAP_DRAWER.includes(k) === keep));
   const summary = {
-    slug: s.slug, title: String(s.title ?? ""), authors: String(s.authors ?? ""), stage: "", stageIndex: 0, phase: "", live: false, status: "done", headline: "",
+    slug: s.slug, title: String(s.title ?? ""), authors: String(s.authors ?? ""), stage: "", stageIndex: 0, failedAt: null, phase: "", live: false, status: "done", headline: "",
     lastEvent: null, pending: { weakening: 0, rewind: false, cap: false, promotion: null, checkpoint: false }, redoing: false,
     verdict: s.verdict ?? null, buckets: s.buckets ?? null, updatedAt: 0, supersededBy: null, orch: null, requests: [], unread: 0, reviews: [], tokens: s.tokens ?? null,
   };
@@ -373,7 +373,7 @@ const cmdBox = (c) => `<div class="cmd"><code>${esc(c)}</code><button type="butt
 
 /* ═════════════ TOOLKIT VIEW ═════════════ */
 const T = { q: "", f: "all", page: 0, size: 8 };
-const STATUS_WORD = { "needs-you": "needs you", running: "running", agent: "with the agent", done: "done", idle: "idle", superseded: "superseded" };
+const STATUS_WORD = { "needs-you": "needs you", running: "running", agent: "with the agent", done: "done", failed: "failed", idle: "idle", superseded: "superseded" };
 async function showToolkit(first) {
   const { data, changed } = await api("/api/toolkit");
   S.toolkit = data;
@@ -410,7 +410,7 @@ async function showToolkit(first) {
   $("#tk-name").textContent = `Papers in ${data.toolkit.name}`;
   $("#start-how").innerHTML = `<p class="meta">Open a terminal in <code>${esc(data.toolkit.repo)}</code>, start <code>claude</code> or <code>codex</code>, and ask it, for example:</p>${cmdBox(`Use PaperFormalizer to verify the paper at <path to the .tex, folder or arXiv id> (toolkit ${data.toolkit.root}).`)}<p class="meta">The agent starts the run, attaches itself to it and acts at every halt; the run appears here and updates live. Decisions that are yours wait for you on the paper's page.</p>`;
   $("#tk-meta").innerHTML = `<span>Owner ${esc(data.toolkit.owner)}</span><span>Lean <code>${esc(data.toolkit.lean.replace(/^.*:/, ""))}</code></span><span>Base: ${esc(data.toolkit.base.join(", ") || "Mathlib")}</span><span><code>${esc(data.toolkit.root)}</code></span>`;
-  $("#tk-stats").innerHTML = [["papers", runs.length], ["need you", count("needs-you")], ["running", count("running")], ["done", count("done")]].map(([k, v]) => `<div class="stat"><b>${v}</b><span>${k}</span></div>`).join("");
+  $("#tk-stats").innerHTML = [["papers", runs.length], ["need you", count("needs-you")], ["running", count("running")], ["done", count("done")], ["failed", count("failed")]].map(([k, v]) => `<div class="stat"><b>${v}</b><span>${k}</span></div>`).join("");
   const waiting = runs.filter((r) => r.status === "needs-you");
   $("#wait-sub").textContent = waiting.length ? `${waiting.length} open` : "nothing open";
   $("#waiting").innerHTML = waiting.length
@@ -422,7 +422,7 @@ async function showToolkit(first) {
 }
 function drawRuns() {
   const runs = S.toolkit?.runs ?? [];
-  const cats = { all: "All", "needs-you": "Needs you", running: "Running", agent: "With the agent", done: "Done", idle: "Idle" };
+  const cats = { all: "All", "needs-you": "Needs you", running: "Running", agent: "With the agent", done: "Done", failed: "Failed", idle: "Idle" };
   const n = (c) => runs.filter((r) => c === "all" || r.status === c).length;
   $("#runs-filter").innerHTML = Object.entries(cats).map(([k, v]) => `<button type="button" data-f="${k}" aria-pressed="${T.f === k}">${v} ${n(k)}</button>`).join("");
   const q = T.q.toLowerCase();
@@ -431,8 +431,15 @@ function drawRuns() {
   T.page = Math.min(T.page, pages - 1);
   const shown = rows.slice(T.page * T.size, T.page * T.size + T.size);
   const STAGES = 11;
+  // as `stageStates` (run_model.ts): a failed run's stage is red, its report done once written
+  const stageState = (r, i) => {
+    const f = r.failedAt ?? null;
+    if (f !== null && i === f) return "failed";
+    if (f !== null && i === STAGES - 1 && r.verdict != null) return "done";
+    return i <= r.stageIndex ? "done" : i === r.stageIndex + 1 ? (r.live || r.status === "running" ? "current" : r.status === "needs-you" || r.status === "agent" ? "halt" : "") : "";
+  };
   $("#runs-body").innerHTML = shown.length ? shown.map((r) => {
-    const dots = Array.from({ length: STAGES }, (_, i) => `<span class="stg ${i <= r.stageIndex ? "done" : i === r.stageIndex + 1 ? (r.live || r.status === "running" ? "current" : r.status === "needs-you" || r.status === "agent" ? "halt" : "") : ""}"></span>`).join("");
+    const dots = Array.from({ length: STAGES }, (_, i) => `<span class="stg ${stageState(r, i)}"></span>`).join("");
     const pill = r.live || r.status === "running" ? `<span class="pill b-running"><span class="dot-live"></span>running</span>` : `<span class="pill b-${r.status}">${STATUS_WORD[r.status]}</span>`;
     return `<tr class="row" data-slug="${esc(r.slug)}" tabindex="0"><td class="t">${esc(r.title)}${r.unread ? ` <span class="msg-new" title="The agent wrote on this paper's page">● ${r.unread} new message${r.unread > 1 ? "s" : ""}</span>` : ""}<small>${esc(r.slug)}${r.authors ? ` · ${esc(r.authors)}` : ""}</small></td>
       <td><div class="stages" title="${esc(r.stage)}">${dots}</div></td><td class="st">${pill}<small title="${esc(r.headline)}">${tex(r.headline)}</small></td><td class="mono" style="white-space:nowrap;color:var(--ink-faint)">${ago(r.updatedAt)}${r.tokens ? `<small title="${esc(tokenLine(r.tokens))}">${esc(tokens(r.tokens.input))} in · ${esc(tokens(r.tokens.output))} out</small>` : ""}</td><td class="sh">${shareCellHTML(r)}</td></tr>`;
@@ -832,12 +839,12 @@ async function showPaper(slug, first) {
         <div class="pm-legend"><span class="pm-key"><i class="pm-sw err"></i>needs revision</span><span class="pm-key"><i class="pm-sw minor"></i>clarification</span><span class="pm-key"><i class="pm-sw top"></i>key result</span><span class="pm-key"><i class="pm-dotk"></i>needs you</span><span class="pm-key"><i class="pm-dotk lean"></i>Lean proved</span></div>
         <p class="pm-note">An arrow reads “used by”: main results sit on top. Click a result for its links; double-click to jump to it.</p><div class="pm-card" id="pm-card" hidden></div></aside>
       <article class="paper" id="article"><div class="byline" id="byline"></div><h1 class="ptitle" id="ptitle"></h1><div class="authors" id="pauthors"></div><div id="status"></div>
-        <div class="rtool" role="toolbar" aria-label="Review"><span class="lbl">Markup</span><span class="seg" id="markup" role="group"><button type="button" data-m="all" aria-pressed="true" title="Red: the printed text. Blue: the revision.">All markup</button><button type="button" data-m="simple" aria-pressed="false" title="The revised text; a bar in the margin marks each change.">Revised</button><button type="button" data-m="original" aria-pressed="false">Original</button></span><span class="chips" id="chips"></span><span class="nav-changes"><button type="button" id="prev-c" aria-label="Previous">↑</button><span id="c-pos">—</span><button type="button" id="next-c" aria-label="Next">↓</button></span></div>
-        <div class="render-check" id="render-check"></div><div id="paper-body"><p class="loading">Loading…</p></div><div id="promo"></div></article>
+        <div class="rtool" role="toolbar" aria-label="Review"><span class="lbl">Markup</span><span class="seg" id="markup" role="group"><button type="button" data-m="all" aria-pressed="true" title="Red: the printed text. Blue: the revision.">All markup</button><button type="button" data-m="simple" aria-pressed="false" title="The revised text; a bar in the margin marks each change.">Revised</button><button type="button" data-m="original" aria-pressed="false">Original</button><button type="button" data-m="report" aria-pressed="false" hidden title="The run's report: what was wrong, what was done about it, and what was proved in Lean.">Report</button></span><span class="chips" id="chips"></span><span class="nav-changes"><button type="button" id="prev-c" aria-label="Previous">↑</button><span id="c-pos">—</span><button type="button" id="next-c" aria-label="Next">↓</button></span></div>
+        <div class="render-check" id="render-check"></div><div id="paper-body"><p class="loading">Loading…</p></div><div id="report-body"></div><div id="promo"></div></article>
       <aside class="pv-rail" aria-label="PaperFormalizer comments"><div class="rail-head">PaperFormalizer <span id="rail-count"></span></div><p class="rail-off">Comments are hidden in this view.</p><div class="rail-cards" id="rail-cards"></div></aside></div>`;
     wirePaper();
     P.page = d0.data; P.detail = withDrawers(P.page, P.drawers);
-    drawHeader(); drawStages(); drawStatus();
+    drawHeader(); drawStages(); drawStatus(); syncReportTab();
   }
   wP.then((w) => {
     if (!here() || P.built !== slug || P.drawers === w.data) return;
@@ -869,7 +876,7 @@ async function showPaper(slug, first) {
     // inputs are everything it reads from the run's detail; all of them read the paper.
     const stale = (part, ...inputs) => { const k = inputs.join("\n"); const was = P.drawn[part]; P.drawn[part] = k; return paperChanged || was !== k; };
     const results = JSON.stringify(P.page.results);
-    drawHeader(); drawStages(); drawStatus();
+    drawHeader(); drawStages(); drawStatus(); syncReportTab();
     if (stale("marks", results, D.summary.live)) { drawBadges(); drawProofOnlyNotes(); }
     if (stale("map", results)) drawMap();
     // (the cards that said "sent" were drawn outside this bookkeeping: drawn again when that is over)
@@ -1021,15 +1028,44 @@ function reportChunks(md, size = 20000) {
 /** The report in the drawer, a piece at a time: the first pieces at once, each later one as it nears
  *  the drawer's view — a long report (a megabyte, thousands of formulas) would otherwise be typeset
  *  whole before anything shows. */
-function drawReport(md) {
-  const host = $("#d-body"), parts = reportChunks(md);
+function drawReport(md, host = $("#d-body"), root = host) {
+  const parts = reportChunks(md);
   host.innerHTML = `<div class="report">${parts.map((p, i) => `<section class="rpart" data-i="${i}" style="min-height:${Math.min(4000, Math.ceil(p.length / 90) * 1.2)}em"></section>`).join("")}</div>`;
   const fill = (sec) => { if (sec.dataset.done) return; sec.dataset.done = "1"; sec.innerHTML = reportHTML(parts[Number(sec.dataset.i)]); sec.style.minHeight = ""; };
   const secs = $$(".rpart", host);
   secs.slice(0, 2).forEach(fill);
   if (!window.IntersectionObserver) { secs.forEach(fill); return; }
-  const io = new IntersectionObserver((ents) => { for (const en of ents) if (en.isIntersecting) { io.unobserve(en.target); fill(en.target); } }, { root: host, rootMargin: "1500px 0px" });
+  const io = new IntersectionObserver((ents) => { for (const en of ents) if (en.isIntersecting) { io.unobserve(en.target); fill(en.target); } }, { root, rootMargin: "1500px 0px" });
   secs.slice(2).forEach((x) => io.observe(x));
+}
+/* The Report tab, beside the markup views: offered once the run's report is written (a run sent back
+   has none), and kept current while it shows — a report written again is drawn anew. */
+function syncReportTab() {
+  const b = $('#markup [data-m="report"]'); if (!b) return;
+  const has = !SNAP && P.detail?.summary?.verdict != null, on = $("#pv")?.classList.contains("m-report");
+  b.hidden = !has;
+  if (on) has ? showReportTab() : setMarkup("all");
+}
+/** The run's report in place of the paper (`/api/runs/<slug>/report`), under the path it is saved at. */
+async function showReportTab() {
+  const slug = S.slug, host = $("#report-body");
+  if (!host) return;
+  if (host.dataset.slug !== slug) host.innerHTML = `<p class="loading">Loading…</p>`;
+  try {
+    const { data, changed } = await api(`/api/runs/${encodeURIComponent(slug)}/report`);
+    if (S.slug !== slug || host !== $("#report-body") || !$("#pv")?.classList.contains("m-report")) return;
+    if (!changed && host.dataset.slug === slug) return;
+    host.dataset.slug = slug;
+    host.innerHTML = `<p class="report-where">Saved at <code>${esc(data.path)}</code></p><div id="report-md"></div>`;
+    drawReport(data.md, $("#report-md"), null);
+  } catch (err) { delete host.dataset.slug; host.innerHTML = `<p class="none">The report could not be read: ${esc(err.message)}</p>`; }
+}
+/** Show the paper in markup view `m` (`all`, `simple`, `original`), or the run's report (`report`). */
+function setMarkup(m) {
+  $$("#markup button").forEach((x) => x.setAttribute("aria-pressed", String(x.dataset.m === m)));
+  const pv = $("#pv"); pv.classList.remove("m-all", "m-simple", "m-original", "m-report"); pv.classList.add(`m-${m}`);
+  if (m === "report") showReportTab();
+  layout();
 }
 async function openReport() {
   closeDrawer();
@@ -1183,15 +1219,19 @@ function drawStatusBox() {
     host.innerHTML = `<div class="status"><div class="line"><span class="pill b-running"><span class="dot-live"></span>running</span><h2>${tex(s.headline, P.paper?.macros)}</h2></div><p>This page updates as ${s.live ? "the run" : "it"} goes.</p>${s.live ? `<div class="actions"><button class="btn" type="button" id="stop-run">Stop the run</button></div>` : ""}</div>`;
     return;
   }
-  if (s.status === "done") {
+  if (s.status === "done" || s.status === "failed") {
     const b = s.buckets ? Object.entries(s.buckets).map(([k, v]) => `${v} ${bucketWord(k)}`).join(" · ") : "";
     // a finished paper can be shared on the public site; its last share is shown with where it stands
     const sh = d.share, shared = sh ? shareLineHTML(sh) : "";
     if (sh && !SHARE_FINAL.has(sh.status)) sharePoll(S.slug);
     // offered only for a bundle that can be shared; else a line says why (`shareable`)
-    const ready = s.shareable?.ok !== false;
+    // (a failed run that ended before its report has nothing to share: no shareable on file)
+    const canShare = s.shareable != null, ready = canShare && s.shareable.ok !== false;
     const share = ready ? `<button class="btn" type="button" id="share-run"${SHARING.has(S.slug) ? " disabled" : ""}>${SHARING.has(S.slug) ? "Sharing…" : sh ? "Share again" : "Share"}</button>` : "";
-    host.innerHTML = `<div class="status"><div class="line"><span class="pill b-done">report</span><h2>${tex(s.headline, P.paper?.macros)}</h2></div>${b ? `<p>${esc(b)}</p>` : ""}${shared || (ready ? `<p class="share-invite">Share your checked work to help other people: they can read what the check found in this paper and build on its Lean proofs.</p>` : "")}${ready ? "" : `<p class="share-invite">Not ready to share: ${esc(s.shareable.reason ?? "its bundle cannot be shared")}.</p>`}<div class="actions">${d.promotion && d.promotion.waiting ? `<button class="btn btn-primary" type="button" data-jump="promo-sec">Review results proposed for your toolkit</button>` : ""}${share}</div></div>`;
+    // (a failed run that ended before its report has none to read)
+    const report = s.verdict != null ? `<button class="btn" type="button" data-open-report>Read the report</button>` : "";
+    const where = s.verdict != null ? `<p class="report-where">The report is saved in your toolkit at <code>runs/${esc(S.slug)}/report.md</code>.</p>` : "";
+    host.innerHTML = `<div class="status"><div class="line">${s.status === "failed" ? `<span class="pill b-failed">failed</span>` : `<span class="pill b-done">report</span>`}<h2>${tex(s.headline, P.paper?.macros)}</h2></div>${b ? `<p>${esc(b)}</p>` : ""}${where}${shared || (ready ? `<p class="share-invite">Share your checked work to help other people: they can read what the check found in this paper and build on its Lean proofs.</p>` : "")}${ready || !canShare ? "" : `<p class="share-invite">Not ready to share: ${esc(s.shareable.reason ?? "its bundle cannot be shared")}.</p>`}<div class="actions">${d.promotion && d.promotion.waiting ? `<button class="btn btn-primary" type="button" data-jump="promo-sec">Review results proposed for your toolkit</button>` : ""}${report}${share}</div></div>`;
     return;
   }
   if (s.status === "needs-you") {
@@ -1469,10 +1509,7 @@ function filterCards() { $$("#rail-cards .card").forEach((c) => c.classList.togg
 
 function wirePaper() {
   $("#markup").addEventListener("click", (e) => {
-    const b = e.target.closest("[data-m]"); if (!b) return;
-    $$("#markup button").forEach((x) => x.setAttribute("aria-pressed", String(x === b)));
-    const pv = $("#pv"); pv.classList.remove("m-all", "m-simple", "m-original"); pv.classList.add(`m-${b.dataset.m}`);
-    layout();
+    const b = e.target.closest("[data-m]"); if (b) setMarkup(b.dataset.m);
   });
   $("#chips").addEventListener("click", (e) => { const c = e.target.closest("[data-chip]"); if (!c) return; P.off.has(c.dataset.chip) ? P.off.delete(c.dataset.chip) : P.off.add(c.dataset.chip); c.setAttribute("aria-pressed", String(!P.off.has(c.dataset.chip))); filterCards(); });
   $("#prev-c").addEventListener("click", () => step(-1));
@@ -1503,7 +1540,7 @@ function wirePaper() {
     activate(card.dataset.card, wide());
   });
   $("#rail-cards").addEventListener("mouseover", (e) => { const c = e.target.closest(".card"); link(c ? c.dataset.card : P.open); });
-  $("#toc").addEventListener("click", (e) => { const a = e.target.closest("a[data-sec]"); if (!a) return; e.preventDefault(); const t = document.getElementById(a.dataset.sec); if (t) reveal(t); });
+  $("#toc").addEventListener("click", (e) => { const a = e.target.closest("a[data-sec]"); if (!a) return; e.preventDefault(); if ($("#pv").classList.contains("m-report")) setMarkup("all"); const t = document.getElementById(a.dataset.sec); if (t) reveal(t); });
   $("#article").addEventListener("click", async (e) => {
     if (e.target.id === "stop-run") {
       if (!(await confirmRun("Stop the run", `<p>The runner stops its workers and the run can be resumed later.</p>`, "Stop"))) return;
@@ -1522,6 +1559,8 @@ function wirePaper() {
     if (e.target.id === "repair-recs") { acceptRepairRecs(); return; }
     if (e.target.id === "resume-plain") runAction({ kind: "resume" }, "Resume the run");
     if (e.target.id === "share-run") { shareRun(); return; }
+    // the finished run's status box points at its report
+    if (e.target.closest("[data-open-report]")) { setMarkup("report"); $(".rtool")?.scrollIntoView({ block: "start", behavior: "smooth" }); return; }
     if (e.target.id === "orch-how") { await confirmRun("Attach an agent session", noOrchHTML(S.slug), "OK"); return; }
     const mg = e.target.closest("[data-msg]");
     if (mg) {
@@ -2461,7 +2500,7 @@ const unreachableHTML = (slug) => (SHARE_DOWN.has(slug) ? `<p class="share-warn"
 /** A paper's share in the list's Share column: the button of a finished paper never shared (or
  *  whose last share was refused or expired), else where its last share stands. */
 function shareCellHTML(r) {
-  if (r.status !== "done") return "";
+  if (r.status !== "done" && !(r.status === "failed" && r.shareable)) return "";
   const sh = r.share, busy = SHARING.has(r.slug);
   const btn = (label) => r.shareable?.ok === false
     ? `<span class="pill b-neutral" title="${esc(r.shareable.reason ?? "its bundle cannot be shared")}">not ready</span>`

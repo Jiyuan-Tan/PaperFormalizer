@@ -15,8 +15,17 @@ import {
   clearChildrenFile,
   setStoppingForTest,
   stopRecordedRun,
+  untaggedEnv,
+  CALL_TAG_ENV,
+  RUN_TAG_ENV,
   type ChildrenFile,
 } from "../../src/shared/child_registry.js";
+
+describe("untaggedEnv", () => {
+  it("leaves out the run's and the call's tags (a browser opened for the owner is no leftover of the run), nothing else", () => {
+    expect(untaggedEnv({ PATH: "/bin", [RUN_TAG_ENV]: "1-x:2", [CALL_TAG_ENV]: "c", HOME: "/h" })).toEqual({ PATH: "/bin", HOME: "/h" });
+  });
+});
 import { mapLimit } from "../../src/formalization/reviewer_verdicts.js";
 import { spawnWithInactivityTimeout } from "../../src/workers/spawn.js";
 import { parseVerifyArgsForTest } from "../../src/verify/cli.js";

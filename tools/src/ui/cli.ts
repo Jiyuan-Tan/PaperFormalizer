@@ -3,6 +3,7 @@ import { randomBytes } from "node:crypto";
 import { spawn } from "node:child_process";
 import { existsSync, mkdirSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import path from "node:path";
+import { untaggedEnv } from "../shared/child_registry.js";
 import { loadToolkitConfig, type ToolkitConfig } from "../toolkit/config.js";
 import { startUiServer, type UiServer } from "./server.js";
 
@@ -90,7 +91,8 @@ export function openBrowser(url: string, env: NodeJS.ProcessEnv = process.env, p
     [cmd, args] = [found, [url]];
   }
   try {
-    const child = spawn(cmd, args, { detached: true, stdio: "ignore", windowsHide: true });
+    // (untagged: the browser outlives this process, whose exit reaps what carries its tag)
+    const child = spawn(cmd, args, { detached: true, stdio: "ignore", windowsHide: true, env: untaggedEnv() });
     child.on("error", () => {});
     child.unref();
     return true;

@@ -50,7 +50,7 @@ repository and the toolkit (your harness's scratch directory, else one under the
 ```
 npx tsx bin/paperformalizer.ts verify <paper.tex|dir|archive> [--toolkit <path>] [--slug s] [--main relpath]
     [--targets l1,l2] [--resume] [--from-stage V1|V1.5|F1|F1.5|F2|F2.5|F5|V6] [--fresh-review] [--from-transcript]
-    [--stop-after <stage>] [--clear-gate <flag>]... [--defer-proposals] [--debug | --full-auto] [--dry-run]
+    [--stop-after <stage>] [--clear-gate <flag>]... [--defer-proposals] [--debug | --full-auto] [--persist] [--dry-run]
     [the answers of "Halt options", each with --resume]
 npx tsx bin/paperformalizer.ts verify --stop --slug s [--toolkit <path>]
 node tools/scripts/orch.mjs <watch|decided|handled|ask|reply|recommend|done|detach> <slug> --toolkit <path> …
@@ -100,10 +100,11 @@ attach is yours too.
 | a garden item that retires or removes a result | the user | put it to them in plain words ("V6 and the promotion rounds") |
 | whether to continue past a ceiling: the proof loop's 300 iterations (the halt says `[iteration-ceiling]`) or F5's one-hour lake limit (`[f5-time-limit]`) | the user | ask (`orch.mjs ask`, giving what the halt states) and wait; never end the run on your own. Yes → `--resume --clear-gate proof_loop_cap_hit` (the count resets), at F5 a plain `--resume` (lake gets a fresh hour; built modules are kept); no → report the run as it stands, at F5 leave it halted |
 | on a run the user started with `--full-auto` (`state.json` `full_auto`), all of the above | you | recommend on every item as above, with the same care: the recommendation that completes a decision carries it out (a resume with the rulings, or `propose --apply --recommended`) and lists it for the user's review; any other weakening ruling you make, enter and record with `orch.mjs decided` ("Full auto: …"); `ask` only with `--owner-only`, for what only they can give. Never turn it on yourself |
+| ending a run before its Lean is complete: the Lean it needs is out of reach (F1 `blocked-infeasible`; a missing item or a proof-loop `build-substrate` escalation that is a whole theory, not definitions or lemmas to build under `Papers/<Slug>/`) | the user; on `--full-auto`, you; on `--persist` (`state.json` `persist`, set by the user, never by you), no one: only the user can lift it | first ask whether the proof needs that theory: a helper of the plan (`provenance: agent-introduced` in `graph.json`) is not a result of the paper, so take another route if there is one. Then confirm it (search Mathlib, the base libraries, the toolkit); post the reason on the page and wait (`ask`, unless on full auto: `decided`); on their yes `--resume --from-stage V6`: the report checks nothing in Lean and the run shows as failed at that stage. On `--persist` keep building, past the ceilings too, however long it takes. Never leave such a run halted or idle, never edit `state.json` |
 | everything else | you | decide and resume; on a run the user started with `--debug` (`state.json` `debug_mode`), bring a hard call to them first (`orch.mjs ask`) |
 
-**The user decides two things (unless they started the run with `--full-auto`): anything that would weaken a main result, at every stage, and what enters their
-toolkit. Every other ruling is yours.** Weakening is wider than a fixer's suggested repair: when
+**The user decides three things (unless they started the run with `--full-auto`): anything that would weaken a main result, at every stage, what enters their
+toolkit, and whether a run ends before its Lean is complete. Every other ruling is yours.** Weakening is wider than a fixer's suggested repair: when
 a ruling of yours at any halt — the Lean stages included — would leave a main result's verified statement weaker than
 the paper prints it (`--add-condition` on it, a `--reject-finding` reading or a `--reject-rewind` ruling that narrows
 it, a condition a proof needs that the paper does not state), do not make it. Re-derive it against the paper's tex,
@@ -228,8 +229,8 @@ the plan or the paper by hand; a sub-agent driving a run reports a directive's t
 | Event | Action |
 |---|---|
 | F1.5 checkpoint on the first plan | read `formalization/formalization.md` and `plan.json`; check depth (every result and step the paper owns is `define-local`; nothing hard relabelled cited or deferred), reuse (each bypass says why), fidelity (the corrected paper's statement, its hypotheses and pins, nothing the paper does not grant). A defect: `--from-stage F1`; else `--resume` |
-| F1.5 REVIEW HALT (`flags.general_review_halt`), or F1 answers `blocked` | read `reviews/stage_1.5_to_1_attempt<N>.json` and rule: a paper error → `discovery/patches.json`, `--from-stage V1.5`; a plan defect F1 did not fix → your directive in `flags.f1_revise_directive`, `--from-stage F1`; a finding you rule out → `--from-stage F2`; each with `--clear-gate general_review_halt`. A plain resume is refused, and one that only clears the gate re-runs the reviewer on the same plan, with no record of your ruling |
-| F2 `MISSING ARCHITECTURE BLOCKED` | build each item of `flags.missing_architecture_items` under `Papers/<Slug>/` at its suggested location, check it, `--resume`. An item F2 does not need: delete it from the list and say why in `flags.f2_scaffold_directive` |
+| F1.5 REVIEW HALT (`flags.general_review_halt`), or F1 answers `blocked` | read `reviews/stage_1.5_to_1_attempt<N>.json` and rule: a paper error → `discovery/patches.json`, `--from-stage V1.5`; a plan defect F1 did not fix → your directive in `flags.f1_revise_directive`, `--from-stage F1`; a finding you rule out → `--from-stage F2`; each with `--clear-gate general_review_halt`; machinery out of reach → end the run ("Who decides"). A plain resume is refused, and one that only clears the gate re-runs the reviewer on the same plan, with no record of your ruling |
+| F2 `MISSING ARCHITECTURE BLOCKED` | build each item of `flags.missing_architecture_items` under `Papers/<Slug>/` at its suggested location, check it, `--resume`. An item F2 does not need: delete it from the list and say why in `flags.f2_scaffold_directive`. A whole theory out of reach: end the run ("Who decides") |
 | the F1↔F1.5 budget runs out on one entry after a plan-gate bounce | read the pending `flags.scaffold_redirect`: rewrite a finding that asks for a shape the gate refuses into one inside the planned kind |
 | loop escalation `scaffold-mismatch` (Lean-side) and the reviewer is right | write `flags.scaffold_redirect`: the directive, then the line `Declarations to edit (one obj_id per line, verbatim):` and one `- <node id>` per declaration; `--resume` |
 | `scaffold-mismatch` and the reviewer is wrong | `--resume` re-reviews (the flip row below), the only lever here; a reviewer that keeps misreading is a prompt defect — record it in `pipeline_issues.md` and fix it as "When the pipeline itself fails" says |
@@ -316,8 +317,7 @@ the witness (plug the numbers in, or exhibit the counterexample in the paper's o
 
 Report in that order. Where a published version exists, checking whether it still has the error is worth one download.
 Distinguish "the theorem is false in its stated generality" from "the displayed constant is off" — both are errors,
-they are not the same finding. Referee grades vary between passes on borderline items: the stable core (a witness you
-can run) is what you report.
+they are not the same finding. Referee grades vary between passes on borderline items: the stable core (a witness you can run) is what you report.
 
 ## When the pipeline itself fails (you are the safety net)
 

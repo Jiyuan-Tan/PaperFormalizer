@@ -20,6 +20,16 @@ describe("checkpoint playbook", () => {
     expect(weakeningRepairGuidance(true)).toContain("never rule on it yourself");
   });
 
+  it("a --persist run is told to build at every halt, ahead of the exits it overrides; other runs hear nothing of it", () => {
+    const flags = { missing_architecture: true };
+    const persisted = checkpointGuidance("2", "checkpoint", flags, true, "", true)!;
+    expect(persisted.startsWith("⚙ PERSIST")).toBe(true);
+    expect(persisted).toContain("Machinery out of reach");
+    for (const stage of ["1", "2", "2.5", "3", "4", "5"] as const) expect(checkpointGuidance(stage, "checkpoint", {}, true, "", true) ?? "⚙ PERSIST").toContain("⚙ PERSIST");
+    expect(checkpointGuidance("2", "checkpoint", flags, true)).not.toContain("PERSIST");
+    expect(checkpointGuidance("3", "checkpoint", {}, true, "", false)).toContain("not a checkpoint ruling");
+  });
+
   it("an F5 halt is a refusal: the reminder names the gate that refused, never 'F5 done'", () => {
     const of = (message: string, auto = false) => checkpointGuidance("5", "checkpoint", {}, auto, message)!;
     expect(of("F5 delivery audit REFUSED: cited-mismatch @ lem:a: x")).toMatch(/DELIVERY AUDIT REFUSED[\s\S]*--from-stage F2\.5/);

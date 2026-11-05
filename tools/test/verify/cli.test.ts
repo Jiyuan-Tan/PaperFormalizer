@@ -33,6 +33,8 @@ describe("paperformalizer verify argument parsing", () => {
       auto: true,
       debug: false,
       fullAuto: false,
+      persist: false,
+      noPersist: false,
       deferProposals: false,
       dryRun: false,
       stop: false,
@@ -128,6 +130,8 @@ describe("paperformalizer verify argument parsing", () => {
       auto: true,
       debug: false,
       fullAuto: false,
+      persist: false,
+      noPersist: false,
       deferProposals: true,
       dryRun: true,
       stop: false,
@@ -179,6 +183,13 @@ describe("paperformalizer verify argument parsing", () => {
 
   it("a dry run ends by naming the directory it left, to delete", () => {
     expect(dryRunLeftover("/tk/runs/smoke")).toMatch(/dry run: it wrote \/tk\/runs\/smoke .* delete the directory/);
+  });
+
+  it("--persist and --no-persist exclude each other, and --stop takes neither", () => {
+    expect(parse(["--resume", "--slug", "s", "--persist"])).toMatchObject({ persist: true, noPersist: false });
+    expect(parse(["--resume", "--slug", "s", "--no-persist"])).toMatchObject({ persist: false, noPersist: true });
+    expect(() => parse(["--resume", "--slug", "s", "--persist", "--no-persist"])).toThrow(/exclude each other/);
+    expect(() => parse(["--stop", "--slug", "s", "--persist"])).toThrow(/--stop combines only/);
   });
 
   it("auto mode is the default; --auto changes nothing; --debug turns it off, never with --full-auto; --stop takes neither", () => {

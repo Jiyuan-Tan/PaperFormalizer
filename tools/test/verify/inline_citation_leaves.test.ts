@@ -23,6 +23,7 @@ import type { V15NodeVerdict, V15Review } from "../../src/verify/types.js";
 import { tk } from "../toolkit/helpers.js";
 import { coreWhere } from "../../src/ui/run_model.js";
 import { applyEdits, planAnnotations } from "../../src/verify/annotated_paper.js";
+import { correctedTex } from "../../src/verify/corrected_tex.js";
 import { citedSourceOfRecord, excerptAround, resolveCitedSources } from "../../src/verify/cited_sources.js";
 import { resultTexName } from "../../src/verify/core_graph.js";
 import { applyPatchFile, validatePatchFile, type PatchFile } from "../../src/verify/patches.js";
@@ -439,6 +440,41 @@ describe("a core with an inline cited leaf, downstream", () => {
     // … named as the cited result's condition, never read as a hypothesis of the host
     expect(out).toMatch(/For a result cited in the proof of Lemma~\\ref\{lem:a\}: Here the cited theorem/u);
     expect(plan.records.find((r) => r.kind === "condition added")).toMatchObject({ node: "lem:k-thm-2", located_by: "after-env" });
+  });
+
+  // live neural-causal-pi: a cited result restated by its repair, its passage rewritten by the host's
+  // proof ops, was "not found" twice (statement, proof) — blocking TODO items
+  it("a leaf restated by its repair whose passage the host's proof ops replace is shown by the host's step", () => {
+    const body = "The bound $a \\le b$ holds.";
+    const proof = "We start from the definition. By \\citep[Theorem 2]{k} we get $a \\le c$. Since $c \\le b$ the claim follows.";
+    const TEX = ["\\documentclass{article}", "\\begin{document}", "\\begin{lemma}\\label{lem:a}", body, "\\end{lemma}", "\\begin{proof}", proof, "\\end{proof}", "\\end{document}"].join("\n");
+    const env: TexEnv = { id: "lem:a", kind: "lemma", envName: "lemma", label: "lem:a", title: null, body, proof, lines: { file: "main.tex", from: 3, to: 5, env: "lemma", label: "lem:a" }, proofLines: { file: "main.tex", from: 6, to: 8, env: "proof", label: null }, refs: [] };
+    const envs: EnvsJson = { main_file: "main.tex", files: ["main.tex"], newtheorem: {}, envs: [env], bibliography: [{ key: "k", text: "k" }] };
+    const s = citationSites(envs, ["lem:a"])[0]!;
+    const ref = RefCoreSchema.parse({ qid: "q", target_estimand: "t", statements: [{ id: "lem:a", kind: "lemma", env: "lem:a" }], proof_citations: [{ id: "lem:k-thm-2", site: s.id, units: [s.units[0], s.units[0]] }] });
+    const transcribed = materializeRefCore(ref, envs, TEX).core;
+    const base = { files: { "main.tex": TEX }, envs, flatText: TEX, lineMap: TEX.split("\n").map((_, i) => ({ file: "main.tex", line: i + 1 })), refs: ref, transcribed, core: transcribed, paperErrors: {}, findings: [], review: null, pending: null };
+    const leaf = { node: "lem:k-thm-2", corrected_statement: "By \\citep[Theorem 2]{k}, for a bounded class, $a \\le 2c$.", ops: [], proof_note: "This is Theorem 2 of \\citep{k}.", owner_explanation: "The cited theorem gives $a \\le 2c$." };
+    const host = { node: "lem:a", corrected_statement: null, ops: [{ op: "replace", unit: s.units[0], tex: "By \\citep[Theorem 2]{k} we get $a \\le 2c$." }], proof_note: "" };
+    const file = (ps: object[]) => ({ key_results: ["lem:a"], key_contribution: "k", unfixable: [], patches: ps }) as never;
+    const plan = planAnnotations({ ...base, patches: file([leaf, host]) } as never);
+    expect(plan.unlocated).toEqual([]);
+    expect(plan.records.filter((r) => r.node === "lem:k-thm-2").map((r) => r.located_by)).toEqual(["host-revised"]);
+    // the annotated paper: the leaf's note after the host's proof
+    const out = applyEdits(TEX, plan.edits["main.tex"] ?? []);
+    expect(out.indexOf("For a result cited in the proof of Lemma~\\ref{lem:a}: The cited theorem gives")).toBeGreaterThan(out.indexOf("\\end{proof}"));
+    // the corrected paper: the host's corrected step once, the leaf's restatement and its proof note nowhere
+    const view = planAnnotations({ ...base, patches: file([leaf, host]), correctedView: true } as never);
+    const r = correctedTex(applyEdits(TEX, view.edits["main.tex"] ?? []), { proofEnv: true });
+    expect(r.tex.split("we get $a \\le 2c$.")).toHaveLength(2);
+    expect(r.tex).not.toContain("for a bounded class");
+    expect(r.tex).not.toContain("This is Theorem 2");
+    expect(r.items.filter((i) => i.kind === "unplaced" || i.kind === "second-proof")).toEqual([]);
+    // a host whose proof leaves the passage as printed does not show it — no op on it, or an insertion
+    // after it (the op reprints it) — still reported
+    for (const ops of [[], [{ ...host.ops[0]!, tex: "By \\citep[Theorem 2]{k} we get $a \\le c$. Moreover $c \\ge 0$." }]]) {
+      expect(planAnnotations({ ...base, patches: file([leaf, { ...host, ops }]) } as never).unlocated.map((u) => u.node)).toContain("lem:k-thm-2");
+    }
   });
 
   // live wss: "with no cited node of its own" was said of the lemma the paper states as that cited result

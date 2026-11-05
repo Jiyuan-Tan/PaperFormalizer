@@ -349,6 +349,8 @@ definition the agent left weaker is listed on the page for your review. To hand 
 well, start the run with `--full-auto`: each decision then takes the agent's recommendation and is
 listed for your review afterwards. Every other halt the agent rules on itself, without asking you
 (auto mode, the default); start the run with `--debug` to have it bring a hard call to you instead.
+A run whose Lean needs a theory nobody has built can end as incomplete; start it (or resume it) with
+`--persist` to have the agent build that theory instead, however long it takes.
 If a cited source cannot be
 fetched, the agent asks you for it. You can write to the agent from the page at any time ("Message the
 agent"), with files attached.

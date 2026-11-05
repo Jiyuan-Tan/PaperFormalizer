@@ -46,10 +46,12 @@ export async function runDocstringsCli(argv: string[]): Promise<void> {
   const ctx: PipelineContext = { repoRoot: cfg.toolkitRoot, toolkit: cfg, qid: TOOLKIT_DOCSTRINGS_RUN, dryRun: false, resume: false };
   ensureLogsDir(ctx.repoRoot, ctx.qid);
   console.log(`[docstrings] ${modules.length} module(s) of ${cfg.toolkitRoot}`);
-  const block = await documentModules({
+  const outcome = await documentModules({
     ctx, deps: defaultDeps(ctx), modules, prefix: cfg.lib,
     outDir: formalizationDir(ctx.repoRoot, ctx.qid), label: "toolkit",
   });
+  // Nothing runs beside it here: the build confirming the edits is awaited at once.
+  const block = outcome.block ?? (outcome.confirm ? await outcome.confirm() : null);
   if (block) {
     console.error(block);
     process.exitCode = 1;
