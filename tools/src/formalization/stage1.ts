@@ -43,7 +43,7 @@ import { paperFormalizerToolsDir } from "../toolkit/config.js";
 import { laterStageEverRan } from "../shared/resume_mode.js";
 import { parseJsonWithEscapeRepair, parseJsonWithEscapeRepairStatus } from "../shared/codex_json.js";
 import { planCorePath } from "../paths.js";
-import { whatChangedBlock } from "./core_delta.js";
+import { coreDeltaLines, whatChangedBlock } from "./core_delta.js";
 import { BEYOND_SCOPE_KEY, coreChangeSeeds, namedNodeIds, nodeReferenceIndex, reviseAffectedNodeIds, reviseLookupBlock } from "./revise_scope.js";
 import { appendPipelineLog } from "../log.js";
 import { resetFormalizationLoopCounters } from "./loop_limits.js";
@@ -161,6 +161,17 @@ export function describeJsonSyntaxError(text: string): string | null {
   return null;
 }
 
+/** The runs whose F1, in THIS process, left the plan standing (NOTHING MOVED); read once by the F1.5
+ * entry right after it (`takePlanStood`). Never persisted: an F1.5 entered on its own is reviewed. */
+const PLAN_STOOD = new Set<string>();
+const planStoodKey = (ctx: PipelineContext): string => `${ctx.repoRoot}\u0000${ctx.qid}`;
+/** Whether this process's last F1 of the run left the plan standing; the record is consumed. */
+export function takePlanStood(ctx: PipelineContext): boolean {
+  return PLAN_STOOD.delete(planStoodKey(ctx));
+}
+
+
+
 export async function runStage1(args: {
   ctx: PipelineContext;
   state: StateJson;
@@ -235,6 +246,20 @@ export async function runStage1(args: {
     affected = reviseAffectedNodeIds(core, planOnDisk, stage1ReviseSeeds(core, { planCore, prior: args.priorReview ?? null, directive: f1Directive }));
     // The gate's hygiene violations go into THIS pass (a correction from the gate already lists them).
     const hygieneBlock = (args.priorReview as { classification?: string } | null | undefined)?.classification === "plan-gate" ? "" : planHygieneBlock(onDisk?.raw);
+    // NOTHING MOVED: a re-entry (a revision of the paper that left every node's record as it was, a
+    // rewind that changed nothing the plan reads) with no review or directive to answer, a clean plan
+    // on disk written from this very core — the plan stands, and no planner is called.
+    PLAN_STOOD.delete(planStoodKey(args.ctx));
+    // An explicit `--from-stage F1` (`flags.f1_replan_asked`, kept until a planner pass completes) and
+    // a blocked F1 (`flags.f1_blocked`: its ruling is still owed) plan, whatever moved.
+    const replanAsked = args.state.flags.f1_replan_asked === true || !!args.state.flags.f1_blocked;
+    if (!replanAsked && planCore && !args.priorReview && !f1Directive && !hygieneBlock && planOnDisk && coreDeltaLines(planCore, core).length === 0) {
+      PLAN_STOOD.add(planStoodKey(args.ctx));
+      const message = "F1: the core is unchanged since the plan on disk was written — the plan stands (no planner call).";
+      console.warn(`[paperformalizer] ${message}`);
+      await appendPipelineLog(args.ctx, { stage: "1", status: "revise-scope", duration_ms: 0, message });
+      return { stage: "1", status: "completed", message };
+    }
     reviseBlock = [
       planCore || !named ? whatChangedBlock(planCore, core) : "",
       hygieneBlock,
@@ -439,6 +464,7 @@ export async function runStage1(args: {
   // Only a completed pass records it — a blocked one left the plan on disk for the older core.
   if (parsed.status === "completed" && parsedPlan?.success) {
     await writeFile(planCorePath(args.ctx.repoRoot, args.ctx.qid), coreText, "utf8");
+    args.state.flags.f1_replan_asked = null;
   }
   if (planGateClean && f1Directive) {
     // why: keep the retry directive until F1 completed with a parsed, gate-clean plan.

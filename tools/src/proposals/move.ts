@@ -1,6 +1,7 @@
 // Round-B MOVE: cut a declaration closure out of the paper's Lean and put it into a toolkit
 // module, with the paper rewired to import it. `planMove` is the pure text transformation;
-// `applyMoveItem` carries one item out: journal, writes, gate. A failed gate restores nothing.
+// `gateMoveBatch` carries a batch of moves out: journal, writes, one gate; a batch that does not pass
+// is undone.
 //
 // The rules:
 //   - every declaration of the item (the accepted one and its `moves_with` closure) is cut from its
@@ -29,10 +30,10 @@ import { insertImportSorted } from "../toolkit/barrels.js";
 import { divisionBarrelPath, type ToolkitConfig } from "../toolkit/config.js";
 import { lintModuleHeader, formatLayoutFinding } from "../toolkit/layout_lint.js";
 import { declarationSpans, forbiddenLeanTokens, identifierTokens, leanImports, type DeclSpan } from "../toolkit/lean_source.js";
-import { appendDeclarations, emptyLedger, parseLedger, serializeLedger, type LedgerDeclaration } from "../toolkit/ledger.js";
+import { appendLedgerDeclarations, type LedgerDeclaration } from "../toolkit/ledger.js";
 import { maskLeanCommentsAndStrings } from "../shared/lean_mask.js";
 import { isLeanModuleFile } from "../shared/lean_syntax.js";
-import { axiomsProbeText, toolkitGateChain, type ApplyDeps, type PromotionJournal, type GateStep } from "./gate.js";
+import { axiomsProbeText, restoreJournal, toolkitGateChain, type ApplyDeps, type PromotionJournal, type GateStep } from "./gate.js";
 import { parseAxiomReport, CLEAN_AXIOMS } from "../verify/lean_evidence.js";
 import { DEFINITION_KINDS } from "./candidate_scan.js";
 
@@ -57,8 +58,11 @@ export interface MoveTarget {
 
 export interface MovePlanInput {
   cfg: Pick<ToolkitConfig, "lib" | "papersLib" | "toolkitRoot">;
-  /** Every `.lean` file of the paper (run barrel and `tmp/` excluded): absolute path → text. */
+  /** Every `.lean` file of the paper (run barrel and `tmp/` excluded), and the files of other
+   *  papers that may use its declarations (`findImporters`): absolute path → text. */
   paperFiles: ReadonlyMap<string, string>;
+  /** For a file of another paper: the declarations that paper declares (they shadow). */
+  shadowOf?: (file: string) => ReadonlySet<string> | undefined;
   /** Declarations of the item, dependencies first; the accepted one is `mainFrom`. */
   decls: readonly MoveDecl[];
   mainFrom: string;
@@ -85,6 +89,9 @@ export interface MovePlanInput {
 export interface MovePlan {
   /** Absolute path → new text, for the target module and every changed paper file. */
   writes: Map<string, string>;
+  /** The text each paper file in `writes` (this paper's or another's) held when the plan read it:
+   *  `writeMove` writes none of them over a change made since (a live run's edit). */
+  read?: Map<string, string>;
   targetAbs: string;
   created: boolean;
   /** The block appended to (or forming the body of) the target module. */
@@ -146,13 +153,56 @@ function resolutions(p: string, scope: Scope): string[] {
 export function rewriteReferences(
   text: string,
   renames: ReadonlyMap<string, string>,
-  opts: { skip?: ReadonlyArray<[number, number]>; scopeOverride?: Scope; relativeTo?: string } = {},
+  opts: {
+    skip?: ReadonlyArray<[number, number]>; scopeOverride?: Scope; relativeTo?: string;
+    /** Declarations the file's own paper declares (another paper that uses the moving one): a name
+     *  that denotes one of these first at its use site is that paper's own, never rewritten. */
+    shadow?: ReadonlySet<string>;
+  } = {},
 ): { text: string; count: number } {
   if (renames.size === 0) return { text, count: 0 };
-  const scopes = opts.scopeOverride ? null : lineScopes(text);
+  const scopeAt = opts.scopeOverride ? () => opts.scopeOverride! : scopeLookup(text);
+  const edits: Array<{ from: number; to: number; text: string }> = [];
+  for (const tok of identifierTokens(text)) {
+    if (opts.skip?.some(([a, b]) => tok.from >= a && tok.to <= b)) continue;
+    const parts = tok.text.split(".");
+    const r = resolvedPrefix(parts, scopeAt(tok.from), (n) => renames.has(n), opts.shadow);
+    if (!r) continue;
+    const rest = parts.slice(r.k).join(".");
+    const full = renames.get(r.hit)!;
+    // Written as it stands, the name already resolves to the new one first (a declaration's own
+    // header, or a sibling's short name, inside the namespace it moved to): nothing to rewrite.
+    const now = r.cands.indexOf(full);
+    if (now >= 0 && now < r.cands.indexOf(r.hit)) continue;
+    // Inside the moved block's own namespace a sibling is written by its short name.
+    const name = opts.relativeTo && full.startsWith(`${opts.relativeTo}.`) ? full.slice(opts.relativeTo.length + 1) : full;
+    edits.push({ from: tok.from, to: tok.to, text: `${name}${rest ? `.${rest}` : ""}` });
+  }
+  let out = text;
+  for (const e of edits.sort((a, b) => b.from - a.from)) out = out.slice(0, e.from) + e.text + out.slice(e.to);
+  return { text: out, count: edits.length };
+}
+
+/** Of `names` (fully qualified), those `text` refers to — resolved at each use site as
+ *  `rewriteReferences` resolves them (with the same `shadow`), so what this finds is what a move
+ *  would rewrite. */
+export function referencedNames(text: string, names: ReadonlySet<string>, shadow?: ReadonlySet<string>): Set<string> {
+  const out = new Set<string>();
+  if (names.size === 0) return out;
+  const scopeAt = scopeLookup(text);
+  for (const tok of identifierTokens(text)) {
+    const r = resolvedPrefix(tok.text.split("."), scopeAt(tok.from), (n) => names.has(n), shadow);
+    if (r) out.add(r.hit);
+  }
+  return out;
+}
+
+/** The scope in effect at each offset of `text`. */
+function scopeLookup(text: string): (offset: number) => Scope {
+  const scopes = lineScopes(text);
   const lineStarts: number[] = [0];
   for (let i = 0; i < text.length; i += 1) if (text[i] === "\n") lineStarts.push(i + 1);
-  const lineAt = (off: number) => {
+  return (off) => {
     let lo = 0;
     let hi = lineStarts.length - 1;
     while (lo < hi) {
@@ -160,34 +210,22 @@ export function rewriteReferences(
       if (lineStarts[mid]! <= off) lo = mid;
       else hi = mid - 1;
     }
-    return lo;
+    return scopes[lo]!;
   };
-  const edits: Array<{ from: number; to: number; text: string }> = [];
-  for (const tok of identifierTokens(text)) {
-    if (opts.skip?.some(([a, b]) => tok.from >= a && tok.to <= b)) continue;
-    const parts = tok.text.split(".");
-    const scope = opts.scopeOverride ?? scopes![lineAt(tok.from)]!;
-    for (let k = parts.length; k >= 1; k -= 1) {
-      const p = parts.slice(0, k).join(".");
-      const cands = resolutions(p, scope);
-      const hit = cands.find((r) => renames.has(r));
-      if (hit) {
-        const rest = parts.slice(k).join(".");
-        const full = renames.get(hit)!;
-        // Written as it stands, the name already resolves to the new one first (a declaration's own
-        // header, or a sibling's short name, inside the namespace it moved to): nothing to rewrite.
-        const now = cands.indexOf(full);
-        if (now >= 0 && now < cands.indexOf(hit)) break;
-        // Inside the moved block's own namespace a sibling is written by its short name.
-        const name = opts.relativeTo && full.startsWith(`${opts.relativeTo}.`) ? full.slice(opts.relativeTo.length + 1) : full;
-        edits.push({ from: tok.from, to: tok.to, text: `${name}${rest ? `.${rest}` : ""}` });
-        break;
-      }
-    }
+}
+
+/** The longest dotted prefix of an identifier (`parts`) that denotes a `known` name at its use
+ *  site: that name, how many parts it spans, and every name the prefix may denote there. A prefix
+ *  whose first resolution that exists is a `shadow` name (the file's own paper declares it) denotes
+ *  that declaration: none. */
+function resolvedPrefix(parts: readonly string[], scope: Scope, known: (n: string) => boolean, shadow?: ReadonlySet<string>): { hit: string; k: number; cands: string[] } | null {
+  for (let k = parts.length; k >= 1; k -= 1) {
+    const cands = resolutions(parts.slice(0, k).join("."), scope);
+    const first = cands.find((c) => known(c) || shadow?.has(c));
+    if (first && known(first)) return { hit: first, k, cands };
+    if (first) return null;
   }
-  let out = text;
-  for (const e of edits.sort((a, b) => b.from - a.from)) out = out.slice(0, e.from) + e.text + out.slice(e.to);
-  return { text: out, count: edits.length };
+  return null;
 }
 
 // ─── the plan ──────────────────────────────────────────────────────────────
@@ -477,18 +515,20 @@ export function planMove(input: MovePlanInput): MovePlan {
 
   // Paper edits: cut, rewrite references, import the target.
   const writes = new Map<string, string>([[targetAbs, targetText]]);
+  const read = new Map<string, string>();
   const cutByFile = new Map<string, Array<[number, number]>>();
   for (const l of located) cutByFile.set(l.file, [...(cutByFile.get(l.file) ?? []), [l.span.from, l.span.to]]);
   const newRenames = new Map(input.decls.map((d) => [d.from, d.to] as const));
   for (const [f, text] of input.paperFiles) {
     const cut = cutByFile.get(f);
     let t = cut ? removeRanges(text, cut) : text;
-    const r = rewriteReferences(t, newRenames);
+    const shadow = input.shadowOf?.(f);
+    const r = rewriteReferences(t, newRenames, shadow ? { shadow } : {});
     t = r.text;
     if (cut || r.count > 0) t = insertImportSorted(t, `public import ${target.module}`);
-    if (t !== text) writes.set(f, t);
+    if (t !== text) { writes.set(f, t); read.set(f, text); }
   }
-  return { writes, targetAbs, created: target.existingText === null, block, importsAdded };
+  return { writes, read, targetAbs, created: target.existingText === null, block, importsAdded };
 }
 
 function openedIn(context: readonly string[]): string[] {
@@ -496,31 +536,16 @@ function openedIn(context: readonly string[]): string[] {
     c.replace(/^open\s+(?:scoped\s+)?/, "").split(/\s*(?:\(|hiding\b|renaming\b)/)[0]!.trim().split(/\s+/).filter(Boolean));
 }
 
-// ─── carrying one item out ─────────────────────────────────────────────────
+// ─── writing a move, and its gate ──────────────────────────────────────────
 
-export interface MoveItemArgs {
+/** What writing one planned move needs (`writeMove`). */
+interface MoveWriteArgs {
   cfg: ToolkitConfig;
-  toolsDir: string;
-  slug: string;
-  proposalId: string;
-  /** The run barrel module (`Papers.<Pascal>`). */
-  paperModule: string;
   plan: MovePlan;
   target: MoveTarget;
-  decls: readonly MoveDecl[];
-  /** Headline declarations and their axioms before any move (`#print axioms` must not change). */
-  headlineBaseline: ReadonlyMap<string, readonly string[]>;
   ledgerEntries: LedgerDeclaration[];
-  /** Write-ahead journal of this apply (`runs/<slug>/proposals/move_journal.json`). */
-  journalFile: string;
-  /** Where the axioms probe is written (the run record, never the toolkit). */
-  probeFile: string;
   /** Index step; null = none (the lakefile check guarantees one on a live toolkit). */
   indexStep: GateStep | null;
-  /** Statement invariance (`invariance.ts`): the scan to run once everything builds, and what it
-   *  must show — a failure reason, or null. Absent: not checked (no hashes before the move). */
-  invariance?: { cmd: string; check: () => string | null };
-  now?: Date;
 }
 
 function sha256(text: string): string {
@@ -547,68 +572,154 @@ export function moveAxiomsFailure(log: string, moved: readonly string[], baselin
   return bad.length ? bad.join("\n  ") : null;
 }
 
-/** What the gate needs of a move: where it went, what must stay true. */
-export type MoveGateArgs = Pick<MoveItemArgs, "cfg" | "toolsDir" | "proposalId" | "paperModule" | "target" | "decls" | "headlineBaseline" | "probeFile" | "indexStep" | "invariance">;
+/**
+ * Of other papers' `modules` — the ones a move is about to rewrite — those that do not build now:
+ * one `lake build` per paper, run inside the move's Lake hold before its first write (so it is
+ * current, and usually up to date). A failure counts every module asked of that paper: Lake names
+ * the module that fails, never one whose import it breaks (in that paper or a third one).
+ */
+export async function brokenBefore(cfg: Pick<ToolkitConfig, "toolkitRoot">, d: Pick<ApplyDeps, "run">, modules: readonly string[]): Promise<Set<string>> {
+  const byPaper = new Map<string, string[]>();
+  for (const m of modules) {
+    const paper = m.split(".").slice(0, 2).join(".");
+    byPaper.set(paper, [...(byPaper.get(paper) ?? []), m]);
+  }
+  const broken = new Set<string>();
+  for (const mods of byPaper.values()) {
+    const r = await d.run(`lake build ${mods.join(" ")}`, cfg.toolkitRoot);
+    if (r.code !== 0 || r.timedOut) for (const m of mods) broken.add(m);
+  }
+  return broken;
+}
+
+/** Of other papers' modules a move rewrote, those its gate builds: not the ones broken before it. */
+export function gatedOthers(modules: readonly string[], broken?: ReadonlySet<string>): string[] {
+  return broken ? modules.filter((m) => !broken.has(m)) : [...modules];
+}
 
 /**
- * The gate of a move, on the files as they stand: `lake build <lib>`, `lake build <paper>
- * <papers_lib>`, statement invariance, `#print axioms` (moved declarations clean, headlines
- * unchanged), module headers, toolkit layout, toolkit index. Stops at the first failing step.
+ * The modules that fail in a `lake build` log, as Lake names them: `✖ [i/n] … <Module>` lines and
+ * `error: <path>.lean:<line>` diagnostics (the path read as a module; Lake writes it `./././Papers/…`). Sorted.
  */
-export async function runMoveGate(args: MoveGateArgs, d: ApplyDeps, logs: string[]): Promise<{ ok: true } | { ok: false; timedOut?: boolean; why: string }> {
-  const { cfg } = args;
-  const moved = args.decls.map((x) => x.to);
-  await d.writeFile(args.probeFile, axiomsProbeText([args.target.module, args.paperModule], [...moved, ...args.headlineBaseline.keys()]));
+export function failingModules(log: string): string[] {
+  const failing = new Set<string>();
+  for (const m of log.matchAll(/✖\s*\[\d+\/\d+\]\s+\S+\s+([A-Za-z_][\w'.]*)/g)) failing.add(m[1]!);
+  for (const m of log.matchAll(/^error: ([^\s:]+)\.lean:\d+/gm)) failing.add(m[1]!.split(/[\\/]/).filter((x) => x !== "" && x !== ".").join("."));
+  return [...failing].sort();
+}
+
+/** (2026-11-11) The failing modules (`✖` in Lake's log) whose Lean was SIGKILLed (`Lean exited with
+ *  code 137`: the OOM killer on a loaded node) — out of resources, not broken. Only 137: 134 (abort)
+ *  and 139 (a stack overflow) are Lean's own, deterministic. A job's own log follows its status
+ *  line, up to the next one. Sorted. */
+export function killedModules(log: string): string[] {
+  const killed = new Set<string>();
+  let cur: string | null = null;
+  for (const line of log.split("\n")) {
+    const st = /^([✔⚠✖ℹ])\s*\[\d+\/\d+\]\s+\S+\s+([A-Za-z_][\w'.]*)/.exec(line);
+    if (st) { cur = st[1] === "✖" ? st[2]! : null; continue; }
+    const ex = /exited with code (\d+)/.exec(line);
+    if (cur && ex && Number(ex[1]) === 137) killed.add(cur);
+  }
+  return [...killed].sort();
+}
+
+/**
+ * The modules of other papers among `paths` (absolute): files a move rewrote because they use a
+ * moved declaration (papers may import each other). The move's gate builds each of them — the
+ * module itself, not its whole paper: the rewrite changes only references, never what a module
+ * declares. Sorted.
+ */
+export function otherPaperModules(cfg: Pick<ToolkitConfig, "toolkitRoot" | "papersLib">, paths: Iterable<string>, paperModule: string): string[] {
+  const out = new Set<string>();
+  for (const abs of paths) {
+    const rel = path.relative(cfg.toolkitRoot, abs).split(path.sep);
+    if (rel[0] !== cfg.papersLib || rel.length < 2 || !rel[rel.length - 1]!.endsWith(".lean")) continue;
+    const mod = rel.join(".").replace(/\.lean$/, "");
+    if (mod === paperModule || mod.startsWith(`${paperModule}.`)) continue;
+    out.add(mod);
+  }
+  return [...out].sort();
+}
+
+/** What one gate checks: one move, or a batch of moves (of one paper or several). */
+export interface GateUnit {
+  cfg: ToolkitConfig;
+  toolsDir: string;
+  /** The papers whose files the moves rewired (each built), and the modules of other papers the
+   *  moves rewrote (`otherPaperModules`; each built). Nothing else of the library is. */
+  paperModules: readonly string[];
+  /** The toolkit modules the moves wrote. */
+  targetModules: readonly string[];
+  /** Every moved declaration's toolkit name. */
+  moved: readonly string[];
+  headlineBaseline: ReadonlyMap<string, readonly string[]>;
+  probeFile: string;
+  indexStep: GateStep | null;
+  /** One statement-invariance check per paper. */
+  invariance: ReadonlyArray<{ cmd: string; check: () => string | null }>;
+}
+
+/**
+ * The gate, on the files as they stand: `lake build <lib>`, `lake build <paper>…` (the moving
+ * papers, and the modules of other papers the moves rewrote that built before them; the rest of
+ * the library is built by the daily library check — `libraryCheck`), statement invariance, `#print axioms` (moved
+ * declarations clean, headlines unchanged), module headers, toolkit layout, toolkit index. Stops
+ * at the first failing step. The whole chain holds the Lake build lock once (`holdLake`): its
+ * commands do not queue again behind other papers' builds between steps.
+ */
+export async function runGate(u: GateUnit, d: ApplyDeps, logs: string[]): Promise<{ ok: true } | { ok: false; timedOut?: boolean; why: string }> {
+  const { cfg } = u;
+  await d.writeFile(u.probeFile, axiomsProbeText([...u.targetModules, ...u.paperModules], [...u.moved, ...u.headlineBaseline.keys()]));
   const axiomsStep: GateStep = {
     label: "print axioms",
-    cmd: `lake env lean ${args.probeFile.split(path.sep).join("/")}`,
+    cmd: `lake env lean ${u.probeFile.split(path.sep).join("/")}`,
     cwd: cfg.toolkitRoot,
-    check: (log) => moveAxiomsFailure(log, moved, args.headlineBaseline),
+    check: (log) => moveAxiomsFailure(log, u.moved, u.headlineBaseline),
   };
-  const chain = toolkitGateChain(cfg, args.toolsDir, args.indexStep, axiomsStep);
-  chain.splice(1, 0, { label: "lake build paper", cmd: `lake build ${args.paperModule} ${cfg.papersLib}`, cwd: cfg.toolkitRoot });
-  // Everything builds: now every statement of the paper and the toolkit must be what it was.
-  if (args.invariance) {
-    const { cmd, check } = args.invariance;
-    chain.splice(2, 0, { label: "statement invariance", cmd, cwd: cfg.toolkitRoot, check: () => check() });
-  }
-  for (const step of chain) {
-    const r = await d.run(step.cmd, step.cwd);
-    logs.push(`$ (${step.cwd}) ${step.cmd}\n${r.log}`);
-    if (r.timedOut) return { ok: false, timedOut: true, why: `gate step '${step.label}' was watchdog-killed (unverified)` };
-    const why = r.code !== 0 ? null : step.check?.(r.log) ?? null;
-    if (r.code !== 0 || why) return { ok: false, why: `gate step '${step.label}' failed${why ? `: ${why}` : ""}` };
-  }
-  return { ok: true };
+  const chain = toolkitGateChain(cfg, u.toolsDir, u.indexStep, axiomsStep);
+  chain.splice(1, 0, { label: "lake build paper", cmd: `lake build ${[...new Set(u.paperModules)].join(" ")}`, cwd: cfg.toolkitRoot });
+  // Everything builds: now every statement of the papers and the toolkit must be what it was.
+  chain.splice(2, 0, ...u.invariance.map(({ cmd, check }) => ({ label: "statement invariance", cmd, cwd: cfg.toolkitRoot, check: () => check() })));
+  return holdLake(d, cfg.toolkitRoot, async () => {
+    for (const step of chain) {
+      const r = await d.run(step.cmd, step.cwd);
+      logs.push(`$ (${step.cwd}) ${step.cmd}\n${r.log}`);
+      if (r.timedOut) return { ok: false as const, timedOut: true, why: `gate step '${step.label}' was watchdog-killed (unverified)` };
+      const why = r.code !== 0 ? null : step.check?.(r.log) ?? null;
+      if (r.code !== 0 || why) return { ok: false as const, why: `gate step '${step.label}' failed${why ? `: ${why}` : ""}` };
+    }
+    return { ok: true as const };
+  });
 }
 
-/**
- * The gate alone, on a move whose files were left as written after it failed and that the
- * orchestrator has since repaired by hand. Passing drops the journal: the move stands.
- */
-export async function verifyKeptMove(args: MoveGateArgs & { journalFile: string }, d: ApplyDeps): Promise<{ ok: boolean; log: string; timedOut?: boolean }> {
-  const logs: string[] = [];
-  const g = await runMoveGate(args, d, logs);
-  if (!g.ok) return { ok: false, ...(g.timedOut ? { timedOut: true } : {}), log: `${logs.join("\n\n")}\n\n[move ${args.proposalId}] ${g.why}; the files are left as they are.` };
-  await d.removeFile(args.journalFile);
-  return { ok: true, log: `${logs.join("\n\n")}\n\n[move ${args.proposalId}] the repaired move passes the gate.` };
+/** Hold the toolkit's Lake build lock across `fn` (reentrant: a gate inside holds it again at once).
+ *  A promotion holds it from its first source write to its verdict (and undo): no other paper's
+ *  build compiles a toolkit module half-written or not yet gated. */
+export function holdLake<T>(d: ApplyDeps, toolkitRoot: string, fn: () => Promise<T>): Promise<T> {
+  return d.holdLake ? d.holdLake(toolkitRoot, fn) : fn();
 }
 
+/** A promotion's write-ahead journal as it is being written: the journal, its file, and whether
+ *  anything was written yet. An existing journal (an earlier attempt) is carried on. */
+interface JournalCtx { journal: PromotionJournal; file: string; wrote: boolean }
+
+async function openJournal(file: string, slug: string, d: ApplyDeps): Promise<JournalCtx> {
+  const earlier = (await d.exists(file)) ? (JSON.parse(await d.readFile(file)) as PromotionJournal) : null;
+  const journal: PromotionJournal = earlier ?? { version: 1, slug, entries: [], created_dirs: [] };
+  return { journal, file, wrote: journal.entries.length > 0 || (journal.ledger_added?.length ?? 0) > 0 };
+}
+
+const persistJournal = (j: JournalCtx, d: ApplyDeps) => d.writeFile(j.file, `${JSON.stringify(j.journal, null, 2)}\n`);
+
 /**
- * Apply one planned move: forbidden-token scan, the writes (target module, division barrel for a
- * new module, paper files, ledger), then the gate (`runMoveGate`). Nothing is ever restored: a move
- * that does not pass its gate leaves every file as written (`kept`) for the orchestrator to repair
- * by hand and gate again (`verifyKeptMove`). The journal beside the run records the original bytes
- * of every file the move wrote, for whoever wants to undo it; it is dropped once the gate passes. A
- * second attempt at the same move (another header) writes over the first and keeps its originals.
+ * Write one planned move: forbidden-token scan, then the writes (target module, division barrel for
+ * a new module, paper files, ledger), each journaled before it is made (the original bytes, every
+ * state written; the ledger by the names it records). Throws when the move is refused.
  */
-export async function applyMoveItem(args: MoveItemArgs, d: ApplyDeps): Promise<{ ok: boolean; log: string; timedOut?: boolean; kept?: boolean }> {
+async function writeMove(args: MoveWriteArgs, j: JournalCtx, d: ApplyDeps, logs: string[]): Promise<void> {
   const { cfg, plan } = args;
-  const logs: string[] = [];
-  const earlier = (await d.exists(args.journalFile)) ? (JSON.parse(await d.readFile(args.journalFile)) as PromotionJournal) : null;
-  const journal: PromotionJournal = earlier ?? { version: 1, slug: args.slug, entries: [], created_dirs: [] };
-  let wrote = journal.entries.length > 0;
-  const persistJournal = () => d.writeFile(args.journalFile, `${JSON.stringify(journal, null, 2)}\n`);
+  const { journal } = j;
   const snap = async (abs: string, afterSha: string | null) => {
     let e = journal.entries.find((x) => x.path === abs);
     if (!e) {
@@ -617,58 +728,181 @@ export async function applyMoveItem(args: MoveItemArgs, d: ApplyDeps): Promise<{
     }
     if (afterSha === null) e.generated = true;
     else if (!e.after_sha.includes(afterSha)) e.after_sha.push(afterSha);
-    await persistJournal();
+    await persistJournal(j, d);
   };
   const write = async (abs: string, text: string) => {
     await snap(abs, sha256(text));
     await d.writeFile(abs, text);
-    wrote = true;
+    j.wrote = true;
   };
-  const failed = (why: string, timedOut = false) => ({
-    ok: false, ...(wrote ? { kept: true } : {}), ...(timedOut ? { timedOut: true } : {}),
-    log: `${logs.join("\n\n")}\n\n[move ${args.proposalId}] ${why}; ${wrote ? "the files are left as written" : "nothing written"}.`,
-  });
-  try {
-    // Nothing unproved enters the toolkit; the paper gains nothing unproved either.
-    for (const [abs, text] of plan.writes) {
-      const now = forbiddenLeanTokens(text);
-      if (abs === plan.targetAbs) {
-        if (now.length) throw new Error(`the moved block contains ${now.map((h) => `\`${h.token}\` at line ${h.line + 1}`).join(", ")}`);
-      } else {
-        const orig = journal.entries.find((x) => x.path === abs)?.orig;
-        const before = orig !== undefined ? forbiddenLeanTokens(orig ?? "").length : (await d.exists(abs)) ? forbiddenLeanTokens(await d.readFile(abs)).length : 0;
-        if (now.length > before) throw new Error(`the rewritten paper file ${path.relative(cfg.toolkitRoot, abs)} gains a sorry / admit / axiom`);
-      }
-    }
-    if (plan.created) {
-      const header = lintModuleHeader(args.target.rel, plan.writes.get(plan.targetAbs)!);
-      if (header.length) throw new Error(`new module ${args.target.rel} breaks the header contract:\n  ${header.map(formatLayoutFinding).join("\n  ")}`);
-      // ours, from an earlier attempt at this move, is written over
-      const ours = journal.entries.some((x) => x.path === plan.targetAbs && x.orig === null);
-      if (!ours && (await d.exists(plan.targetAbs))) throw new Error(`target ${args.target.rel} appeared since the plan was made`);
-      for (let cur = path.dirname(plan.targetAbs); cur.startsWith(`${cfg.toolkitRoot}${path.sep}`) && !(await d.exists(cur)); cur = path.dirname(cur)) {
-        if (!journal.created_dirs.includes(cur)) journal.created_dirs.push(cur);
-      }
-    }
-    for (const [abs, text] of plan.writes) await write(abs, text);
-    if (plan.created) {
-      const barrel = divisionBarrelPath(cfg, args.target.division);
-      if (!(await d.exists(barrel))) throw new Error(`division barrel missing: ${path.relative(cfg.toolkitRoot, barrel)}`);
-      const text = await d.readFile(barrel);
-      if (!isLeanModuleFile(text)) throw new Error(`division barrel is not a module-system file: ${path.relative(cfg.toolkitRoot, barrel)}`);
-      await write(barrel, insertImportSorted(text, `public import ${args.target.module}`));
-    }
-    const ledgerText = (await d.exists(cfg.ledgerPath)) ? await d.readFile(cfg.ledgerPath) : null;
-    const { ledger, added } = appendDeclarations(ledgerText === null ? emptyLedger() : parseLedger(ledgerText, cfg.ledgerPath), args.ledgerEntries);
-    if (added.length) await write(cfg.ledgerPath, serializeLedger(ledger));
-    logs.push(`[ledger] ${added.length} declaration(s) recorded: ${added.map((e) => e.name).join(", ")}`);
-    if (args.indexStep) await snap(cfg.indexPath, null);
-
-    const g = await runMoveGate(args, d, logs);
-    if (!g.ok) return failed(g.why, g.timedOut === true);
-    await d.removeFile(args.journalFile);
-    return { ok: true, log: `${logs.join("\n\n")}\n\n[move ${args.proposalId}] moved ${args.decls.map((x) => x.to).join(", ")} into ${args.target.module}.` };
-  } catch (err) {
-    return failed(`apply error: ${err instanceof Error ? err.message : String(err)}`);
+  // A paper file that changed since the plan read it (a live run saved an edit — another paper's
+  // run, mid-way through its own work) is never written over: nothing of this move is written (an
+  // earlier move of a batch is undone with it), and the next apply plans from the files as they
+  // are. What this move wrote on an earlier attempt is its own.
+  for (const [abs, was] of plan.read ?? []) {
+    const now = (await d.exists(abs)) ? await d.readFile(abs) : null;
+    const ours = now !== null && (journal.entries.find((x) => x.path === abs)?.after_sha.includes(sha256(now)) ?? false);
+    if (now !== was && !ours) throw new Error(`${path.relative(cfg.toolkitRoot, abs)} changed since the move was planned (another run's edit?); nothing of the move was written — apply again`);
   }
+  // Nothing unproved enters the toolkit; the paper gains nothing unproved either.
+  for (const [abs, text] of plan.writes) {
+    const now = forbiddenLeanTokens(text);
+    if (abs === plan.targetAbs) {
+      if (now.length) throw new Error(`the moved block contains ${now.map((h) => `\`${h.token}\` at line ${h.line + 1}`).join(", ")}`);
+    } else {
+      const orig = journal.entries.find((x) => x.path === abs)?.orig;
+      const before = orig !== undefined ? forbiddenLeanTokens(orig ?? "").length : (await d.exists(abs)) ? forbiddenLeanTokens(await d.readFile(abs)).length : 0;
+      if (now.length > before) throw new Error(`the rewritten paper file ${path.relative(cfg.toolkitRoot, abs)} gains a sorry / admit / axiom`);
+    }
+  }
+  if (plan.created) {
+    const header = lintModuleHeader(args.target.rel, plan.writes.get(plan.targetAbs)!);
+    if (header.length) throw new Error(`new module ${args.target.rel} breaks the header contract:\n  ${header.map(formatLayoutFinding).join("\n  ")}`);
+    // ours, from an earlier attempt at this move, is written over
+    const ours = journal.entries.some((x) => x.path === plan.targetAbs && x.orig === null);
+    if (!ours && (await d.exists(plan.targetAbs))) throw new Error(`target ${args.target.rel} appeared since the plan was made`);
+    for (let cur = path.dirname(plan.targetAbs); cur.startsWith(`${cfg.toolkitRoot}${path.sep}`) && !(await d.exists(cur)); cur = path.dirname(cur)) {
+      if (!journal.created_dirs.includes(cur)) journal.created_dirs.push(cur);
+    }
+  }
+  for (const [abs, text] of plan.writes) await write(abs, text);
+  if (plan.created) {
+    const barrel = divisionBarrelPath(cfg, args.target.division);
+    if (!(await d.exists(barrel))) throw new Error(`division barrel missing: ${path.relative(cfg.toolkitRoot, barrel)}`);
+    const text = await d.readFile(barrel);
+    if (!isLeanModuleFile(text)) throw new Error(`division barrel is not a module-system file: ${path.relative(cfg.toolkitRoot, barrel)}`);
+    await write(barrel, insertImportSorted(text, `public import ${args.target.module}`));
+  }
+  // The ledger is shared with every paper's decision records: appended under its own lock, never
+  // journaled as bytes; the journal lists what the append adds, under that lock, before it writes,
+  // so an undo removes just those.
+  const { added } = await appendLedgerDeclarations(cfg.ledgerPath, args.ledgerEntries, async (fresh) => {
+    const have = new Set((journal.ledger_added ?? []).map((a) => `${a.slug}\u0000${a.name}`));
+    journal.ledger_added = [...(journal.ledger_added ?? []), ...fresh.filter((a) => !have.has(`${a.slug}\u0000${a.name}`))];
+    await persistJournal(j, d);
+    j.wrote = true;
+  });
+  logs.push(`[ledger] ${added.length} declaration(s) recorded: ${added.map((e) => e.name).join(", ")}`);
+  if (args.indexStep) await snap(cfg.indexPath, null);
+}
+
+// ─── a batch of moves, one gate ──────────────────────────────────────────────
+
+/** One move of a batch. Nothing in it is tied to one run: a batch may carry several papers' moves. */
+export interface BatchMove {
+  slug: string;
+  proposalId: string;
+  paperModule: string;
+  decls: readonly MoveDecl[];
+  ledgerEntries: LedgerDeclaration[];
+  /** Planned when its turn comes, under the caller's lock, from the files as the batch's earlier
+   *  moves left them; returns the plan and the target as it then stood. */
+  plan: () => Promise<{ plan: MovePlan; target: MoveTarget }>;
+  /** Kept on record with the move, for whoever records it after a crash (its run's F4 receipts). */
+  cleared?: readonly string[];
+  /** Kept on record too: whether the gate checks its paper's statement invariance (a batch of
+   *  several papers may check one and not another). Absent: the batch's `checked`. */
+  checked?: boolean;
+}
+
+/** What a batch journal records beside the files: the moves, whether their gate checks statement
+ *  invariance, and whether it passed. */
+export interface BatchRecord {
+  passed: boolean;
+  checked: boolean;
+  moves: Array<{ slug: string; proposal_id: string; module: string; decls: Array<{ from: string; to: string }>; cleared?: string[]; checked?: boolean }>;
+}
+
+export interface MoveBatchArgs {
+  cfg: ToolkitConfig;
+  toolsDir: string;
+  moves: readonly BatchMove[];
+  /** The batch's write-ahead journal; must not exist (a journal left behind is settled first). */
+  journalFile: string;
+  probeFile: string;
+  indexStep: GateStep | null;
+  /** The headlines of every paper in the batch, without the declarations that move. */
+  headlineBaseline: ReadonlyMap<string, readonly string[]>;
+  /** One statement-invariance check per paper of the batch. */
+  invariance: ReadonlyArray<{ cmd: string; check: () => string | null }>;
+}
+
+type BatchJournal = PromotionJournal & { batch?: BatchRecord };
+
+/** The batch record of a journal, or null (no journal, or a single move's). */
+export async function readBatchRecord(file: string, d: Pick<ApplyDeps, "exists" | "readFile">): Promise<BatchRecord | null> {
+  if (!(await d.exists(file))) return null;
+  return (JSON.parse(await d.readFile(file)) as BatchJournal).batch ?? null;
+}
+
+export type BatchOutcome = { ok: boolean; log: string; timedOut?: boolean; restored?: boolean; conflict?: string[] };
+
+/**
+ * Write every move of a batch, in order, then gate them all once (`runGate`: the toolkit and each
+ * moving paper built once, one invariance check per paper, one axioms probe). All or nothing: when a
+ * move is refused, or the gate fails, throws or is watchdog-killed (`timedOut`: the caller escalates
+ * it as unverified), every file is restored from the batch journal (`restoreJournal`). On a pass the
+ * journal is marked `passed` and kept: the caller reads what passed (`readBatchRecord`) and then
+ * drops it.
+ */
+export async function gateMoveBatch(args: MoveBatchArgs, d: ApplyDeps): Promise<BatchOutcome> {
+  const { cfg } = args;
+  const logs: string[] = [];
+  if (await d.exists(args.journalFile)) throw new Error(`a batch journal is on file (${args.journalFile}); settle it first`);
+  const j = await openJournal(args.journalFile, args.moves.map((m) => m.slug).filter((x, i, a) => a.indexOf(x) === i).join(","), d);
+  const record: BatchRecord = { passed: false, checked: args.invariance.length > 0, moves: [] };
+  (j.journal as BatchJournal).batch = record;
+  const undo = async (why: string, timedOut = false): Promise<BatchOutcome> => {
+    const r = await restoreJournal(cfg, args.journalFile, d, "batch");
+    return {
+      ok: false, ...(timedOut ? { timedOut: true } : {}), restored: r?.ok ?? true, ...(r?.conflict ? { conflict: r.conflict } : {}),
+      log: `${logs.join("\n\n")}\n\n[batch] ${why}; ${r === null ? "nothing was written" : r.log}`,
+    };
+  };
+  // the Lake lock from the first write to the verdict, the undo included
+  return holdLake(d, cfg.toolkitRoot, async (): Promise<BatchOutcome> => {
+    const targets: string[] = [];
+    // other papers' modules the moves rewrite, and those of them that did not build before
+    const others = new Set<string>();
+    const broken = new Set<string>();
+    try {
+      for (const m of args.moves) {
+        let { plan, target } = await m.plan();
+        const fresh = otherPaperModules(cfg, plan.writes.keys(), m.paperModule).filter((o) => !others.has(o));
+        for (const b of await brokenBefore(cfg, d, fresh)) broken.add(b);
+        for (const o of fresh) others.add(o);
+        // planned again from the files as they are after that build (a live run may have saved meanwhile)
+        if (fresh.length) {
+          ({ plan, target } = await m.plan());
+          // a module only the new plan rewrites was not built before it: rewritten, not gated
+          for (const o of otherPaperModules(cfg, plan.writes.keys(), m.paperModule)) if (!others.has(o)) { others.add(o); broken.add(o); }
+        }
+        if (broken.size) logs.push(`[batch] other papers' modules that did not build before the moves — rewritten, not gated: ${[...broken].sort().join(", ")}`);
+        record.moves.push({
+          slug: m.slug, proposal_id: m.proposalId, module: target.module, decls: m.decls.map((x) => ({ from: x.from, to: x.to })),
+          ...(m.cleared?.length ? { cleared: [...m.cleared] } : {}), ...(m.checked !== undefined ? { checked: m.checked } : {}),
+        });
+        await persistJournal(j, d);
+        await writeMove({ cfg, plan, target, ledgerEntries: m.ledgerEntries, indexStep: args.indexStep }, j, d, logs);
+        targets.push(target.module);
+        logs.push(`[batch] ${m.proposalId}: written (${m.decls.map((x) => x.to).join(", ")} into ${target.module})`);
+      }
+    } catch (err) {
+      return undo(`apply error: ${err instanceof Error ? err.message : String(err)}`);
+    }
+    let g: Awaited<ReturnType<typeof runGate>>;
+    try {
+      g = await runGate({
+        cfg, toolsDir: args.toolsDir, paperModules: [...args.moves.map((m) => m.paperModule), ...gatedOthers([...others].sort(), broken)], targetModules: targets,
+        moved: args.moves.flatMap((m) => m.decls.map((x) => x.to)), headlineBaseline: args.headlineBaseline,
+        probeFile: args.probeFile, indexStep: args.indexStep, invariance: args.invariance,
+      }, d, logs);
+    } catch (err) {
+      return undo(`gate error: ${err instanceof Error ? err.message : String(err)}`);
+    }
+    if (!g.ok) return undo(g.why, g.timedOut === true);
+    record.passed = true;
+    await persistJournal(j, d);
+    return { ok: true, log: `${logs.join("\n\n")}\n\n[batch] ${args.moves.length} move(s) passed one gate.` };
+  });
 }

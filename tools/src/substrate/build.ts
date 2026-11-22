@@ -2,6 +2,7 @@
 import { readFileSync } from "node:fs";
 import path from "node:path";
 import { withLakeBuildLock } from "../shared/build_mutex.js";
+import { TOOLKIT_STAGING_SEGMENT } from "../toolkit/config.js";
 import { spawnWithInactivityTimeout } from "../workers/spawn.js";
 import type { BuildDiagnostics } from "./types.js";
 
@@ -103,6 +104,10 @@ export async function buildTargets(repoRoot: string, modules: string[]): Promise
   // sorry/error attribution scopes to the substrate's OWN files and ignores
   // dependency-replay warnings. Module `A.B.C` ↦ file `A/B/C.lean`.
   const files: string[] = modules.map((m) => `${m.replace(/\./g, "/")}.lean`);
+  // The modules of one study's staging tree (`Toolkit.Staging.<Study>…`) only: a shared hold, as a
+  // paper's build is (the lock refuses one for anything else; outside the toolkit's signature).
+  const units = new Set(modules.map((m) => m.split(".").slice(0, 3).join(".")));
+  const study = units.size === 1 && modules.every((m) => m.split(".")[1] === TOOLKIT_STAGING_SEGMENT && m.split(".").length >= 3) ? [...units] : null;
   return withLakeBuildLock(repoRoot, async () => {
     const result = await spawnWithInactivityTimeout("lake", ["build", ...modules], {
       cwd: repoRoot,
@@ -140,5 +145,5 @@ export async function buildTargets(repoRoot: string, modules: string[]): Promise
       return { ...diag, ok: false, errors: [...diag.errors, ...laundering] };
     }
     return diag;
-  });
+  }, `study build: lake build ${modules.join(" ").slice(0, 200)}`, undefined, undefined, study ? { papers: study } : {});
 }

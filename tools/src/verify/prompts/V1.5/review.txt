@@ -4,8 +4,8 @@ CORE — a machine-checkable skeleton of its symbols, assumptions, definitions a
 statements. You are given that core and the paper's text: the whole flattened LaTeX,
 or — in a call that grades a few nodes — the excerpts its own scope block names; the
 whole paper is `discovery/flat.tex` in your working directory, where each core node's
-`tex_locator` (`{file, from, to, env, label}` in the user's ORIGINAL files), its `\label`
-and the paper's theorem numbering locate its environment. Read a statement's proof
+`tex_locator` (its environment and `\label`; lines, when given, are the user's ORIGINAL files'),
+the `flat.tex lines` of an excerpt and the paper's theorem numbering locate its environment. Read a statement's proof
 there even when the core's `proof_tex` is empty.
 
 You judge exactly three things, per core node: FAITHFULNESS of the core to the
@@ -93,7 +93,7 @@ same way. Three grades:
                 the truth or strength of a result in scope. Give both readings.
                 This is the paper's defect, reported and sent to repair. A
                 question that arises only in a degenerate case (below) is never
-                unresolvable: grade that node `bookkeeping` with the exclusion.
+                unresolvable: grade it by the rule for degenerate cases below.
 
 Judge correctness UNDER the pinned readings. A reading tagged `added_by: "owner"`
 (`ass:pin-owner-*`) is the paper's owner's own reading, adopted when the owner
@@ -135,8 +135,10 @@ below). Degenerate cases (zero variance, a zero
 normalizing denominator, empty sets, a group of size one, a single period,
 equality in strict inequalities) are not readings to settle: when a result
 fails only there, grade it `bookkeeping` with the exclusion as its
-`bookkeeping_assumption` (ambiguity `ok`), as for a degenerate witness below;
-when a definition does, the grade sits on the statement that uses it there.
+`bookkeeping_assumption` (ambiguity `ok`), as for a degenerate witness below.
+A definition that fails only there is graded on the definition, by its own
+referee: `pinned`, the exclusion as its `reading` (`of` null), which binds
+every result using it.
 
 PATCHES. When a PATCHES section is present, a previous pass found errors and a
 fixer repaired them minimally, by REPLACING printed text (a hypothesis it adds is
@@ -231,9 +233,20 @@ of that patch, with the misfit as the witness, never drift.
   A repair you state (in `detail`, a witness or `fix`) is written as the paper would write the
   statement: its own form and clause structure, its references to cited results kept.
   A hypothesis a repair adds that only spells out a convention the paper already
-  invokes adds no scope (neither a weakening nor a larger change).
+  invokes adds no scope (neither a weakening nor a larger change). Any other
+  hypothesis or condition it adds that the corrected result does not need — the
+  result and its amended proof hold without it, as when its other hypotheses imply
+  it — is a larger change (`minimality: true`, the witness naming it and why the
+  result holds without it).
   The paper's owner decides on a weakening; a patch marked `accepted_weakening`
-  is one the owner accepted — judge only whether it holds — and an `unfixable`
+  is one the owner accepted (or is asked to) — judge whether it holds, and
+  whether it gives up only what its witness forces. A case or conclusion it
+  gives up that no witness refutes and its repaired proof does not need — a
+  visibly stronger version holds — is a larger change (`minimality: true`, not
+  `weakens_contribution`: the weakening itself is settled; the witness stating
+  the stronger version and why it holds). So is a weakening
+  whose `given_up` begins "printed claim not refuted" when you can supply the
+  missing proof of the printed statement (the witness giving it). An `unfixable`
   entry marked `declined` is the owner's decision, not a disputed key result.
 - CONFIRMING A REPAIR. A corrected statement must be a drop-in replacement
   for the printed one: substituted for it, it reads as a complete statement
@@ -251,7 +264,8 @@ of that patch, with the misfit as the witness, never drift.
   paper's author, shown as the author reads it: grade it in
   `explanation_clarity` — clear when an author of the paper, reading only it,
   can locate the step and see why it fails, and its "Gives up", when it has
-  one, says exactly what the corrected statement no longer claims.
+  one, says exactly what the corrected statement no longer claims (after the
+  prefix "printed claim not refuted:", which it may carry).
 - SPLIT REPAIRS. A patch may split its result: the node keeps what is not
   moved to a block and each entry of the patch's `corollaries` is a
   result of its own, a core node with `split_from` (its id is in the PATCHES
@@ -319,6 +333,16 @@ of that patch, with the misfit as the witness, never drift.
 - In `patch_review`, judge `key_results` and `key_contribution`: a headline
   result missing from `key_results`, or a patch that no longer carries the
   contribution, is `key_results_ok: false`.
+- In `patch_review.weakenings`, give one {node, severity, reason} for every
+  patch with `accepted_weakening` on a node in `key_results` ([] when none);
+  `node` is the patch's node (the parent of a split, never a block).
+  `substantial`: the result's headline claim is cut — a rate, ratio, factor,
+  order or bound the paper advertises changes; a conclusion is dropped or made
+  conditional on an unproved hypothesis; or a case the paper highlights (its
+  examples, main application, stated generality) is excluded. `limited`: only
+  degenerate or boundary cases, an added standard regularity assumption, or a
+  constant or side clause the paper does not advertise. This grades the paper,
+  not the repair: a weakening the owner approved is graded the same way.
 
 Grade nodes without patches exactly as in a first pass.
 
@@ -394,6 +418,17 @@ CORRECTNESS — one of four grades:
                when the proof reveals the intended form: the theorem as printed
                is false, and readers use statements, not proofs. This rule is
                what keeps two passes on the same paper from disagreeing.
+               A slip in a PROOF that the surrounding derivation plainly
+               corrects and that leaves the graded result true — a wrong
+               index, exponent, constant or sign, `=` printed for `≤`, swapped
+               words ("left" for "right"), a wrong equation or lemma reference,
+               a factor dropped that the next line restores — is a TYPO: list
+               it in `typos` as {printed, intended, reason} (`printed` a
+               verbatim snippet of the printed proof, long enough to occur once
+               in it; `intended` its replacement). A typo changes no grade (a
+               node whose only defects are typos is `ok`); the runner corrects
+               the proof with it. A slip in a statement, hypothesis or
+               definition is never a typo: the rules above hold.
                A paper is not stopped for a case every competent reader
                excludes. A triviality every reader excludes is bookkeeping; a
                genuine second reading the paper settles is a pin; only a claim
@@ -428,6 +463,11 @@ So do not check the proof. Reproduce it.
    grade: a discrepancy you can justify is `error` with its witness; one you
    cannot pin down is `unclear`; a discrepancy that closes once a harmless side
    condition is granted is `bookkeeping`.
+4. Then check the proof as printed: its setup (the sets, ranges, domains and
+   properties it introduces) and each step. Where the printed version is not
+   what you used, redo the step under the printed version. Report a step only
+   if it is wrong as printed, with its witness, graded as in step 3 (a typo
+   goes in `typos`).
 
 CITED STANDARD RESULTS. A statement with `status: "cited"` is a published result
 the paper INVOKES rather than derives. Do NOT re-derive it, and do not grade it

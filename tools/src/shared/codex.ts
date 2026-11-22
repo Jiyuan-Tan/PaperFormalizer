@@ -220,13 +220,21 @@ export function effectiveSandboxMode(
  * Said to every agent (codex and claude workers), after its prompt. An F3 agent whose Lean tools hung on
  * a stalled NFS mount (2026-11-04) built its own: a 64 GB RAM disk in a private mount namespace, a
  * downloaded toolchain, Mathlib's oleans and sources copied 128 at a time — load on the machine and the
- * mount every other run shares. A broken environment is the owner's to fix: the agent says so.
+ * mount every other run shares. A broken environment is the owner's to fix: the agent says so. Lean-lsp
+ * tools that did not come up are not a broken environment: the command line still checks the Lean
+ * (a round-A study halted for the owner over that alone, 2026-11-08).
  */
 export const MACHINE_RULES =
   "[Machine rules] This machine and its file system are shared with other runs and other people. Do not work around the environment: " +
   "do not download toolchains or packages, copy the toolkit's `.lake` (its packages, builds or sources), mount anything, create namespaces " +
-  "(`unshare`), RAM disks or preloaded libraries, or run more than 4 heavy processes at once. If Lean or its tools are missing or hang " +
-  "(no lean-lsp tools, `lake env lean` or `lake build` stuck), stop and report it in your answer, in the form the task asks for, instead of building a substitute.";
+  "(`unshare`), RAM disks or preloaded libraries, or run more than 4 heavy processes at once. Missing lean-lsp tools alone are no reason to stop: " +
+  "do the work with the command-line checks the task gives (a targeted `lake build`, `lake env lean` on a file). If Lean itself is missing or hangs " +
+  "(`lake build` or `lake env lean` fails to start or is stuck), stop and report it in your answer, in the form the task asks for, instead of building a substitute. " +
+  "A `lake build` may first wait its turn for the toolkit's shared build lock (it prints `[lake-lock] waiting`): that is a wait, not a hang — give it a long timeout and let it finish. " +
+  "Create, edit or delete only the files your task gives you to write (and scratch in your workspace): the toolkit library, its path dependencies " +
+  "and other papers are read-only unless the task names them — a toolkit change goes through promotion. " +
+  "Run `lake` commands directly: each queues for the toolkit's build lock by itself (through the pipeline's lake shim). Never take or wrap " +
+  "the build lock yourself (never import the pipeline's lock code or touch its lock files): one hold around many builds stops every other paper.";
 
 function leanLspCodexFlags(input: CodexRunInput, callTag?: string): string[] {
   if (input.leanLsp === false) return [];

@@ -54,7 +54,7 @@ export interface CorrectedOptions {
 
 const RED = new Set(["vsOriginal", "vsStep"]);
 const STRUCK = new Set(["vsStruck", "vsStruckRed"]);
-const BLUE = new Set(["vsCorrected", "vsClarified", "vsCorrectedStep", "vsProposed", "vsProposedStep"]);
+const BLUE = new Set(["vsCorrected", "vsClarified", "vsCorrectedStep", "vsTypoStep", "vsLeanStep", "vsProposed", "vsProposedStep"]);
 const NOTE = new Set(["vsNote", "vsRewind", "vsCap"]);
 const READING = new Set(["vsReading", "vsReadingOwner", "vsReadingSymbol"]);
 const CONDITION = new Set(["vsCondition", "vsConditionOwner"]);
@@ -63,7 +63,7 @@ const PROOF = new Set(["vsProof", "vsProposedProof"]);
 const PRINTED = new Set(["vsPrintedProof"]);
 /** Arguments each macro of the annotated paper takes. */
 const ARITY: Record<string, number> = {
-  vsAt: 2, vsOriginal: 1, vsStep: 1, vsStruck: 1, vsStruckRed: 1, vsCorrected: 1, vsClarified: 1, vsCorrectedStep: 1,
+  vsAt: 2, vsOriginal: 1, vsStep: 1, vsStruck: 1, vsStruckRed: 1, vsCorrected: 1, vsClarified: 1, vsCorrectedStep: 1, vsTypoStep: 1, vsLeanStep: 1,
   vsProposed: 1, vsProposedStep: 1, vsNote: 1, vsRewind: 1, vsCap: 1, vsReading: 1, vsReadingOwner: 1, vsReadingSymbol: 2, vsCondition: 1, vsConditionOwner: 1, vsDetail: 1,
   vsProof: 1, vsProposedProof: 1, vsPrintedProof: 1, vsCorollary: 3, vsProposedCorollary: 3, vsCorollaryProof: 3, vsSplitProposition: 3, vsProposedSplitProposition: 3, vsSplitPropositionProof: 3, vsFit: 1, vsDisplay: 1, vsFitIn: 2, vsMathEnv: 2, vsItem: 1, vsPar: 0, vsLine: 0, vsSub: 0, vsBreak: 0, vsLabel: 1,
 };

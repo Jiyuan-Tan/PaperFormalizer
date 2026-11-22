@@ -8,3 +8,6 @@ __pycache__/
 .claude/settings.local.json
 .claude/worktrees/
 !tools/test/verify/fixtures/*.log
+
+# dated backups left beside edited files
+*.bak-*

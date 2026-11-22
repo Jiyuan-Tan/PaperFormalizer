@@ -24,9 +24,10 @@ import { copyFile, readFile } from "node:fs/promises";
 import path from "node:path";
 import { z } from "zod";
 import { OWNER_EXPLANATION_JSON, OwnerExplanationFieldSchema, TEX_STRING, TEX_STRING_NONEMPTY, TEX_STRING_OR_NULL } from "./owner_text.js";
-import { OPS_JSON, PROOF_UNCHANGED, PatchOpSchema, hasDetail, isStatementOp, materializeRepair, nodePassage, resolveOps, revisesProof, supersededNodes, type PassageSources, type PatchOp, type RepairScope } from "./ops.js";
+import { OPS_JSON, PROOF_UNCHANGED, PatchOpSchema, hasDetail, isStatementOp, materializeRepair, nodePassage, resolveOps, revisesProof, supersededNodes, typoOpsKept, type PassageSources, type PatchOp, type RepairScope } from "./ops.js";
 import { RefCoreSchema, type RefCore } from "./ref_core.js";
 import { loadUnits } from "./units.js";
+import { writeJsonAtomic } from "../shared/json_atomic.js";
 import { parseTypedCore } from "../core/core_io.js";
 import type { Core } from "../core/schema.js";
 import { CoreGraphInputError, buildCore, REVIEW_ADDED_BY, UMBRELLA_PROOF, UMBRELLA_STATEMENT, citedLabels, isUmbrellaPatch, splitCorollaryId, statementBody, statementClosure, type SplitCorollary } from "./core_graph.js";
@@ -139,7 +140,7 @@ const PatchSchema = z.object({
   reason: optionalText(),
   /** Runner-owned (or written by hand): the repair WEAKENS the paper's claim and the owner accepted
    * it (`--accept-repair`, or a hand-written patch followed by `--from-stage V1.5`). The referee then
-   * judges only whether it holds, not whether it weakens. */
+   * judges whether it holds and gives up only what its witness forces, not whether it weakens. */
   accepted_weakening: z.boolean().optional(),
   /** Runner-owned, with `accepted_weakening`: what the weakened version gives up (one line). */
   given_up: z.string().optional(),
@@ -242,6 +243,36 @@ function FixerRejectionReplySchema() {
   return z.object({ node: z.string().min(1), reason: z.string().min(1), where_the_paper_grants_it: z.string().min(1) });
 }
 
+/** One typo the referee found in a result's PROOF (`V15NodeVerdict.typos`), with the proof unit that
+ * prints it (`typoFix`); `unit` null: no unit of the proof prints the snippet exactly once — reported,
+ * never applied. */
+const TypoSchema = z.object({
+  printed: z.string().min(1),
+  intended: z.string(),
+  reason: z.string(),
+  unit: z.string().nullable(),
+  /** Who found it: `lean` — the F-stage proof filler, whose proof had to depart from the printed step
+   * (`formalization/proof_filler.ts` `printed_step_fixes`); absent — the V1.5 referee. */
+  source: z.enum(["lean"]).optional(),
+});
+
+/**
+ * The TYPOS of one result's proof, which the runner corrects in place (`withRefereeTypos`): never a
+ * repair — no finding, no fixer, no confirming round, no owner decision, no grade; the report lists them
+ * apart. The edit is a repair's (`ops.ts`): `ops` replaces each proof unit holding a located typo by its
+ * printed text with every snippet swapped. Runner-owned: a fixer reply never carries one and never drops
+ * one (`weakening.ts` `pinOwnerEntries`).
+ */
+const TypoFixSchema = z.object({
+  node: z.string().min(1),
+  typos: z.array(TypoSchema),
+  ops: z.array(PatchOpSchema).default([]),
+  /** DERIVED (`deriveTypoProofs`): the printed proof with `ops` applied — and the node's repair's ops,
+   * when it has one — which the core's proof carries; absent when no op applies. */
+  proof_note: z.string().min(1).optional(),
+});
+export type TypoFix = z.infer<typeof TypoFixSchema>;
+
 const PatchFileObjectSchema = z.object({
   key_results: z.array(z.string()).default([]),
   key_contribution: z.string().default(""),
@@ -260,6 +291,9 @@ const PatchFileObjectSchema = z.object({
    * (`consequential.ts` `setAsideSuggestionConsequences`): applied with the suggestion the owner
    * accepts (`ruleOnReceipt`), dropped with one declined or redone. */
   set_aside: z.array(PatchSchema).optional(),
+  /** Runner-owned (never in the fixer's reply): the typos the referee listed in proofs, each result's
+   * corrected in place (`TypoFixSchema`). */
+  typo_fixes: z.array(TypoFixSchema).optional(),
 });
 export const PatchFileSchema = PatchFileObjectSchema;
 export type PatchFile = z.infer<typeof PatchFileObjectSchema>;
@@ -984,9 +1018,194 @@ export async function repairSources(runDir: string): Promise<PassageSources | nu
   return { units, refs, statements: transcribed.statements, envs };
 }
 
-/** `rederiveRepairs` on the run's passage sources (`repairSources`). Pure. */
+/** `rederiveRepairs` on the run's passage sources (`repairSources`), the typo fixes' proofs with them
+ * (`deriveTypoProofs`). Pure. */
 export function rederiveOn(file: PatchFile, src: PassageSources): ReturnType<typeof rederiveRepairs> {
-  return rederiveRepairs(file, (n) => ({ units: src.units, passage: nodePassage(src, n) }), (n, ops) => supersededNodes(src, n, ops));
+  const scopeOf = (n: string): RepairScope => ({ units: src.units, passage: nodePassage(src, n) });
+  const r = rederiveRepairs(file, scopeOf, (n, ops) => supersededNodes(src, n, ops));
+  return { ...r, file: deriveTypoProofs(r.file, scopeOf) };
+}
+
+// ---------------------------------------------------------------------------------------------
+// Typos of proofs (the referee's `typos`): corrected by the runner, never repaired
+// ---------------------------------------------------------------------------------------------
+
+/** Where `printed` occurs in `text`: verbatim, a run of white space matching any other. */
+function snippetMatches(text: string, printed: string): Array<{ start: number; end: number }> {
+  const words = printed.trim().split(/\s+/u).filter(Boolean);
+  if (words.length === 0) return [];
+  const re = new RegExp(words.map((w) => w.replace(/[.*+?^${}()|[\]\\]/gu, "\\$&")).join("\\s+"), "gu");
+  return [...text.matchAll(re)].map((m) => ({ start: m.index, end: m.index + m[0].length }));
+}
+
+/** Unescaped `{` less unescaped `}`. */
+function braceDelta(t: string): number {
+  let d = 0;
+  for (let i = 0; i < t.length; i += 1) {
+    if (t[i] === "\\") i += 1;
+    else if (t[i] === "{") d += 1;
+    else if (t[i] === "}") d -= 1;
+  }
+  return d;
+}
+
+export const sameWords = (a: string, b: string): boolean => a.replace(/\s+/gu, " ").trim() === b.replace(/\s+/gu, " ").trim();
+
+type Typo = TypoFix["typos"][number];
+
+/**
+ * The ops of a typo fix: per proof unit holding located typos, one replacement — its printed text
+ * (`PaperUnits.contentOf`, what an op on it replaces) with each snippet replaced by its `intended` — in
+ * the proof's order. A typo whose snippet its unit no longer prints exactly once, or whose match overlaps
+ * another typo's there, is not placed: returned with `unit` null. Pure.
+ */
+export function typoOps(units: PassageSources["units"], typos: readonly Typo[]): { typos: Typo[]; ops: PatchOp[] } {
+  const out = typos.map((t) => ({ ...t }));
+  const byUnit = new Map<string, Array<{ t: Typo; start: number; end: number }>>();
+  for (const t of out) {
+    if (!t.unit) continue;
+    const u = units.unitById(t.unit);
+    const hits = u ? snippetMatches(units.contentOf(u), t.printed) : [];
+    const placed = byUnit.get(t.unit) ?? [];
+    if (hits.length !== 1 || placed.some((x) => hits[0]!.start < x.end && x.start < hits[0]!.end)) {
+      t.unit = null;
+      continue;
+    }
+    byUnit.set(t.unit, [...placed, { t, ...hits[0]! }]);
+  }
+  const ops: PatchOp[] = [];
+  for (const u of units.file.units) {
+    const placed = byUnit.get(u.id);
+    if (!placed) continue;
+    let tex = units.contentOf(u);
+    for (const x of [...placed].sort((a, b) => b.start - a.start)) tex = tex.slice(0, x.start) + x.t.intended + tex.slice(x.end);
+    if (tex.trim()) ops.push({ op: "replace", unit: u.id, tex: tex.trim() });
+    else for (const x of placed) x.t.unit = null;
+  }
+  return { typos: out, ops };
+}
+
+/**
+ * The typo fixes of `file` with the typos of `verdicts` added (`added`: each new one; the file as it
+ * was when none is new; a new file when there is none yet). A typo whose snippet the node's fix holds
+ * already is kept as it is: a pass that lists it again changes nothing, and one that leaves it out drops
+ * nothing. A new one is LOCATED in the node's printed proof: the one proof unit whose text prints
+ * `printed` exactly once, the snippet printed nowhere else in the proof, and the swap keeping the braces
+ * as they are — else it is recorded with `unit` null (reported, never applied). One that changes nothing
+ * is not recorded. The fix's ops are rebuilt from its located typos (`typoOps`), its proof derived
+ * (`deriveTypoProofs`). Pure.
+ */
+export function withRefereeTypos(
+  file: PatchFile | null,
+  verdicts: ReadonlyArray<{ id: string; typos?: ReadonlyArray<{ printed: string; intended: string; reason: string }> | null }>,
+  src: PassageSources,
+  /** Who found them (`TypoSchema` `source`); absent: the V1.5 referee. */
+  source?: "lean",
+): { file: PatchFile | null; added: Array<{ node: string } & Typo> } {
+  const fixes = new Map((file?.typo_fixes ?? []).map((t) => [t.node, t] as const));
+  const added: Array<{ node: string } & Typo> = [];
+  for (const v of verdicts) {
+    const prior = fixes.get(v.id);
+    const typos = [...(prior?.typos ?? [])];
+    const passage = nodePassage(src, v.id);
+    const reg = passage && src.statements.some((st) => st.id === v.id) ? src.units.region(passage.env, "proof") : undefined;
+    const proof = reg && passage ? src.units.unitsOf(passage.env, "proof") : [];
+    for (const raw of v.typos ?? []) {
+      const t = { printed: raw.printed.trim(), intended: raw.intended.trim(), reason: raw.reason.replace(/\s+/gu, " ").trim() };
+      if (!t.printed || sameWords(t.printed, t.intended) || typos.some((x) => sameWords(x.printed, t.printed))) continue;
+      const hits = proof.filter((u) => snippetMatches(src.units.contentOf(u), t.printed).length > 0);
+      const once = hits.length === 1 && snippetMatches(src.units.contentOf(hits[0]!), t.printed).length === 1 && snippetMatches(src.units.flat.slice(reg!.start, reg!.end), t.printed).length === 1;
+      const entry: Typo = { ...t, unit: once && braceDelta(t.printed) === braceDelta(t.intended) ? hits[0]!.id : null, ...(source ? { source } : {}) };
+      typos.push(entry);
+      added.push({ node: v.id, ...entry });
+    }
+    if (typos.length === (prior?.typos.length ?? 0)) continue;
+    const built = typoOps(src.units, typos);
+    for (const a of added) if (a.node === v.id) a.unit = built.typos.find((x) => x.printed === a.printed)?.unit ?? null;
+    fixes.set(v.id, { node: v.id, typos: built.typos, ops: built.ops });
+  }
+  if (added.length === 0) return { file, added };
+  const base: PatchFile = file ?? { key_results: [], key_contribution: "", patches: [], unfixable: [] };
+  const next = { ...base, typo_fixes: [...fixes.values()] };
+  return { file: deriveTypoProofs(next, (n) => ({ units: src.units, passage: nodePassage(src, n) })), added };
+}
+
+/**
+ * The printed proof steps the F-stage proof filler had to depart from (`proof_filler.ts`
+ * `printed_step_fixes`), recorded as typo fixes from the Lean stage (`withRefereeTypos`, `source:
+ * "lean"`): located exactly as the referee's are, else reported only. Only `patches.json` is written —
+ * the corrected paper and the report read it at V6; `core.json`, which the F stages formalize, is not
+ * rebuilt here. Never throws: a run without the paper's units, an entry of another shape, a node the
+ * core does not hold, a failed write — each is logged and skipped. Returns the entries recorded.
+ */
+export async function recordLeanStepFixes(runDir: string, entries: unknown, log: (msg: string) => void): Promise<Array<{ node: string } & Typo>> {
+  try {
+    if (entries == null) return [];
+    if (!Array.isArray(entries)) {
+      log(`printed_step_fixes is not a list; ignored`);
+      return [];
+    }
+    const str = (v: unknown): string | null => (typeof v === "string" ? v : null);
+    const fixes = entries.flatMap((e, k) => {
+      const r = e && typeof e === "object" ? (e as Record<string, unknown>) : {};
+      const node = str(r.node)?.trim();
+      const printed = str(r.printed);
+      const intended = str(r.intended);
+      if (!node || !printed?.trim() || intended === null) {
+        log(`printed_step_fixes[${k}] has no node, printed snippet or intended text; ignored`);
+        return [];
+      }
+      return [{ node, printed, intended, reason: str(r.reason) ?? "" }];
+    });
+    if (fixes.length === 0) return [];
+    const src = await repairSources(runDir);
+    if (!src) {
+      log(`printed_step_fixes: the run has no paper units (no verify run at ${runDir}); ${fixes.length} fix(es) not recorded`);
+      return [];
+    }
+    const known = new Set(src.statements.map((s) => s.id));
+    const verdicts = new Map<string, Array<{ printed: string; intended: string; reason: string }>>();
+    for (const f of fixes) {
+      if (!known.has(f.node)) {
+        log(`printed_step_fixes: "${f.node}" is not a result of the core; the fix of "${f.printed}" is not recorded`);
+        continue;
+      }
+      (verdicts.get(f.node) ?? verdicts.set(f.node, []).get(f.node)!).push(f);
+    }
+    const t = withRefereeTypos(await readPatchFile(runDir), [...verdicts].map(([id, typos]) => ({ id, typos })), src, "lean");
+    if (t.added.length > 0 && t.file) await writeJsonAtomic(path.join(runDir, VERIFY_FILES.patches), t.file);
+    return t.added;
+  } catch (err) {
+    log(`printed_step_fixes not recorded: ${err instanceof Error ? err.message : String(err)}`);
+    return [];
+  }
+}
+
+/** A patch file that holds nothing but typo fixes: the runner wrote it for them alone, and it owes the
+ * error ledger no repair (as no file does). Pure. */
+export function onlyTypoFixes(file: PatchFile): boolean {
+  return file.patches.length === 0 && file.unfixable.length === 0 && !file.owner_readings?.length && !file.set_aside?.length && !!file.typo_fixes?.length;
+}
+
+/**
+ * Every typo fix's proof DERIVED again (on every read, `readPatchFile`): the node's printed proof with
+ * its kept typo ops applied (`typoOpsKept`), together with its repair's ops when it has an applied one —
+ * the proof the core carries (`core_graph.ts` `compilePatchEdits`). Absent when no typo op applies (an
+ * umbrella's printed proof is superseded whole). Pure.
+ */
+export function deriveTypoProofs(file: PatchFile, scopeOf: (node: string) => RepairScope): PatchFile {
+  if (!file.typo_fixes?.length) return file;
+  const repairOf = new Map(file.patches.map((p) => [p.node, p] as const));
+  const typo_fixes = file.typo_fixes.map(({ proof_note: _p, ...t }) => {
+    const repair = repairOf.get(t.node);
+    if (repair && isUmbrellaPatch(repair)) return t;
+    const scope = scopeOf(t.node);
+    const kept = typoOpsKept(t.ops, repair?.ops ?? [], scope);
+    if (kept.length === 0) return t;
+    const m = materializeRepair([...(repair?.ops ?? []), ...kept], scope, t.node);
+    return m.problems.length === 0 && m.proof ? { ...t, proof_note: m.proof } : t;
+  });
+  return { ...file, typo_fixes };
 }
 
 export { revisesProof };

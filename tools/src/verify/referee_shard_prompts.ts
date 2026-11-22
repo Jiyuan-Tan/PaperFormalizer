@@ -148,6 +148,10 @@ export function compactCore(core: Core, own: ReadonlySet<string>, excerpts: Read
   const full = (n: Record<string, unknown>): string => {
     const { proof_tex, pinned_readings_binding: _p, ...rest } = n;
     const out: Record<string, unknown> = { ...rest };
+    // Where the node is printed, by its environment and label: its lines are where to read it (the
+    // excerpts below point at them), not what it says — no basis reads them (`core_graph.ts` scheme 6).
+    const at = rest.tex_locator as { env?: unknown; label?: unknown } | undefined;
+    if (at && typeof at === "object") out.tex_locator = { env: at.env ?? null, label: at.label ?? null };
     const ex = excerpts.get(n.id as string);
     const k = "statement" in n ? "statement" : "condition" in n ? "condition" : "construction";
     const text = String(n[k] ?? "");
@@ -573,7 +577,7 @@ Emit ONE JSON object and nothing else:
   summary  two or three sentences: what spans nodes, and what you found.
   patch_review  null unless a PATCHES section is present (it then names key_results, and every
            repair of a key result — whole, or by one line when carried); then
-           {key_results_ok, detail} as the brief says.
+           {key_results_ok, detail, weakenings} as the brief says.
   rejection_verdicts  null unless a FIXER REJECTIONS section is present; then one
            {node, upheld, detail} per rejection listed there, as that section says.
   cross_node  [] or entries {id, kind, detail, fix, witness}:

@@ -9,8 +9,8 @@ uses the condition. Your grade is the only one this node gets: grade what you wo
 You are NOT shown the whole paper: you see your nodes in full, what they use in full text, every
 other node by id, a capped setup, the statement and proof of each node you grade as printed, and the
 passages those reference. Wherever the brief says "the flattened text", read these excerpts. The
-whole paper is `discovery/flat.tex` in your working directory (read-only); `tex_locator`, the
-`\label`s and the theorem numbering locate a node there. Read there what a step or a node needs and
+whole paper is `discovery/flat.tex` in your working directory (read-only); the `flat.tex lines` of
+each excerpt, the `\label`s and the theorem numbering locate a node there. Read there what a step or a node needs and
 is not shown before you grade anything `unclear` or `drift` for want of it.
 
 The core is `discovery/core.json` (read-only). A grade is kept while what it rests on stands, so it

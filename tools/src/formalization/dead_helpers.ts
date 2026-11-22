@@ -1,6 +1,6 @@
 import { readdir, readFile } from "node:fs/promises";
 import path from "node:path";
-import { isPaperTmpPath } from "../paths.js";
+import { PAPER_TMP_DIR } from "../paths.js";
 import { maskLeanCommentsAndStrings } from "../graph/extractor.js";
 import {
   isLeanModuleFile,
@@ -124,36 +124,45 @@ export async function sweepDeadHelpers(
   },
 ): Promise<DeadHelperFinding[]> {
   if (!leanDir) return [];
-  const readTree = async (root: string): Promise<{ file: string; src: string; raw: string }[]> => {
-    let rels: string[];
-    try {
-      rels = (await readdir(root, { recursive: true }))
-        .map(String)
-        .filter((f) => f.endsWith(".lean") && !isPaperTmpPath(f))
-        .sort();
-    } catch {
-      return []; // best-effort, like the sibling F3.5 scanners
-    }
-    const out: { file: string; src: string; raw: string }[] = [];
-    for (const rel of rels) {
-      try {
-        const raw = await readFile(path.join(root, rel), "utf8");
-        out.push({ file: rel.replaceAll(path.sep, "/"), src: maskLeanCommentsAndStrings(raw), raw });
-      } catch {
-        /* file vanished between readdir and read */
+  // Sources are read ONE FILE AT A TIME and dropped after use. The consumer corpus is the whole
+  // package (every paper's sources: ~0.7 GB in 26k files on 2026-11-08), and holding it raw +
+  // masked overflowed the runner's 4 GB heap right after every F4 review.
+  async function* leanSources(root: string): AsyncGenerator<{ file: string; raw: string }> {
+    // Disposable `tmp/` trees are pruned before descent rather than listed and then filtered (the
+    // same files as `!isPaperTmpPath`): live they held 1.3M entries against 27k package entries.
+    const rels: string[] = [];
+    const walk = async (rel: string): Promise<void> => {
+      for (const entry of await readdir(path.join(root, rel), { withFileTypes: true })) {
+        const child = rel ? path.join(rel, entry.name) : entry.name;
+        if (entry.isDirectory()) {
+          if (entry.name !== PAPER_TMP_DIR) await walk(child);
+        } else if (entry.name.endsWith(".lean")) rels.push(child);
       }
+    };
+    try {
+      await walk("");
+    } catch {
+      return; // best-effort, like the sibling F3.5 scanners
     }
-    return out;
-  };
-  const masked = await readTree(leanDir);
+    rels.sort();
+    for (const rel of rels) {
+      let raw: string;
+      try {
+        raw = await readFile(path.join(root, rel), "utf8");
+      } catch {
+        continue; // file vanished between readdir and read
+      }
+      yield { file: rel.replaceAll(path.sep, "/"), raw };
+    }
+  }
   const searchRoot = opts?.searchRoot ? path.resolve(opts.searchRoot) : null;
   const leanAbs = path.resolve(leanDir);
-  const usageCorpus =
+  const usageRoots =
     searchRoot === null || searchRoot === leanAbs
-      ? masked
+      ? [leanDir]
       : leanAbs.startsWith(searchRoot + path.sep)
-        ? await readTree(searchRoot) // parent root already covers leanDir
-        : [...(await readTree(searchRoot)), ...masked];
+        ? [searchRoot] // parent root already covers leanDir
+        : [searchRoot, leanDir];
   // Graph nodes may record fully qualified decl names; call sites use the short name.
   const exempt = new Set<string>();
   for (const d of graphDeclNames) {
@@ -161,25 +170,47 @@ export async function sweepDeadHelpers(
     exempt.add(d.split(".").pop()!);
   }
   const sites: DeclSite[] = [];
-  for (const { file, src, raw } of masked) sites.push(...scanDeclSites(src, raw, file));
+  for await (const { file, raw } of leanSources(leanDir)) sites.push(...scanDeclSites(maskLeanCommentsAndStrings(raw), raw, file));
+  const candidates = sites.filter((s) => !s.attributed && !s.kept && !exempt.has(s.name));
+  if (candidates.length === 0) return [];
+
+  /** Per candidate name: its whole-identifier matches and its definition sites over the corpus. */
+  const counts = new Map<string, { wordRe: RegExp; defRe: RegExp; uses: number; defs: number }>();
+  for (const { name } of candidates) {
+    if (counts.has(name)) continue;
+    const esc = name.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+    counts.set(name, {
+      wordRe: new RegExp(`(?<![\\p{L}\\p{N}_'])${esc}(?![\\p{L}\\p{N}_?!'])`, "gu"),
+      // Every definition site of the same short name anywhere in the corpus contributes one match
+      // that is not a use (the corpus may span sibling run dirs with their own re-declarations).
+      defRe: new RegExp(`(?:theorem|lemma|def|instance|abbrev)\\s+${esc}(?![\\p{L}\\p{N}_?!'])`, "gu"),
+      uses: 0,
+      defs: 0,
+    });
+  }
+  const matches = (src: string, re: RegExp): number => {
+    re.lastIndex = 0;
+    let n = 0;
+    while (re.exec(src) !== null) n++;
+    return n;
+  };
+  for (const root of usageRoots) {
+    for await (const { raw } of leanSources(root)) {
+      // Masking only blanks text, so a name absent from the raw source has no match in its masked
+      // form: most files mention no candidate and are neither masked nor regex-scanned.
+      const present = [...counts].filter(([name]) => raw.includes(name));
+      if (present.length === 0) continue;
+      const src = maskLeanCommentsAndStrings(raw);
+      for (const [, c] of present) {
+        c.uses += matches(src, c.wordRe);
+        c.defs += matches(src, c.defRe);
+      }
+    }
+  }
 
   const findings: DeadHelperFinding[] = [];
-  for (const s of sites) {
-    if (s.attributed || s.kept || exempt.has(s.name)) continue;
-    const esc = s.name.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
-    const wordRe = new RegExp(`(?<![\\p{L}\\p{N}_'])${esc}(?![\\p{L}\\p{N}_?!'])`, "gu");
-    // Every definition site of the same short name anywhere in the corpus contributes one match
-    // that is not a use (the corpus may span sibling run dirs with their own re-declarations).
-    const defRe = new RegExp(
-      `(?:theorem|lemma|def|instance|abbrev)\\s+${esc}(?![\\p{L}\\p{N}_?!'])`,
-      "gu",
-    );
-    let uses = 0;
-    let defs = 0;
-    for (const { src } of usageCorpus) {
-      uses += src.match(wordRe)?.length ?? 0;
-      defs += src.match(defRe)?.length ?? 0;
-    }
+  for (const s of candidates) {
+    const { uses, defs } = counts.get(s.name)!;
     if (uses - Math.max(defs, 1) <= 0) findings.push({ decl: s.name, file: s.file, line: s.line });
   }
   // One finding per name (same-name sites would all report or none).

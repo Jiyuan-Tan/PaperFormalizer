@@ -1,7 +1,8 @@
 // The local UI server: 127.0.0.1 only, a random token (handed over in the printed URL, then kept in
 // a SameSite=Strict HttpOnly cookie), the Host header checked against DNS rebinding. Views are JSON,
 // gzipped, with ETags; pushes go out as server-sent events when the watcher sees a change. A run's
-// views (its page detail, its drawers, its paper) are answered from memory while unchanged.
+// views (its page detail, its drawers, its paper) are answered from memory while unchanged, for the
+// papers last opened (`PAPERS_HELD`); any other is rendered again when asked.
 import { createHash, randomBytes, timingSafeEqual } from "node:crypto";
 import { createReadStream, existsSync, lstatSync, mkdirSync, readdirSync, readFileSync, renameSync, rmSync, statSync, writeFileSync } from "node:fs";
 import { open } from "node:fs/promises";
@@ -14,17 +15,18 @@ import type { ToolkitConfig } from "../toolkit/config.js";
 import type { ChecklistDecision } from "../proposals/checklist.js";
 import type { ProposalBatch } from "../proposals/schema.js";
 import { buildArgv, displayCommand, launch, needsAgent, writeChecklistDecisions, type Action } from "./actions.js";
-import { derive, readJsonCached, signature } from "./fscache.js";
+import { derive, deriveKey, forget, readJsonCached, signature } from "./fscache.js";
 import { formulasApart } from "./formulas_apart.js";
 import { readLibrary } from "./library_model.js";
 import { ASSET_EXT, MATH_OVERRIDES_FILE, runPaper, texStrings, type Fragment, type PaperView } from "./page_snapshot.js";
-import { applyOf, renderCheckpointOf, checklistPath, DECISIONS_FILE, listRunSlugs, newerRuns, markApplying, markStarted, OBJECTIONS_FILE, START_REQUEST_FILE, MESSAGES_FILE, drawersOf, pageOf, reportCurrent, runDetail, runDir, runLive, runSummary, validSlug, type MessageFile, type OrchDecision, type OrchMessage, type OwnerObjection } from "./run_model.js";
+import { applyOf, renderCheckpointOf, checklistPath, DECISIONS_FILE, listRunSlugs, newerRuns, markApplying, markStarted, OBJECTIONS_FILE, START_REQUEST_FILE, MESSAGES_FILE, drawersOf, isVersionSlug, pageOf, reportCurrent, runDetail, runDir, runExists, runLive, runSummary, runWorkDir, validSlug, versionSlug, type MessageFile, type OrchDecision, type OrchMessage, type OwnerObjection } from "./run_model.js";
 import { writeJsonAtomic } from "../shared/json_atomic.js";
 import { clearMessages, nextMessageId, updateMessages } from "../../scripts/messages_store.mjs";
 import { planFingerprint, pollShare, readShare, sharePaper, sharePlan, shareRecordView, shareView, type ShareDeps } from "../verify/share.js";
 import type { MathFailure } from "./tex_html.js";
 import { TIKZ_DIR } from "./tikz.js";
 import { ChangeWatcher } from "./watch.js";
+import { compareView } from "./compare.js";
 import type { DemoDriver } from "../demo/driver.js";
 import { VERIFY_FILES } from "../verify/types.js";
 
@@ -44,6 +46,8 @@ export const MATH_FAILURES_FILE = path.join("logs", "ui_math_failures.json");
 /** What the page could not draw besides formulas (`RenderProblems`), rewritten as the paper changes; the
  *  orchestrating agent's watcher reports a new list once. */
 export const RENDER_PROBLEMS_FILE = path.join("logs", "ui_render_problems.json");
+/** The answer to every change asked of an earlier version of a paper (`<slug>@v<n>`): it is frozen. */
+export const VERSION_READ_ONLY = "an earlier version is read only: open the current version to act on the paper";
 
 /** The owner's messages to the agent (`OrchMessage`): the length of one, and what it may carry —
  *  files of these kinds only (documents, pictures, archives: nothing a browser would run). */
@@ -70,6 +74,11 @@ const plainDir = (dir: string): boolean => {
 
 /** When this server process started: part of every keyed ETag. */
 const BOOT = Date.now().toString(36);
+/** How many papers the server holds rendered: those last opened (each is tens of MB). More tabs than
+ *  this, on papers that keep changing, each render again at every change: bounded memory, more work. */
+const PAPERS_HELD = 8;
+/** A paper's renderer of TeX outside it (the run records'), and what it rendered. */
+type Renderer = { fragment: Fragment; done: Map<string, string> };
 /** The pace of the event stream's pings (the page takes three missed for a lost connection). */
 const PING_MS = 10_000;
 /** The page's files as they stand on disk: a tab that loaded others runs an older page. */
@@ -108,27 +117,37 @@ export async function startUiServer(cfg: ToolkitConfig, opts: { port: number; ho
     if (!hit || hit.key !== key) answers.set(name, hit = { key, etag: `"${createHash("sha1").update(`${BOOT}:${name}:${key}`).digest("base64url")}"`, gz: null, br: null });
     return hit;
   };
-  // per run: the paper's fragment renderer, what it rendered, and the formulas no renderer read
-  const fragmenters = new Map<string, { fragment: Fragment; done: Map<string, string>; failures: Array<MathFailure & { where: string }> }>();
+  // per run: the formulas no renderer read — the paper's, and the run records' the page drew — under
+  // the paper key they were found at (a render under the same key, after the paper was let go, keeps
+  // the records'); small, kept for every run rendered
+  const failuresOf = new Map<string, { key: string; paper: MathFailure[]; record: MathFailure[] }>();
   const recordFailures = (slug: string) => {
-    const f = fragmenters.get(slug); if (!f) return;
+    // (a frozen version is never written; its formulas are its run's to fix)
+    const f = failuresOf.get(slug); if (!f || isVersionSlug(slug)) return;
     const file = path.join(runDir(cfg, slug), MATH_FAILURES_FILE);
     const seen = new Set<string>();
-    const failures = f.failures.filter((x) => !seen.has(x.tex) && seen.add(x.tex));
+    const failures = [...f.paper.map((x) => ({ ...x, where: "paper" })), ...f.record.map((x) => ({ ...x, where: "run record" }))].filter((x) => !seen.has(x.tex) && seen.add(x.tex));
     const text = JSON.stringify({ how: `add "<tex>": "<replacement TeX>" to ${MATH_OVERRIDES_FILE} in the run directory`, failures }, null, 2) + "\n";
     if (!failures.length && !existsSync(file)) return;
     try { if (!existsSync(file) || readFileSync(file, "utf8") !== text) { mkdirSync(path.dirname(file), { recursive: true }); writeFileSync(file, text); } } catch { /* best effort */ }
   };
-  /** The run detail's TeX strings rendered: string → HTML (the page looks them up). */
-  const texHtmlFor = (slug: string, detail: unknown): Record<string, string> => {
-    const f = fragmenters.get(slug); if (!f) return {};
+  /** The run detail's TeX strings rendered by its paper's renderer: string → HTML (the page looks them up). */
+  const texHtmlFor = (slug: string, renderer: Renderer | null, detail: unknown): Record<string, string> => renderTex(slug, renderer, texStrings(detail));
+  /** `strings` (TeX) rendered by the paper's renderer: string → HTML. `onRecord`: what no renderer reads
+   *  is put on the run's record for the agent (and the rendering kept with the paper); without it (the
+   *  compare view's statements, an earlier version's among them) neither. */
+  const renderTex = (slug: string, renderer: Renderer | null, strings: Iterable<string>, onRecord = true): Record<string, string> => {
+    if (!renderer) return {};
     const out: Record<string, string> = {};
     let fresh = false;
-    for (const v of texStrings(detail)) {
-      let html = f.done.get(v);
+    for (const v of strings) {
+      let html = renderer.done.get(v);
       if (html === undefined) {
-        const r = f.fragment(v); html = r.html; f.done.set(v, html);
-        if (r.failures.length) { f.failures.push(...r.failures.map((x) => ({ ...x, where: "run record" }))); fresh = true; }
+        const r = renderer.fragment(v); html = r.html; if (onRecord) renderer.done.set(v, html);
+        const record = onRecord ? failuresOf.get(slug)?.record : undefined;
+        const known = new Set(record?.map((x) => x.tex));
+        const found = r.failures.filter((x) => !known.has(x.tex));
+        if (record && found.length) { record.push(...found); fresh = true; }
       }
       out[v] = html;
     }
@@ -231,30 +250,63 @@ export async function startUiServer(cfg: ToolkitConfig, opts: { port: number; ho
   };
 
   const recordRenderProblems = (slug: string, p: PaperView["renderProblems"]) => {
+    if (isVersionSlug(slug)) return;
     const file = path.join(runDir(cfg, slug), RENDER_PROBLEMS_FILE);
     const any = Object.keys(p.unknownCommands).length + Object.keys(p.unknownEnvironments).length + p.missingFigures.length + p.omittedDrawings + (p.tikz ? 1 : 0) + p.unresolvedRefs.length + p.unnamedResults.length > 0;
     const text = JSON.stringify({ how: "fix in the run (its source copy, or a renderer gap with a test); the page shows each of these as source text or a placeholder", ...p }, null, 2) + "\n";
     if (!any && !existsSync(file)) return;
     try { if (!existsSync(file) || readFileSync(file, "utf8") !== text) { mkdirSync(path.dirname(file), { recursive: true }); writeFileSync(file, text); } } catch { /* best effort */ }
   };
-  const paperView = async (slug: string) => {
-    const p = await runPaper(runDir(cfg, slug), `/api/runs/${encodeURIComponent(slug)}/asset`);
-    if (!p) return { value: null, key: "none" };
-    return derive(`paper:${slug}`, p.inputs, p.base, async () => {
+  const assetBase = (slug: string) => `/api/runs/${encodeURIComponent(slug)}/asset`;
+  // the papers held in memory: those last opened, PAPERS_HELD of them (most recent last); any other
+  // paper is let go once rendered
+  const held: string[] = [];
+  const drop = (slug: string) => {
+    forget(`paper:${slug}`);
+    for (const v of ["paper", "page", "drawers"]) answers.delete(`${v}:${slug}`);
+  };
+  /** After a request that opened a paper: let it go if it was no longer held by the time it was answered. */
+  const release = (slug: string) => { if (!held.includes(slug)) drop(slug); };
+  const hold = (slug: string) => {
+    const at = held.indexOf(slug);
+    if (at >= 0) held.splice(at, 1);
+    held.push(slug);
+    while (held.length > PAPERS_HELD) drop(held.shift()!);
+  };
+  /** The key each run's paper was last rendered under (its formulas on record then). */
+  const rendered = new Map<string, string>();
+  /** A run's paper and the renderer of its run records' TeX, under the key of its inputs. */
+  const paperView = async (slug: string): Promise<{ value: PaperView | null; renderer: Renderer | null; key: string }> => {
+    const p = await runPaper(runDir(cfg, slug), assetBase(slug), runWorkDir(cfg, slug));
+    if (!p) return { value: null, renderer: null, key: "none" };
+    const r = await derive(`paper:${slug}`, p.inputs, p.base, async (key) => {
       const { view, fragment } = await p.render();
-      fragmenters.set(slug, { fragment, done: new Map(), failures: view.health.mathFailures.map((x) => ({ ...x, where: "paper" })) });
+      const was = failuresOf.get(slug);
+      failuresOf.set(slug, { key, paper: view.health.mathFailures, record: was?.key === key ? was.record : [] });
       recordFailures(slug);
       recordRenderProblems(slug, view.renderProblems);
-      return view;
+      return { view, renderer: { fragment, done: new Map<string, string>() } satisfies Renderer };
     });
+    rendered.set(slug, r.key);
+    return { value: r.value.view, renderer: r.value.renderer, key: r.key };
   };
 
   /** The paper view as sent: its formulas set apart (`formulas_apart.ts`), drawn by the page as needed. */
   const paperJson = (value: PaperView | null) => JSON.stringify(value ? formulasApart(value) : value);
-  /** The paper rendered and its answer zipped, ahead of the page asking. */
+  /** A paper opened: held, the least recently opened let go. */
+  const openPaper = (slug: string) => { hold(slug); return paperView(slug); };
+  /** A run's paper rendered again after its files changed, its formulas no renderer reads on record for
+   *  the agent: an unchanged paper is not rendered again; a paper held is zipped ahead of the page
+   *  asking, any other let go. */
   const warmPaper = async (slug: string) => {
+    const isHeld = held.includes(slug);
+    if (!isHeld) {
+      const p = await runPaper(runDir(cfg, slug), assetBase(slug), runWorkDir(cfg, slug));
+      if (!p || rendered.get(slug) === deriveKey(p.inputs, p.base)) return;
+    }
     const { value, key } = await paperView(slug);
-    answerOf(`paper:${slug}`, key).gz ??= gzipSync(paperJson(value));
+    if (isHeld && held.includes(slug)) answerOf(`paper:${slug}`, key).gz ??= gzipSync(paperJson(value));
+    else if (!held.includes(slug)) drop(slug);
   };
 
   const server = http.createServer(async (req, res) => {
@@ -322,12 +374,12 @@ export async function startUiServer(cfg: ToolkitConfig, opts: { port: number; ho
       const am = /^\/api\/runs\/([^/]+)\/asset\/(.+)$/.exec(p);
       if (am && req.method === "GET") {
         const slug = decodeURIComponent(am[1]!);
-        if (!validSlug(slug)) { fail(res, 404, "no such run"); return; }
+        if (!validSlug(slug) || (isVersionSlug(slug) && !runExists(cfg, slug))) { fail(res, 404, "no such run"); return; }
         const rel = am[2]!;
         if (!ASSET_EXT.has(path.extname(decodeURIComponent(rel)).toLowerCase())) { fail(res, 403, "not a figure or PDF"); return; }
         const dir = runDir(cfg, slug);
-        // a TikZ picture typeset for the page (`tikz.ts`)
-        if (rel.startsWith("_tikz/")) { serveFile(req, res, safeJoin(path.join(dir, TIKZ_DIR), rel.slice("_tikz/".length)), false, true); return; }
+        // a TikZ picture typeset for the page (`tikz.ts`; a version's, under its run)
+        if (rel.startsWith("_tikz/")) { serveFile(req, res, safeJoin(path.join(runWorkDir(cfg, slug), TIKZ_DIR), rel.slice("_tikz/".length)), false, true); return; }
         const base = existsSync(path.join(dir, "annotated")) ? path.join(dir, "annotated") : path.join(dir, "source");
         const file = safeJoin(base, rel);
         serveFile(req, res, existsSync(file) ? file : safeJoin(path.join(dir, "source"), rel), false, true);
@@ -336,18 +388,46 @@ export async function startUiServer(cfg: ToolkitConfig, opts: { port: number; ho
       const m = /^\/api\/runs\/([^/]+)(?:\/([a-z-]+))?$/.exec(p);
       if (m) {
         const slug = decodeURIComponent(m[1]!);
-        if (!validSlug(slug) || !existsSync(path.join(runDir(cfg, slug), "state.json"))) { fail(res, 404, `no run ${slug}`); return; }
+        if (!runExists(cfg, slug)) { fail(res, 404, `no run ${slug}`); return; }
         const sub = m[2] ?? "";
+        // An earlier version of the paper (`<slug>@v<n>`) is frozen: shown, never changed — every POST
+        // refused, and nothing shared or compared from it.
+        if (isVersionSlug(slug) && (req.method !== "GET" || sub === "share" || sub === "share-status" || sub === "compare")) { if (req.method === "POST") req.resume(); fail(res, 409, VERSION_READ_ONLY); return; }
+        if (sub === "compare" && req.method === "GET") {
+          // an earlier version beside the run as it stands: each result's statement in both, rendered
+          // as the page renders statements (each under its own paper's macros), and its outcome in each
+          const n = Number(url.searchParams.get("with"));
+          const view = Number.isInteger(n) && n > 0 ? await compareView(cfg, slug, n) : null;
+          if (!view) { fail(res, 404, `${slug} has no earlier version ${url.searchParams.get("with") ?? ""}`.trim()); return; }
+          const vslug = versionSlug(slug, n);
+          const now = await openPaper(slug).catch(() => null);
+          const before = await paperView(vslug).catch(() => null);
+          try {
+            // each column from its own version's paper: its numbering, and its TeX under its own macros
+            const headingIn = (paper: PaperView | null | undefined, id: string, label: string | null) => (label ? paper?.envs.find((e) => e.label === label)?.heading : undefined) ?? paper?.anchorHeadings[id] ?? null;
+            for (const r of view.rows) {
+              r.headingBefore = r.before ? headingIn(before?.value, r.id, r.labelBefore) : null;
+              r.heading = (r.now ? headingIn(now?.value, r.id, r.label) : null) ?? r.headingBefore;
+            }
+            const texHtml = {
+              before: renderTex(vslug, before?.renderer ?? null, view.rows.flatMap((r) => (r.before ? [r.before.statement] : [])), false),
+              now: renderTex(slug, now?.renderer ?? null, view.rows.flatMap((r) => (r.now ? [r.now.statement] : [])), false),
+            };
+            sendJson(req, res, { ...view, title: now?.value?.title ?? null, texHtml });
+          } finally { release(slug); release(vslug); }
+          return;
+        }
         if ((sub === "" || sub === "drawers") && req.method === "GET") {
           // the page's detail, and apart from it what only the results' drawers show (`RunPage`,
           // `RunDrawers`): each keyed by its own content and the paper its TeX is rendered under
           const detail = await runDetail(cfg, slug, { lean: sub === "drawers" });
-          const paper = await paperView(slug).catch(() => null); // the fragment renderer comes with the paper
+          const paper = await openPaper(slug).catch(() => null); // the fragment renderer comes with the paper
           const part = sub ? drawersOf(detail) : pageOf(detail);
-          sendView(req, res, `${sub || "page"}:${slug}`, `${paper?.key}\n${JSON.stringify(part)}`, () => JSON.stringify({ ...part, texHtml: texHtmlFor(slug, part) }));
+          try { sendView(req, res, `${sub || "page"}:${slug}`, `${paper?.key}\n${JSON.stringify(part)}`, () => JSON.stringify({ ...part, texHtml: texHtmlFor(slug, paper?.renderer ?? null, part) })); }
+          finally { release(slug); }
           return;
         }
-        if (sub === "paper" && req.method === "GET") { const { value, key } = await paperView(slug); sendView(req, res, `paper:${slug}`, key, () => paperJson(value)); return; }
+        if (sub === "paper" && req.method === "GET") { const { value, key } = await openPaper(slug); try { sendView(req, res, `paper:${slug}`, key, () => paperJson(value)); } finally { release(slug); } return; }
         if ((sub === "preview" || sub === "action") && req.method === "POST") {
           const body = await readBody(req) as { action?: Action };
           if (!body.action) { fail(res, 400, "no action"); return; }
@@ -453,9 +533,11 @@ export async function startUiServer(cfg: ToolkitConfig, opts: { port: number; ho
           // agent's watcher wakes on a rejection and acts on it)
           const body = await readBody(req) as { id?: string; verdict?: string; guidance?: string };
           const file = path.join(runDir(cfg, slug), DECISIONS_FILE);
-          // a copy: the cached value stays what is on disk if the write fails
-          const all = structuredClone((await readJsonCached<OrchDecision[]>(file)) ?? []);
-          const d = all.find((x) => x.id === body.id);
+          // from disk, and with no await between this read and the write below: two reviews sent in
+          // quick succession must not both start from the same copy (the later would drop the earlier)
+          let all: OrchDecision[] = [];
+          try { all = JSON.parse(readFileSync(file, "utf8")) as OrchDecision[]; } catch { /* none yet, or unreadable: no such decision */ }
+          const d = Array.isArray(all) ? all.find((x) => x.id === body.id) : undefined;
           if (!d) { fail(res, 404, "no such decision"); return; }
           const verdict = body.verdict === "reject" ? "reject" : "approve";
           const guidance = String(body.guidance ?? "").trim();
@@ -483,7 +565,8 @@ export async function startUiServer(cfg: ToolkitConfig, opts: { port: number; ho
           if (body.withdraw) { if (!o) { fail(res, 404, "no such report"); return; } all.splice(all.indexOf(o), 1); }
           else if (o) Object.assign(o, { text, at: new Date().toISOString() });
           else {
-            const c = (await paperView(slug)).value?.comments.find((x) => x.key === body.comment);
+            const c = (await openPaper(slug)).value?.comments.find((x) => x.key === body.comment);
+            release(slug);
             if (!c) { fail(res, 404, "no such comment"); return; }
             // a note awaiting a ruling is decided, not reported on
             if (c.kind === "rewind" || c.kind === "cap") { fail(res, 400, "this comment awaits a ruling"); return; }
@@ -626,13 +709,9 @@ export async function startUiServer(cfg: ToolkitConfig, opts: { port: number; ho
     server.listen(opts.port, host, () => resolve());
   });
   port = (server.address() as { port: number }).port;
+  // no paper rendered ahead: a run at work renders its own at its next change (its formulas on record
+  // for the agent), any other when it is opened
   watcher.start();
-  // Warm every paper (those needing the owner first): the first open is instant, and formulas no
-  // renderer reads are on record for the agent.
-  void (async () => {
-    const all = await Promise.all(listRunSlugs(cfg).map(async (s) => ({ s, needs: (await runSummary(cfg, s).catch(() => null))?.status === "needs-you" })));
-    for (const { s } of all.sort((a, b) => Number(b.needs) - Number(a.needs))) { try { await warmPaper(s); } catch { /* best effort */ } }
-  })();
   return {
     server, token, url: `http://${host}:${port}/?token=${token}`,
     viewers: () => clients.size,

@@ -7,47 +7,49 @@
  * without being fooled by `"/-"`, `"def fake"`, `-- :=`, or brackets in comments.
  */
 export function maskLeanCommentsAndStrings(s: string): string {
-  let out = "";
-  let depth = 0;
+  // Built from slices of `s` joined once, not one `+=` per char: that left a rope of one node
+  // per char, tens of bytes each, so masking a 10 MB generated module took hundreds of MB.
+  const parts: string[] = [];
+  let kept = 0; // start of the verbatim run not yet in `parts`
+  /** Mask [from, to): every code unit a space, newlines kept. */
+  const blank = (from: number, to: number): void => {
+    parts.push(s.slice(kept, from), s.slice(from, to).replace(/[^\n]/g, " "));
+    kept = to;
+  };
   for (let i = 0; i < s.length; i++) {
     const ch = s[i];
-    if (depth > 0) {
-      if (ch === "/" && s[i + 1] === "-") {
-        depth++;
-        out += "  ";
-        i++;
-      } else if (ch === "-" && s[i + 1] === "/") {
-        depth--;
-        out += "  ";
-        i++;
-      } else out += ch === "\n" ? "\n" : " ";
-      continue;
-    }
     if (ch === "/" && s[i + 1] === "-") {
-      depth = 1;
-      out += "  ";
-      i++;
+      const start = i;
+      let depth = 1;
+      for (i += 2; i < s.length && depth > 0; ) {
+        if (s[i] === "/" && s[i + 1] === "-") {
+          depth++;
+          i += 2;
+        } else if (s[i] === "-" && s[i + 1] === "/") {
+          depth--;
+          i += 2;
+        } else i++;
+      }
+      blank(start, i);
+      i--;
       continue;
     }
     if (ch === "-" && s[i + 1] === "-") {
-      out += "  ";
-      i++;
-      while (i + 1 < s.length && s[i + 1] !== "\n") {
-        out += " ";
-        i++;
-      }
+      const nl = s.indexOf("\n", i + 2);
+      const end = nl < 0 ? s.length : nl;
+      blank(i, end);
+      i = end - 1;
       continue;
     }
     if (ch === '"') {
-      out += " ";
+      const start = i;
       for (i++; i < s.length; i++) {
-        const q = s[i];
-        out += q === "\n" ? "\n" : " ";
-        if (q === "\\" && i + 1 < s.length) {
-          i++;
-          out += s[i] === "\n" ? "\n" : " ";
-        } else if (q === '"') break;
+        if (s[i] === "\\" && i + 1 < s.length) i++;
+        else if (s[i] === '"') break;
       }
+      const end = Math.min(i + 1, s.length);
+      blank(start, end);
+      i = end - 1;
       continue;
     }
     if (ch === "'") {
@@ -55,12 +57,13 @@ export function maskLeanCommentsAndStrings(s: string): string {
       const plain = s[i + 1] !== "\\" && s[i + 1] !== undefined && s[i + 2] === "'";
       if (escaped || plain) {
         const end = escaped ? i + 3 : i + 2;
-        out += " ".repeat(end - i + 1);
+        parts.push(s.slice(kept, i), " ".repeat(end - i + 1));
+        kept = end + 1;
         i = end;
         continue;
       }
     }
-    out += ch;
   }
-  return out;
+  parts.push(s.slice(kept));
+  return parts.join("");
 }

@@ -65,7 +65,8 @@ installation have not yet been checked. On Windows, start with **Windows setup**
 | `lean-lsp-mcp` on `PATH` | lets the model workers query Lean | `lean-lsp-mcp --help` | `pipx install lean-lsp-mcp` (or `uv tool install lean-lsp-mcp`) |
 | `pdflatex` (optional) | the annotated paper's PDF, and a check that repaired text compiles; without it both are skipped and you get the TeX only | `pdflatex --version` | TeX Live / MacTeX |
 | `tar`, `unzip` | unpacking a paper given as an archive | | usually present |
-| `curl`, `zstd` (Causalean, StatLean) | fetching a library's prebuilt cache (step 4) | `zstd --version` | your package manager |
+| `curl`, `zstd` | fetching a library's prebuilt cache (Causalean, StatLean: step 4); `zstd` also serves the Lean workspaces (next row) | `zstd --version` | your package manager |
+| `flock`, `zstd`, `tar`, bash ≥ 4, GNU `cp` and `find` | per-run Lean workspaces: papers build side by side, and moving results into your toolkit needs them (manual, "Lean workspaces") | `flock --version`, `bash --version` | most Linux systems have them (else your package manager); macOS: `brew install bash coreutils findutils zstd flock`, with Homebrew's `bin` and the `gnubin` directories of coreutils and findutils first on `PATH`; Windows: install in WSL |
 
 You can do without a GPU and Python (see "Library search" below).
 
@@ -112,6 +113,11 @@ Use **Git Bash** for the numbered steps below. `source scripts/node_env.sh` is a
 it does not run in PowerShell or Command Prompt. Install Windows programs, then close and reopen
 Git Bash so it sees their updated `PATH`. WSL is a separate Linux installation: keep its tools
 and paths separate from this Windows setup.
+
+Per-run Lean workspaces are off on Windows: runs build in the shared toolkit, and moving results
+into your toolkit (applying the accepted entries of a promotion round) is refused, with a message
+that says why. To have both, install PaperFormalizer and your toolkit in WSL and follow the Linux
+steps there instead.
 
 1. Install [Git for Windows](https://git-scm.com/downloads/win), including Git Bash, and a
    Windows [Node.js installer](https://nodejs.org/en/download) satisfying the version above.
@@ -357,6 +363,19 @@ agent"), with files attached.
 
 **5. Continue** stage by stage — `--resume --stop-after F1.5`, then on — to the report
 (`runs/<slug>/report.md`) and the annotated paper.
+
+**6. Revise.** To revise the paper (a proof rewritten, a statement corrected, a lemma added), edit
+your own copy of it: the folder you gave in step 3 (`~/papers/mypaper`), or a copy of it. The
+annotated paper shows what to change. Do not edit the run's copy in `runs/<slug>/source/`: an edit
+there is taken as a fix of the run's copy, not a new version. If you no longer have the original,
+copy the run's out first: `cp -r ~/my-toolkit/runs/mypaper/source ~/papers/mypaper`. Then run the
+revision under the same slug:
+
+    npx tsx bin/paperformalizer.ts verify ~/papers/mypaper --toolkit ~/my-toolkit --slug mypaper
+
+The run keeps everything the revision left as it was (its checks, repairs, your rulings and its Lean)
+and redoes only what changed; the earlier version is kept under `runs/<slug>/versions/`, and the
+paper's page lets you pick it or compare it with the new one. See "A revised paper" in the manual.
 
 `doc/USER_MANUAL.md` covers every stage, halt, option and file; `paperformalizer` alone prints all
 commands (`propose`, `study`, `toolkit-health`, `report`, …). Here and in the manual,

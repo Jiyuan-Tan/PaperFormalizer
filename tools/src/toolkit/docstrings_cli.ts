@@ -13,7 +13,9 @@ import { assertToolkitLakefile } from "./lakefile.js";
 export const DOCSTRINGS_USAGE =
   "Usage: paperformalizer docstrings [--toolkit <path>] [--modules M1,M2,…]\n" +
   "  document the toolkit's declarations to the docstring contract (NL translation + crosslinks);\n" +
-  "  default: every module of the toolkit's divisions. Records under runs/toolkit_docstrings/.";
+  "  default: every module of the toolkit's divisions. Records under runs/toolkit_docstrings/.\n" +
+  "  The pass runs in a flux session of its own (`paperformalizer toolkit-flux`); one stopped part-way\n" +
+  "  leaves it open: close it with `paperformalizer toolkit-flux off --id <id>` (the id is printed at the start).";
 
 /** The run id the pass records under (`runs/<id>/`). */
 export const TOOLKIT_DOCSTRINGS_RUN = "toolkit_docstrings";
@@ -46,12 +48,17 @@ export async function runDocstringsCli(argv: string[]): Promise<void> {
   const ctx: PipelineContext = { repoRoot: cfg.toolkitRoot, toolkit: cfg, qid: TOOLKIT_DOCSTRINGS_RUN, dryRun: false, resume: false };
   ensureLogsDir(ctx.repoRoot, ctx.qid);
   console.log(`[docstrings] ${modules.length} module(s) of ${cfg.toolkitRoot}`);
-  const outcome = await documentModules({
-    ctx, deps: defaultDeps(ctx), modules, prefix: cfg.lib,
-    outDir: formalizationDir(ctx.repoRoot, ctx.qid), label: "toolkit",
-  });
-  // Nothing runs beside it here: the build confirming the edits is awaited at once.
-  const block = outcome.block ?? (outcome.confirm ? await outcome.confirm() : null);
+  // The pass rewrites the toolkit's Lean outside a Lake hold: inside a flux session of its own (no
+  // paper's build runs beside it; at its end the toolkit is built clean again).
+  const { withToolkitFlux } = await import("../shared/build_mutex.js");
+  const block = await withToolkitFlux(cfg.toolkitRoot, "docstrings", async () => {
+    const outcome = await documentModules({
+      ctx, deps: defaultDeps(ctx), modules, prefix: cfg.lib,
+      outDir: formalizationDir(ctx.repoRoot, ctx.qid), label: "toolkit",
+    });
+    // Nothing runs beside it here: the build confirming the edits is awaited at once.
+    return outcome.block ?? (outcome.confirm ? await outcome.confirm() : null);
+  }, (l) => console.log(l));
   if (block) {
     console.error(block);
     process.exitCode = 1;

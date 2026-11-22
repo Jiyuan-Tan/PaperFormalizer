@@ -386,6 +386,36 @@ describe("page: paper search", () => {
   });
 });
 
+describe("page: the pager stays short when there are many pages", () => {
+  const pagesShown = (html: string) => [...html.matchAll(/data-pg="(\d+)"[^>]*>(\d+)</g)].map((m) => +m[2]);
+  const toolkit = { name: "tk", repo: "/r", root: "/r", owner: "O", lean: "lean4:v4", base: [] };
+  const papers = (n: number) => Array.from({ length: n }, (_, i) => ({ slug: `p${i}`, title: `Paper ${i}`, authors: "", status: "done", stageIndex: 10 }));
+  it("shows the first, the last and the pages around the current one, and every button still moves there", async () => {
+    const p = runPage("p", { "/api/toolkit": { toolkit, runs: papers(200) } });
+    p.location.hash = "#/";
+    await p.page.route!();
+    const pager = p.at("#runs-pager");
+    const click = (pg: number) => (pager.listeners as Map<string, (e: unknown) => void>).get("click")!({ target: { closest: () => ({ disabled: false, dataset: { pg: String(pg) } }) } });
+    expect(pagesShown(pager.html)).toEqual([1, 2, 3, 4, 5, 6, 25]);
+    expect(pager.html).toContain("1–8 of 200");
+    click(11);
+    expect(pagesShown(pager.html)).toEqual([1, 10, 11, 12, 13, 14, 25]);
+    expect(pager.html.match(/class="gap"/g)?.length).toBe(2);
+    expect(p.at("#runs-body").html).toContain('data-slug="p88"');
+    click(24);
+    expect(pagesShown(pager.html)).toEqual([1, 20, 21, 22, 23, 24, 25]);
+    expect(pager.html).toContain("193–200 of 200");
+    expect(pager.html).toMatch(/data-pg="25" disabled/);
+  });
+  it("lists every page when there are few", async () => {
+    const p = runPage("p", { "/api/toolkit": { toolkit, runs: papers(70) } });
+    p.location.hash = "#/";
+    await p.page.route!();
+    expect(pagesShown(p.at("#runs-pager").html)).toEqual([1, 2, 3, 4, 5, 6, 7, 8, 9]);
+    expect(p.at("#runs-pager").html).not.toContain('class="gap"');
+  });
+});
+
 describe("page: what waits for the owner is counted in the tab's title and, when asked for, notified once", () => {
   const paper = (over: Record<string, unknown>) => ({ slug: "p1", title: "A Paper", status: "running", headline: "V1 · working", pending: { weakening: 0, promotion: null }, requests: [], unread: 0, ...over });
   const shown: Array<{ title: string; body: string; onclick?: () => void }> = [];

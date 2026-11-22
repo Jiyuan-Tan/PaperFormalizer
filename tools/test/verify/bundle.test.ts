@@ -716,6 +716,25 @@ describe("lean/ and MATCH.md", () => {
     const readmeTop = await readFile(path.join(runDir, "bundle", "README.md"), "utf8");
     expect(readmeTop).toContain("Ready to submit as far as the mechanical checks go.");
     expect(readmeTop).toContain("The files at this directory's root (`REPORT.md`, `MATCH.md`, `bundle.json`, this file) are outside the seal.");
+    // A dependency can belong to another paper in the same local library. Copy just its
+    // reached closure, byte for byte, without importing the owner's aggregate Papers root.
+    await w("Papers.lean", "import Papers.Demo\nimport Papers.Unrelated\n");
+    await w("Papers/Demo/Basic.lean", "module\npublic import Papers.Other.Helper\n\n-- @node: thm:rate\ntheorem rate : True := trivial\n");
+    const sibling = "module\npublic import Papers.Third.Leaf\npublic import Toolkit.A\n";
+    await w("Papers/Other/Helper.lean", sibling);
+    await w("Papers/Third/Leaf.lean", "import Mathlib.Data.Real.Basic\n");
+    await w("Papers/Other/Unused.lean", "-- not reached\n");
+    await w("Papers/Unrelated.lean", "-- not reached\n");
+    const withSibling = await writeBundle(args);
+    expect(withSibling.bundle.lean).toMatchObject({ self_contained: { ok: true, problems: [] }, toolkit_modules: ["Papers.Other.Helper", "Papers.Third.Leaf", "Toolkit.A", "Toolkit.B"] });
+    expect(withSibling.todo).toEqual([]);
+    expect(await lean("Papers/Other/Helper.lean")).toBe(sibling);
+    expect(await lean("Papers.lean")).toBe("module\n\npublic import Papers.Demo\n");
+    const siblingFiles = await files(path.join(runDir, "bundle", "lean"));
+    expect(siblingFiles).toContain("Papers/Third/Leaf.lean");
+    expect(siblingFiles).not.toContain("Papers/Other/Unused.lean");
+    expect(siblingFiles).not.toContain("Papers/Unrelated.lean");
+    await runSealCli([path.join(runDir, "bundle")], { log: () => {} });
     // a link in the Lean tree is refused: the bundle holds regular files only, and the seal names each
     if (FILE_SYMLINKS) {
       await symlink(path.join(root, "Papers/Demo/Basic.lean"), path.join(root, "Papers/Demo/Link.lean"));

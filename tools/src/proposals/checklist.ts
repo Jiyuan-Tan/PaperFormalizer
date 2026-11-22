@@ -112,7 +112,9 @@ function recurrenceText(p: Proposal): string {
     ? "first time — no other paper of yours states it"
     : `now in ${papers.length + 1} of your papers: this one and ${papers.join(", ")}` +
       (counted.some((x) => x.kind !== "identical") ? " (the same result under different notation, confirmed by the curator)" : "");
+  const users = p.imported_by ?? [];
   return head +
+    (users.length ? `; already used by the Lean of ${users.join(", ")}, which import${users.length === 1 ? "s" : ""} this paper (moving it rewrites ${users.length === 1 ? "that paper's" : "their"} references)` : "") +
     (deferred.length ? `; you deferred it before in ${deferred.join(", ")} — it returns with this evidence` : "") +
     (maybe.length ? `; possibly related in ${maybe.join(", ")}` : "");
 }
@@ -128,7 +130,7 @@ function goesToText(p: Proposal): string {
 
 /** The curator's advice for a technique seen for the first time. */
 function firstSightingText(p: Proposal): string[] {
-  if (p.division !== "Tricks" || p.qualifies_by !== "judgement" || (p.recurrence ?? []).some(countsAsRecurrence)) return [];
+  if (p.division !== "Tricks" || p.qualifies_by !== "judgement" || (p.recurrence ?? []).some(countsAsRecurrence) || p.imported_by?.length) return [];
   return ["**First sighting.** A technique seen in one paper only; deferring it keeps it on record, and it returns when another of your papers proves the same pattern.", ""];
 }
 

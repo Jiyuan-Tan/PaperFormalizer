@@ -41,6 +41,14 @@ describe("the paper's grade", () => {
     expect(kept).toMatchObject({ grade: "minor", major: [], minor: [{ node: "thm:main", what: "weakened: a constant for small alpha (the referee found the key results and the contribution kept)" }] });
     const lost = paperGrade([row({ node_id: "thm:main" })], [], { nodes: [], patch_review: { key_results_ok: false, detail: "lost" } } as unknown as V15Review, mains, { key_results: [], patches: [{ node: "thm:main", accepted_weakening: true, given_up: "the rate" }] });
     expect(lost.grade).toBe("major");
+    // the referee's severity decides a weakened key result, whatever key_results_ok says
+    const graded = (severity: "substantial" | "limited") =>
+      paperGrade([row({ node_id: "thm:main" })], [], { nodes: [], patch_review: { key_results_ok: true, detail: "kept", weakenings: [{ node: "thm:main", severity, reason: "why" }] } } as unknown as V15Review, mains, { key_results: ["thm:main"], patches: [{ node: "thm:main", accepted_weakening: true, given_up: "the rate" }] });
+    expect(graded("substantial")).toMatchObject({ grade: "major", major: [{ node: "thm:main", what: "weakened: the rate (substantial: why)" }] });
+    expect(graded("limited")).toMatchObject({ grade: "minor", major: [], minor: [{ node: "thm:main", what: "weakened: the rate (limited: why)" }] });
+    // a severity on a node outside the key results is ignored (an intermediate result stays minor)
+    const lemma = paperGrade([row({ node_id: "lem:x" })], [], { nodes: [], patch_review: { key_results_ok: true, detail: "kept", weakenings: [{ node: "lem:x", severity: "substantial", reason: "why" }] } } as unknown as V15Review, mains, { key_results: ["thm:main"], patches: [{ node: "lem:x", accepted_weakening: true, given_up: "a case" }] });
+    expect(lemma).toMatchObject({ grade: "minor", major: [] });
     expect(paperGrade([row({ node_id: "thm:main", bucket: "refuted", findings: [refuted("thm:main", false)] })], [], null, mains, null).grade).toBe("major");
     // a main result with no finding of its own, resting on a lemma still false
     const rests = (id: string) => (id === "thm:main" ? ["thm:main", "lem:z"] : [id]);

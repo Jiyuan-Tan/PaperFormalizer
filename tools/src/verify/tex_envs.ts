@@ -788,6 +788,20 @@ export interface EnvSignature {
   labelTemplate: string | null;
   /** Environment the wrapper opens, e.g. `theorem` — the kind is inherited from it. */
   wraps: string | null;
+  /** The paper's own proof environment: its opening typesets "Proof" (`{\bf Proof}:`), uses
+   *  `\proofname`, or opens `proof` (`\newenvironment{proof1}{\noindent{\bf Proof}:}{…}`), and it
+   *  takes no mandatory argument. One that names its result in a mandatory argument
+   *  (`\begin{proofof}{Theorem~\ref{t}}`) is left out: its target is not read, so it would be bound
+   *  to whatever result stands before it. */
+  proofLike: boolean;
+}
+
+/** Whether a `\newenvironment`'s opening code typesets a proof's heading. */
+function opensProof(begin: string, wraps: string | null): boolean {
+  if (wraps === "proof" || wraps === "proof*" || /\\proofname(?![A-Za-z])/.test(begin)) return true;
+  // the word as typeset text: not inside a `\label{…}` / `\begin{…}` argument, not part of a command name
+  const text = begin.replace(/\\(?:label|begin|end|ref)\s*\{[^{}]*\}/g, " ");
+  return /(?<![\\A-Za-z])Proof(?![A-Za-z])/.test(text);
 }
 
 function parseDocumentArgSpec(spec: string): Array<"m" | "o" | "s"> {
@@ -839,10 +853,12 @@ export function parseEnvSignatures(text: string): Record<string, EnvSignature> {
   ): void => {
     const label = begin ? /\\label\s*\{([^{}]*)\}/.exec(begin) : null;
     const wraps = begin ? /\\begin\s*\{([^{}#]+)\}/.exec(begin) : null;
+    const opened = wraps ? wraps[1]!.trim() : null;
     out[name.trim()] = {
       argSpec,
       labelTemplate: label ? label[1]! : null,
-      wraps: wraps ? wraps[1]!.trim() : null,
+      wraps: opened,
+      proofLike: begin !== null && !argSpec.includes("m") && opensProof(begin, opened),
     };
   };
   for (const m of text.matchAll(NEW_DOC_ENV_RE)) {
@@ -1233,6 +1249,8 @@ export function extractEnvs(
   const warnings: string[] = [];
   const starts = lineStarts(flat);
   const sigs = parseEnvSignatures(flat);
+  // `proof`, and the paper's own proof environments (`\newenvironment{proof1}{{\bf Proof}:}{…}`)
+  const proofEnvs = new Set([...PROOF_ENVS, ...Object.entries(sigs).filter(([n, s]) => s.proofLike && !newtheorem[n]).map(([n]) => n)]);
   const beginDoc = /\\begin\s*\{document\}/.exec(flat);
   const from = beginDoc ? beginDoc.index + beginDoc[0].length : 0;
   // The `\end{document}` that closes the body is the first one AFTER `\begin{document}`:
@@ -1283,7 +1301,7 @@ export function extractEnvs(
     }
     const line = lineMap[lineOf(starts, start)];
     const where = line ? `${line.file}:${line.line}` : `flat:${start}`;
-    const { bodyEnd, end } = findEnd(flat, name, i, PROOF_ENVS.has(name), where);
+    const { bodyEnd, end } = findEnd(flat, name, i, proofEnvs.has(name), where);
     return { name, start, bodyStart: i, bodyEnd, end, args };
   };
 
@@ -1295,7 +1313,7 @@ export function extractEnvs(
   for (let m = beginRe.exec(flat); m && m.index < to; m = beginRe.exec(flat)) {
     if (m.index < covered) continue;
     const name = m[1]!.trim();
-    const isProof = PROOF_ENVS.has(name);
+    const isProof = proofEnvs.has(name);
     const kind = newtheorem[name] ?? (name.endsWith("*") ? newtheorem[name.slice(0, -1)] : undefined);
     if (isProof && kind) {
       // The paper redeclared `proof` itself as a theorem-like environment. It stays a
@@ -1430,7 +1448,7 @@ export function extractEnvs(
     // the environment's own labels, never those belonging to a result or proof nested in it
     // (a list or an align block inside the body is part of the body: `\item \label{thm:a-i}`)
     const own = body.replace(/\\begin\s*\{([^{}]+)\}[\s\S]*?\\end\s*\{\1\}/g, (all, name: string) =>
-      (newtheorem[name.trim()] && !isAlgorithmName(name.trim())) || PROOF_ENVS.has(name.trim()) ? " " : all,
+      (newtheorem[name.trim()] && !isAlgorithmName(name.trim())) || proofEnvs.has(name.trim()) ? " " : all,
     );
     const all = [...own.matchAll(/\\label\s*\{([^{}]*)\}/g)].map((m) => m[1]!.trim()).filter((l) => l);
     // An algorithm is labelled at its caption (algorithm2e also labels lines: `\label{ln:init}`).

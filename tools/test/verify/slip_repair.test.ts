@@ -109,6 +109,8 @@ describe("the smallest repair: a formula slip is corrected, no hypothesis added"
     // The shard grading the patched node carries the minimality rule.
     const shard = r.calls.find((c) => isRefereeShard(c) && shardIds(c.prompt).includes("prop:delta2"))!;
     expect(shard.prompt).toContain("uses a later step where an earlier one suffices");
+    // An added hypothesis or condition the result holds without (e.g. implied by the others) is a larger change too.
+    expect(shard.prompt.replace(/\s+/g, " ")).toContain("Any other hypothesis or condition it adds that the corrected result does not need — the result and its amended proof hold without it, as when its other hypotheses imply it — is a larger change");
     const directive = JSON.parse(await readFile(path.join(r.runDir, VERIFY_FILES.v1ReviseDirective), "utf8"));
     expect(JSON.stringify(directive.findings)).toContain("$\\\\bar Q\\\\mathcal R^q");
   });

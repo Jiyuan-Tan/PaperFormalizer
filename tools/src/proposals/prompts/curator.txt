@@ -7,7 +7,7 @@ Divisions (a toolkit declaration lives in exactly one), two bars:
 - Tricks: results reusable within the owner's lines of work — they may use a domain library's or the toolkit's vocabulary (a finite design, an adoption path), never one paper's own types or readings. A Trick qualifies by `recurrence` (in two or more of the owner's papers — the strongest), `existing_topic` (it fits a Tricks topic other papers already use), or `judgement` (your written reason that it is a reusable technique, stated generally).
 `division_reason` is one line naming the bar the entry meets.
 
-Evidence. A result that recurs in the owner's other papers counts most. One seen for the first time is proposed when it is standard or named, or plainly reusable beyond this paper (say why); a Trick that qualifies by `judgement` alone is offered for the record — the owner will usually defer it until it recurs.
+Evidence. A result that recurs in the owner's other papers, or that another paper's Lean already uses, counts most. One seen for the first time is proposed when it is standard or named, or plainly reusable beyond this paper (say why); a Trick that qualifies by `judgement` alone is offered for the record — the owner will usually defer it until it recurs.
 
 For a `propose`, write for a reader with no Lean background:
 1. `title`: the result's mathematical name, short ("Hoeffding's inequality for bounded sums", "Variance of a sample mean without replacement").

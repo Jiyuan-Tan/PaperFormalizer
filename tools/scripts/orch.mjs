@@ -271,16 +271,16 @@ function applyLive() {
     return pid > 0 && alive(pid);
   }) ?? null;
 }
-/** The applies' own record: an apply writes its round's decisions first, a move it is half-way
- *  through, and — when it ends without applying the round — why (`apply_failed.json`). */
-const applySig = () => ["A.decisions.json", "B.decisions.json", "move_pending.json", "apply_failed.json"].map((f) => { try { return statSync(path.join(run, "proposals", f)).mtimeMs; } catch { return 0; } }).join(":");
-/** The round an apply left unfinished: decided since its batch was written, or a move half-way, and not recorded applied. */
+/** The applies' own record: an apply writes its round's decisions first, and — when it ends without
+ *  applying the round — why (`apply_failed.json`). */
+const applySig = () => ["A.decisions.json", "B.decisions.json", "apply_failed.json"].map((f) => { try { return statSync(path.join(run, "proposals", f)).mtimeMs; } catch { return 0; } }).join(":");
+/** The round an apply left unfinished: decided since its batch was written, and not recorded applied. */
 function applyUnfinished(round) {
   const v = readJson(path.join(run, "state.json"), {}).verify ?? {};
   const open = (r) => (r === "A" ? v.promotion_a : v.promotion)?.status === "pending_user";
   // (`ui/run_model.ts` `roundDecided`: decisions on file, not older than the batch — no date counts as decided)
   const began = (r) => { const d = readJson(path.join(run, "proposals", `${r}.decisions.json`), null); return Boolean(d) && !(Date.parse(String(d.decided_at ?? "")) < Date.parse(String(readJson(path.join(run, "proposals", `${r}.json`), {})?.created ?? ""))); };
-  return (round ? [round] : ["A", "B"]).find((r) => open(r) && (began(r) || existsSync(path.join(run, "proposals", "move_pending.json")))) ?? null;
+  return (round ? [round] : ["A", "B"]).find((r) => open(r) && began(r)) ?? null;
 }
 
 /** The identity of a suggested repair (`ui/run_model.ts` `repairKey`): its node and proposed statement. */
@@ -557,13 +557,15 @@ if (cmd === "watch") {
       const batchOf = failedOnFile?.round ?? sawApply ?? "B";
       const failed = failedOnFile && !(Date.parse(failedOnFile.at ?? "") < Date.parse(readJson(path.join(run, "proposals", `${batchOf}.json`), {}).created ?? "")) ? failedOnFile : null;
       const said = failed?.message ? `\n  it said: ${String(failed.message).split("\n").join("\n  ")}` : "";
-      if (round) report(`the apply of promotion round ${round} ended without completing it — read its output (the latest runs/${slug}/logs/ui_*.log, or your own log of it) and proposals/move_pending.json, settle what it names, then apply the round again (\`paperformalizer propose ${slug} --round ${round} --apply --toolkit ${toolkit}\`)${said}`);
+      if (round) report(`the apply of promotion round ${round} ended without completing it — read its output (the latest runs/${slug}/logs/ui_*.log, or your own log of it), settle what it names, then apply the round again (\`paperformalizer propose ${slug} --round ${round} --apply --toolkit ${toolkit}\`)${said}`);
       // refused before a decision was recorded: nothing entered the toolkit, the round still waits
       if (failed?.message) report(`the apply of promotion round ${failed.round ?? sawApply ?? ""} was refused and nothing was applied — the page shows the user why; when it is theirs to answer (an entry still undecided), tell them, else settle what it names and have the round applied again${said}`);
       sawApply = null;
       apply0 = applySig();
     }
-    if (timeout && Date.now() - t0 > timeout * 1000) { console.log(`[orch] ${slug}: nothing to act on yet (${live ? "running" : "waiting for the owner"})`); process.exit(2); }
+    // (an apply at work is running too — 2026-11-11: a run in its promotion round, no verify runner, read as
+    // "waiting for the owner", left the driver's count of runs at work, and each job took more from the queue: 85 at once)
+    if (timeout && Date.now() - t0 > timeout * 1000) { console.log(`[orch] ${slug}: nothing to act on yet (${live || applying ? "running" : "waiting for the owner"})`); process.exit(2); }
     setTimeout(tick, Number(process.env.PAPERFORMALIZER_ORCH_TICK_MS) || (timeout ? Math.min(10_000, timeout * 1000) : 10_000));
   };
   tick();

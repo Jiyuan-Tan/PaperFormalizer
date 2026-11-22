@@ -34,6 +34,7 @@ import { resultNames } from "./report_plain.js";
 import { loadUnits } from "./units.js";
 import { isStructuredExplanation, noteProse, type NoteProse, type OwnerExplanation } from "./owner_text.js";
 import { buildReport, renderReport, REPORT_BUCKETS, type ReportCitedLean, type ReportInputStatus, type VerifyReportJson } from "./report.js";
+import { reportRevision } from "./revision.js";
 import { readPatchFile } from "./patches.js";
 import { parseFileDecls } from "../formalization/lean_rows.js";
 import { leanNameLeaf } from "../presentation/lean_decl_name.js";
@@ -43,6 +44,7 @@ import { BUNDLE_DIR, writeBundle } from "./bundle.js";
 import { buildF4Seal } from "./f4_seal.js";
 import type { PublicTree } from "./bundle_lean.js";
 import { isCoreBearingEnv } from "./transcription_lint.js";
+import { readLeanProofEnglish } from "../formalization/lean_proof_english.js";
 import {
   VERIFY_FILES,
   type EnvsJson,
@@ -263,6 +265,7 @@ export function makeStageV6(deps: StageV6Deps = {}): VerifyStage {
       qid,
       explanations,
       patches: await readPatchFile(runDir),
+      leanProofEnglish: await readLeanProofEnglish(runDir),
       withdrawn: (verify.rejected_rewinds ?? [])
         .filter((r) => r.by === "owner")
         .map((r) => ({ node: r.node, stage: r.stage, finding: r.detail, reason: r.reason, pin: r.pin ?? null })),
@@ -288,6 +291,13 @@ export function makeStageV6(deps: StageV6Deps = {}): VerifyStage {
       inputs,
     });
 
+    // A revised paper: what changed from the version before (`versions/v<n>/report.json`).
+    if (verify.revision) {
+      const previous = path.join(runDir, "versions", `v${verify.revision.from_version}`, VERIFY_FILES.reportJson);
+      const rows = existsSync(previous) ? (((await readJsonFile(previous)) as VerifyReportJson).results ?? null) : null;
+      const rev = reportRevision(verify, json.results, rows);
+      if (rev) json.revision = rev;
+    }
     const out = deps.outDir ?? runDir;
     const jsonPath = path.join(out, VERIFY_FILES.reportJson);
     const mdPath = path.join(out, VERIFY_FILES.reportMd);

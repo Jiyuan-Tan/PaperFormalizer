@@ -10,12 +10,15 @@ import { isUndeliveredNode, type AssumptionClass, type FormalizationGraph } from
 import type { CodexRunInput } from "../shared/codex.js";
 import type { ToolkitConfig } from "../toolkit/config.js";
 import { parseJsonWithEscapeRepair } from "../shared/codex_json.js";
-import { promptPath } from "../paths.js";
+import { promptPath, verifyRunDir } from "../paths.js";
 import { WORKER_BUILD_INACTIVITY_MS, dispatchAgent } from "../framework/agent_dispatch.js";
 import { librarySearchPromptBlock } from "../toolkit/search.js";
 import { baseLibraryNotesBlock } from "../toolkit/prompt_notes.js";
 import { readFormalizationCore } from "../core/core_io.js";
 import { balancedJsonObjects } from "./reviewer_verdicts.js";
+import path from "node:path";
+import { recordLeanStepFixes } from "../verify/patches.js";
+import { VERIFY_FILES } from "../verify/types.js";
 
 /** The proof-filler agent's escalation when it hits a wall it cannot resolve.
  *  `unparsable-output` is synthesized by the DISPATCHER (not the model) when the filler's
@@ -39,6 +42,9 @@ interface FillerOutput {
   added_assumptions?: FillerAddedAssumption[];
   escalate?: FillerEscalation | null;
   summary?: string;
+  /** The printed proof steps the proof had to depart from, each wrong as printed: recorded as typo
+   * fixes from the Lean stage (`verify/patches.ts` `recordLeanStepFixes`). Absent in an older reply. */
+  printed_step_fixes?: unknown;
 }
 
 export interface FillerResult {
@@ -107,7 +113,7 @@ const nullable = (schema: Record<string, unknown>) => ({ anyOf: [{ type: "null" 
 export const FILLER_OUTPUT_SCHEMA: Record<string, unknown> = {
   type: "object",
   additionalProperties: false,
-  required: ["added_assumptions", "escalate", "summary"],
+  required: ["added_assumptions", "escalate", "printed_step_fixes", "summary"],
   properties: {
     added_assumptions: {
       type: "array",
@@ -126,6 +132,10 @@ export const FILLER_OUTPUT_SCHEMA: Record<string, unknown> = {
       type: "object", additionalProperties: false, required: ["kind", "reason", "node"],
       properties: { kind: { enum: ["statement-wrong", "needs-substrate", "ambiguous-spec"] }, reason: str, node: nullable(str) },
     }),
+    printed_step_fixes: {
+      type: "array",
+      items: { type: "object", additionalProperties: false, required: ["node", "printed", "intended", "reason"], properties: { node: str, printed: str, intended: str, reason: str } },
+    },
     summary: str,
   },
 };
@@ -140,6 +150,29 @@ function parseFillerReply(stdout: string): FillerOutput {
   }
   console.warn("[f3] filler: schema-constrained reply needed the heuristic parser");
   return parseFillerOutput(stdout);
+}
+
+/** The filler's `printed_step_fixes`, each node named as the core names it (a graph node's id or its
+ *  paper obj_id alias), handed to the verify run's typo fixes (`recordLeanStepFixes`, which logs and
+ *  skips what it cannot use). A run that is no verify run has no paper to correct: nothing is done.
+ *  Never throws. */
+export async function recordPrintedStepFixes(ctx: { repoRoot: string; qid: string }, graph: FormalizationGraph, raw: unknown): Promise<number> {
+  try {
+    if (raw == null || (Array.isArray(raw) && raw.length === 0)) return 0;
+    const runDir = verifyRunDir(ctx.repoRoot, ctx.qid);
+    if (!existsSync(path.join(runDir, VERIFY_FILES.envsJson))) return 0;
+    const resolve = (name: string): string =>
+      (graph.nodes.find((n) => n.id === name) ?? graph.nodes.find((n) => n.obj_id === name) ?? graph.nodes.find((n) => nodeIdToObjId(n.id) === name))?.id ?? name;
+    const entries = Array.isArray(raw)
+      ? raw.map((e) => (e && typeof e === "object" && typeof (e as { node?: unknown }).node === "string" ? { ...(e as object), node: resolve((e as { node: string }).node.trim()) } : e))
+      : raw;
+    const added = await recordLeanStepFixes(runDir, entries, (m) => console.warn(`[f3] filler: ${m}`));
+    if (added.length > 0) console.warn(`[f3] filler: ${added.length} printed proof step(s) the proof departed from recorded (${added.filter((a) => a.unit).length} corrected in the paper, the rest reported only)`);
+    return added.length;
+  } catch (err) {
+    console.warn(`[f3] filler: printed_step_fixes not recorded: ${err instanceof Error ? err.message : String(err)}`);
+    return 0;
+  }
 }
 
 /** Open nodes the filler is pointed at this round, leaf-first (a node none of whose own
@@ -333,6 +366,11 @@ export async function runFiller(args: {
       summary: "",
     };
   }
+
+  // The printed proof steps the proof departed from: the typo channel of the verify run (corrected in
+  // the paper and the report at V6), never a round or a stop. Node names resolve as an added
+  // assumption's `attached_to` does; nothing here may fail the fill.
+  await recordPrintedStepFixes(args.ctx, args.graph, parsed.printed_step_fixes);
 
   let graph = args.graph;
 

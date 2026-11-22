@@ -116,6 +116,25 @@ describe("the prose is generated from the fields, in one place (noteProse)", () 
     expect(d("undefined_case", "The quotient is undefined at $n = 0$.", "thm:a/proof/9/9")).toBe("The quotient is undefined at $n = 0$.");
   });
 
+  it.each([
+    String.raw`Denote $c =`,
+    String.raw`\sum_i a_i$, where $a_i>0$.`,
+    String.raw`\[a=b`,
+  ])("keeps the explanation without quoting a paper unit cut inside math: %s", (printed) => {
+    const text = "The displayed normalization is incompatible with the weights.";
+    const d = defect({ kind: "other", uses: null, assumed_on: null, applied_at: null, detail: text });
+    expect(noteProse(note({ defects: [d] }), () => printed).what_is_wrong).toEqual([text]);
+  });
+
+  it.each([
+    String.raw`\begin{minipage}{3cm} Then $x \le 3$.`,
+    String.raw`\end{minipage} Then $x \le 3$.`,
+  ])("still quotes a unit that opens or closes a layout box (quoted drops its tags): %s", (printed) => {
+    const text = "The bound does not follow.";
+    const d = defect({ kind: "other", uses: null, assumed_on: null, applied_at: null, detail: text });
+    expect(noteProse(note({ defects: [d] }), () => printed).what_is_wrong).toEqual(["``Then $x \\le 3$.'' " + text]);
+  });
+
   it("each step is quoted once: a later defect in it names the earlier one; a slot's leading article continues the sentence", () => {
     const q = "``We have $E(U \\mid W) = 0$ for every nuisance.''";
     const at = (kind: Defect["kind"], detail: string | null, uses: string | null = null) => ({ kind, step_unit: "thm:a/proof/1/1", uses, assumed_on: uses ? "the regression nuisance" : null, applied_at: uses ? "a projection nuisance" : null, detail });

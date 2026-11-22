@@ -117,6 +117,13 @@ describe("checkDocstringEdit", () => {
 });
 
 describe("statementChanges (the docstring pass leaves every statement as it was)", () => {
+  it("compares a name repeated across files file by file, whatever the scan order", () => {
+    const before = scan([["Papers.T.aux", "1", "Papers/T/A.lean"], ["Papers.T.aux", "2", "Papers/T/B.lean"]]);
+    expect(statementChanges(before, scan([["Papers.T.aux", "2", "Papers/T/B.lean"], ["Papers.T.aux", "1", "Papers/T/A.lean"]]))).toEqual([]);
+    expect(statementChanges(before, scan([["Papers.T.aux", "9", "Papers/T/A.lean"], ["Papers.T.aux", "2", "Papers/T/B.lean"]])))
+      .toEqual(["Papers.T.aux (Papers/T/A.lean) states something else"]);
+    expect(statementChanges(before, scan([["Papers.T.aux", "2", "Papers/T/B.lean"]]))).toEqual(["Papers.T.aux (Papers/T/A.lean) is gone"]);
+  });
   const scan = (decls: [string, string, string?][]) =>
     parseStatementFingerprints(JSON.stringify({ declarations: decls.map(([name, closure_hash, file]) => ({ name, file: file ?? "Papers/T/A.lean", closure_hash })) }), "Papers/T")!;
   it("names a moved fingerprint, a declaration gone and one new; nothing when all match", () => {

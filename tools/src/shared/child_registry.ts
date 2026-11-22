@@ -411,6 +411,10 @@ export function installStopHandlers(opts: { graceMs?: number; log?: (line: strin
   // (a runner started inside another's call — an agent's backgrounded resume — must not hand that call's
   // tag to what it starts: the call's end would reap them)
   delete process.env[CALL_TAG_ENV];
+  // A runner started from a model worker's environment is the pipeline, not a worker: its own
+  // lock requests are allowed (`LAKE_LOCK_WORKER_ENV`, build_mutex.ts; a worker's script that
+  // imports the lock code never comes through here, and is still refused).
+  delete process.env.PAPERFORMALIZER_MODEL_WORKER;
   const log = opts.log ?? ((line: string) => console.error(line));
   // what earlier runners on this machine left running when they died
   void reapDeadRunners().then((n) => { if (n > 0) log(`[paperformalizer] stopped ${n} process(es) left by runners that are gone`); }, () => {});

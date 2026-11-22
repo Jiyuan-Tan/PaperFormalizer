@@ -7,7 +7,6 @@ import os from "node:os";
 import path from "node:path";
 import { afterEach, describe, expect, it } from "vitest";
 import type { CandidateScan, ScanDecl } from "../../src/proposals/candidate_scan.js";
-import { pendingMoveSnapshot } from "../../src/proposals/apply_b.js";
 import { runProposeCli } from "../../src/proposals/cli.js";
 import { archiveEarlierRound, gardenListOrNull, runRoundB } from "../../src/proposals/round_b.js";
 import { batchPath, checklistPath, proposalBatchSchema, proposalLedgerPath } from "../../src/proposals/schema.js";
@@ -100,10 +99,6 @@ describe("round B", () => {
     const old = ["B.json", "B.decisions.json", "B.moves.json", "move_b-old.log", "statements_before_b-old.json", "statements_after_b-old.json"];
     for (const f of old) await writeFile(path.join(dir, f), "{}");
     await writeFile(path.join(dir, "A.decisions.json"), "{}");
-    // a move the toolkit is half-way through: its record, journal, snapshot and log are not this round's to archive
-    const kept = ["move_pending.json", "move_journal.json", "move_b-kept.log", "statements_before_b-kept.json"];
-    await writeFile(path.join(dir, "move_pending.json"), JSON.stringify({ proposal_id: "b-kept", statements_before: path.join(dir, "statements_before_b-kept.json") }));
-    for (const f of kept.slice(1)) await writeFile(path.join(dir, f), JSON.stringify({ declarations: [{ name: "Papers.X.t", stmt_hash: "h" }] }));
     const batch = { slug: QID, round: "B" as const, created: "2026-10-07T12:00:00.000Z", proposals: [{ id: "b-new", content: "c" }, { id: "b-same", content: "restated" }] } as never;
     const { recommendationKeys } = await import("../../src/proposals/checklist.js");
     const of = recommendationKeys(batch).get("b-new");
@@ -118,18 +113,8 @@ describe("round B", () => {
     }
     expect(JSON.parse(await readFile(path.join(dir, "B.recommendations.json"), "utf8"))).toEqual({ "b-new": { kind: "defer", why: "v", of } });
     expect(JSON.parse(await readFile(path.join(to, "B.recommendations.json"), "utf8"))).toEqual({ "b-old": { kind: "accept", why: "w" }, "b-same": { kind: "accept", why: "u", of: "0000000000000000" } });
-    // the other round's files and a move still half-way stay
+    // the other round's files stay
     expect(existsSync(path.join(dir, "A.decisions.json"))).toBe(true);
-    for (const f of kept) expect(existsSync(path.join(dir, f))).toBe(true);
-    // … and the pending move finds its snapshot; one whose snapshot is gone is refused, not gated without it
-    const pend = JSON.parse(await readFile(path.join(dir, "move_pending.json"), "utf8"));
-    const where = { pendingFile: path.join(dir, "move_pending.json"), journal: path.join(dir, "move_journal.json"), voided: path.join(dir, "voided") };
-    expect(pendingMoveSnapshot(pend, where)).toBeInstanceOf(Map);
-    expect(pendingMoveSnapshot({ ...pend, statements_before: null }, where)).toBeNull();
-    await rm(path.join(dir, "statements_before_b-kept.json"));
-    expect(() => pendingMoveSnapshot(pend, where)).toThrow(/statement snapshot taken before it is missing[\s\S]*cannot check that no statement changed/);
-    await writeFile(path.join(dir, "statements_before_b-kept.json"), "{}");
-    expect(() => pendingMoveSnapshot(pend, where)).toThrow(/holds no statement hashes/);
     expect(await archiveEarlierRound(cfg, QID, batch)).toEqual([]);
   });
 

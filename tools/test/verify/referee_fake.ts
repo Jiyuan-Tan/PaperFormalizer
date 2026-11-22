@@ -79,6 +79,3 @@ export function cannedCodex(replies: unknown[], calls: CodexRunInput[], opts: { 
     return { stdout: JSON.stringify(withOwnerExplanations(reply)), stderr: "" };
   }) as typeof runCodex;
 }
-
-/** The non-referee calls of `calls` (the fixer's). */
-export const fixerCalls = (calls: readonly CodexRunInput[]): CodexRunInput[] => calls.filter((c) => !isRefereeCall(c));

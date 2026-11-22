@@ -126,11 +126,32 @@ describe("F1 re-plan after the core moved", () => {
     expect(prompt).not.toContain("long proof");
     // The completed re-plan records the new core: a further pass sees nothing moved.
     expect(JSON.parse(await readFile(planCorePath(repoRoot, QID), "utf8")).statements[0].statement).toBe("$E[Y]$ exists and is finite");
+    // Nothing moved since (a revision of the paper that left every record as it was): the plan
+    // stands, and no planner is called.
     const third = deps();
-    await runStage1({ ctx: ctx(), state, deps: third.deps });
-    expect(third.prompt()).not.toContain("WHAT CHANGED");
-    expect(third.prompt()).toContain("names no core node");
-    expect(third.prompt()).not.toContain("$E[Y]$ exists and is finite");
+    const stands = await runStage1({ ctx: ctx(), state, deps: third.deps });
+    expect(stands).toMatchObject({ stage: "1", status: "completed" });
+    expect(stands.message).toMatch(/the plan stands \(no planner call\)/);
+    expect(third.prompt()).toBe("");
+    // an explicit `--from-stage F1` plans, nothing moved or not
+    // (kept in the state: a kill before F1 starts loses nothing)
+    state.flags.f1_replan_asked = true;
+    const asked = deps();
+    await runStage1({ ctx: ctx(), state, deps: asked.deps });
+    expect(asked.prompt()).not.toBe("");
+    expect(state.flags.f1_replan_asked).toBeNull();
+    // a blocked F1 plans too (its ruling is still owed), nothing moved or not
+    state.flags.f1_blocked = { message: "the planner was blocked" };
+    const blocked = deps();
+    await runStage1({ ctx: ctx(), state, deps: blocked.deps });
+    expect(blocked.prompt()).not.toBe("");
+    // … while a directive is still answered: a re-plan with nothing moved, the directive naming no node
+    state.flags.f1_revise_directive = "Tighten the notes of the plan.";
+    const fourth = deps();
+    await runStage1({ ctx: ctx(), state, deps: fourth.deps });
+    expect(fourth.prompt()).not.toContain("WHAT CHANGED");
+    expect(fourth.prompt()).toContain("names no core node");
+    expect(fourth.prompt()).not.toContain("$E[Y]$ exists and is finite");
   });
 
   it("the plan's qid is the run's, written by the runner: no prompt asks the planner for it", async () => {

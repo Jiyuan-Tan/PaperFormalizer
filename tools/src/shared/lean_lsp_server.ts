@@ -1,5 +1,6 @@
 import { spawn, type ChildProcess } from "node:child_process";
 import net from "node:net";
+import { leanWsChildEnv } from "./build_mutex.js";
 import { haltIfStopping, trackChild } from "./child_registry.js";
 import { localConfig, leanProjectPathFor } from "../local_config.js";
 
@@ -112,6 +113,8 @@ export async function startSharedLeanLsp(
       cwd: repoRoot,
       env: {
         ...process.env,
+        // a run with a workspace: its `lake serve` (and the tools' lake calls) go there, by the shim
+        ...leanWsChildEnv(),
         MCP_TIMEOUT: String(cfg.mcpTimeoutMs),
         LEAN_LSP_MAX_OPEN_FILES: String(opts.maxOpenFiles ?? 8),
       },

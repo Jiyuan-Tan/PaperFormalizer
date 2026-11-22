@@ -15,7 +15,7 @@ import { CodexRunError } from "../shared/codex.js";
 import { crosslinkNames, linksGoal, parseNlCrosslinks, sourceBinders } from "../shared/nl_crosslinks.js";
 import { spawnWithInactivityTimeout, type SpawnWithTimeoutResult } from "../workers/spawn.js";
 import { checkDocstringEdit, type DeclAfterEdit } from "./docstring_text_check.js";
-import { withLakeBuildLock } from "../shared/build_mutex.js";
+import { LAKE_NO_BUILD_EXIT, WOULD_BUILD, withLakeBuildLock, withScannerHold } from "../shared/build_mutex.js";
 import { mapLimit } from "./reviewer_verdicts.js";
 import { fillTemplate } from "../shared/template.js";
 import { F5_LAKE_TIMEOUT_MS, F5_TIME_LIMIT_TAG } from "../cap_gates.js";
@@ -339,6 +339,8 @@ export interface DocstringTarget {
   /** Test seams: how lake runs (default: `lake -d <root> …` under the toolkit's build lock, with the
    *  gate's time limit) and how a docstring call is dispatched (default: `dispatchAgent`). */
   runLake?: LakeRun;
+  /** The lake process itself, under whatever hold `runLake` takes (tests replace it). */
+  spawnLake?: LakeRun;
   dispatch?: (args: Parameters<typeof dispatchAgent>[0]) => Promise<unknown>;
   /** The statement check around the passes (F5: the statement fingerprints). `before` runs once a
    *  pass is about to, on the tree the passes start from: a reason means the check cannot be had and
@@ -414,6 +416,37 @@ async function writeWhole(abs: string, content: string): Promise<void> {
 }
 
 /**
+ * How the docstring gate runs lake by default, from the toolkit root: under the toolkit's build
+ * lock — a build of the paper's own modules only as a shared hold (the lock refuses one for a
+ * prefix that is no paper's, the toolkit's own docstrings); so is the index executable, which only
+ * reads oleans, when it is up to date (`withScannerHold`: run `--no-build`), else exclusive.
+ * `spawnLake`: the lake process itself (tests replace it).
+ */
+export function docstringsLakeRun(root: string, prefix: string, spawnLake: LakeRun = (lakeArgs) => spawnWithInactivityTimeout("lake", ["-d", root, ...lakeArgs], {
+  cwd: root,
+  env: process.env,
+  inactivityTimeoutMs: LAKE_TIMEOUT_MS,
+  maxTotalMs: LAKE_TIMEOUT_MS,
+})): LakeRun {
+  const paperBuild = (lakeArgs: readonly string[]) =>
+    lakeArgs[0] === "build" && lakeArgs.length > 1 && lakeArgs.slice(1).every((m) => m === prefix || m.startsWith(`${prefix}.`));
+  return (lakeArgs) => {
+    const what = `F5 docstrings: lake ${lakeArgs.join(" ")}`;
+    if (lakeArgs[0] !== "exe" || lakeArgs[1] !== "paper_index") {
+      return withLakeBuildLock(root, () => spawnLake(lakeArgs), what, undefined, undefined, paperBuild(lakeArgs) ? { papers: [prefix] } : {});
+    }
+    return withScannerHold<SpawnWithTimeoutResult>(root, [prefix], what, {
+      exeFresh: async () => (await spawnLake(["build", "--no-build", "paper_index"])).exitCode === 0,
+      shared: async () => {
+        const r = await spawnLake(["--no-build", ...lakeArgs]);
+        return r.exitCode === LAKE_NO_BUILD_EXIT ? WOULD_BUILD : r;
+      },
+      exclusive: () => withLakeBuildLock(root, () => spawnLake(lakeArgs), what),
+    });
+  };
+}
+
+/**
  * Bring every declaration of `modules` to the docstring contract: documented, with NL↔Lean
  * crosslinks (see crosslinkDefect). Codex documents the gaps in batched calls (docstring edits
  * only). A pass is checked from the source text, with no build (docstring_text_check.ts): the edit
@@ -450,13 +483,7 @@ export async function documentModules(t: DocstringTarget): Promise<DocstringOutc
   const indexOut = path.join(t.outDir, "docstring_coverage.json");
   const lakeLog = path.join(t.outDir, "docstring_lake.log");
   const rejectedDir = path.join(t.outDir, "docstring_rejected");
-  const runLake: LakeRun = t.runLake ?? ((lakeArgs) =>
-    withLakeBuildLock(root, () => spawnWithInactivityTimeout("lake", ["-d", root, ...lakeArgs], {
-      cwd: root,
-      env: process.env,
-      inactivityTimeoutMs: LAKE_TIMEOUT_MS,
-      maxTotalMs: LAKE_TIMEOUT_MS,
-    })));
+  const runLake: LakeRun = t.runLake ?? docstringsLakeRun(root, t.prefix, t.spawnLake);
   // Full stdout+stderr of every lake call lands in `lakeLog` (overwritten per call); a failure
   // throws only the diagnostic lines, so the checkpoint message carries the Lean error itself.
   const lake = async (lakeArgs: string[]) => {

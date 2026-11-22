@@ -58,7 +58,7 @@ import { writeJsonAtomic } from "../shared/json_atomic.js";
 import type { StateJson } from "../types.js";
 import { NOTE_LOSS_WARNING } from "./note_macros.js";
 import { sha256File, writeCoreJson } from "./core_hash.js";
-import { BASIS_SCHEME, CoreGraphInputError, DERIVED_USER_FIELDS, SYMBOL_PIN_OF, applicableClauses, basisInputs, basisInputsV4, basisOf, bindingReadings, buildCore, isUmbrellaPatch, mergeBasisExtra, regradeCause, symbolUsers, symbolsUsedByNode, type BasisExtra, type BasisExtraValue, type BasisInputs, type RegradeCause, type SymbolReadingBasis } from "./core_graph.js";
+import { BASIS_SCHEME, CoreGraphInputError, DERIVED_USER_FIELDS, SYMBOL_PIN_OF, applicableClauses, basisInputs, basisInputsV4, basisOf, bindingReadings, buildCore, isUmbrellaPatch, mergeBasisExtra, regradeCause, symbolUsers, symbolsUsedByNode, type BasisExtra, type BasisExtraValue, type BasisInputs, type RegradeCause, type SymbolReadingBasis, patchReadingId, patchConditionId } from "./core_graph.js";
 import { normalizeBasisText } from "./basis_text.js";
 import { hasDriftFix, type DriftFix } from "./directive_edits.js";
 import { openFindingKind, recordVerifyFinding } from "./findings.js";
@@ -85,6 +85,9 @@ import {
   corollaryNodes,
   onSplitParent,
   splitCorollaries,
+  withRefereeTypos,
+  deriveTypoProofs,
+  onlyTypoFixes,
 } from "./patches.js";
 import { governByOwnerRulings, ownerRuling } from "./owner_rulings.js";
 import { hypothesisRepairLine, hypothesisUsers } from "./cross_stage_rewind.js";
@@ -397,7 +400,14 @@ export function patchesShown(
   const byLine = (_p: PatchFile["patches"][number]): boolean => global && !!ids;
   // A patch touches a node it repairs, and a hypothesis it restates (`supersedes`, `drops`).
   // … and a corollary it splits off (graded as a node of its own, with the repair that wrote it).
-  const touches = (p: PatchFile["patches"][number]): boolean => !ids || [p.node, ...(p.supersedes ?? []), ...(p.drops ?? []), ...corollaryNodes(p.node, p).map((c) => c.id)].some((n) => ids.includes(n));
+  // … and the readings and side conditions it states beside its statement (`ass:pin-fix-*`, `ass:bk-fix-*`):
+  // "the referee grades it with the patch" (`core_graph.ts`). A shard grading one of them alone was shown no
+  // repair, so it read the reading as drift ("drift REPEATED" on every resume).
+  const stated = (p: PatchFile["patches"][number]): string[] => [
+    ...(p.readings ?? []).map((t) => patchReadingId(p.node, t)),
+    ...(p.conditions ?? []).map((t) => patchConditionId(p.node, t)),
+  ];
+  const touches = (p: PatchFile["patches"][number]): boolean => !ids || [p.node, ...(p.supersedes ?? []), ...(p.drops ?? []), ...corollaryNodes(p.node, p).map((c) => c.id), ...stated(p)].some((n) => ids.includes(n));
   const shown = file.patches.filter((p) => touches(p) || byLine(p));
   if (ids && !global && shown.length === 0) return null;
   // A shard grades each note's clarity, shown as the author reads it; the global pass grades none.
@@ -410,7 +420,7 @@ export function patchesShown(
     global || (typeof rest.proof_note === "string" && proofChangeOf(rest.node)?.includes(rest.proof_note)) ? (({ proof_note: _p, ...r }) => r as Omit<T, "ops" | "corrected_statement">)(rest) : rest;
   /** The nodes of the shard a repair it does not grade restates or drops, or null (the shard grades the repair). */
   const onlyRestated = (p: PatchFile["patches"][number]): { node: string; supersedes?: string[]; drops?: string[] } | null => {
-    if (!ids || global || [p.node, ...corollaryNodes(p.node, p).map((c) => c.id)].some((n) => ids.includes(n))) return null;
+    if (!ids || global || [p.node, ...corollaryNodes(p.node, p).map((c) => c.id), ...stated(p)].some((n) => ids.includes(n))) return null;
     const mine = (xs: readonly string[] | null | undefined): string[] => (xs ?? []).filter((n) => ids.includes(n));
     return { node: p.node, ...(mine(p.supersedes).length ? { supersedes: mine(p.supersedes) } : {}), ...(mine(p.drops).length ? { drops: mine(p.drops) } : {}) };
   };
@@ -558,6 +568,14 @@ const GLOBAL_PROMPT_BUDGET = Math.floor(PROMPT_INPUT_MAX * 0.95);
  * each corollary a patch splits off its result (a statement the repair wrote). */
 function repairedNodes(patches: PatchFile | null): Set<string> {
   return new Set((patches?.patches ?? []).flatMap((p) => [p.node, ...corollaryNodes(p.node, p).map((c) => c.id)]));
+}
+
+/** The patch file a core is accepted on: the file when it holds a repair (`hasPatches`); else its
+ * typo fixes alone, when it has any (`typo_fixes`: the proofs' typos, which the runner corrects in
+ * place); else none. */
+function acceptedOverlay(file: PatchFile | null, hasPatches: boolean): PatchFile | null {
+  if (hasPatches) return file;
+  return file?.typo_fixes?.length ? { key_results: [], key_contribution: "", patches: [], unfixable: [], typo_fixes: file.typo_fixes } : null;
 }
 
 /** A verdict the runner may carry: faithful, not unresolvably ambiguous, reproduced. */
@@ -713,7 +731,7 @@ export function partitionByBasis(
   carryAny: Readonly<Record<string, string>> = {},
   own: ReadonlyMap<string, string> = new Map(),
   shown: ShownVerdict = shownVerdictOf(core),
-  transition: { own?: ReadonlyMap<string, string>; complete?: boolean; earlierExtra?: BasisExtra } = {},
+  transition: { own?: ReadonlyMap<string, string>; complete?: boolean; earlierExtra?: BasisExtra; linesBefore?: Readonly<Record<string, unknown>> } = {},
 ): BasisPartition {
   const ownV4 = transition.own ?? own;
   // The extra as the passes to 2026-10-07 computed it (`earlierExtra`; absent: nothing moved).
@@ -757,6 +775,11 @@ export function partitionByBasis(
     bases.set(id, basis);
     inputs.set(id, inp);
     const stands = (b: string): boolean => !!pv && ((confirmed[id] === b && isClean(pv) && (pv.basis === undefined || pv.basis === b)) || (carryAny[id] === b && pv.basis === b));
+    // TRANSITION (remove with `basisInputs`' `scheme`): a verdict recorded under scheme 5, whose basis
+    // read the node's lines, is carried and re-keyed while that basis holds.
+    const scheme = !legacy && pv?.basis_scheme === 5 ? 5 : BASIS_SCHEME;
+    // (… read on the lines the node had when it was given: `linesBefore`, from a revision's V1)
+    const held5 = scheme === 5 && stands(basisOf(basisInputs(core, id, extra, own.get(id), verdictOf, 5, transition.linesBefore?.[id])));
     const v4 = legacy ? basisInputsV4(core, id, extraBefore, ownV4.get(id)) : null;
     const held = v4 !== null && stands(basisOf(v4));
     // … of a paused or halted pass, only while what the scheme-4 key never read — the node's own
@@ -767,14 +790,14 @@ export function partitionByBasis(
     // keyed before a hypothesis's own readings and the open symbols its shard lists were read into
     // its basis (`earlierExtra`) is carried over and re-keyed while that earlier basis holds — of a
     // COMPLETE pass only, as above; a paused or halted pass grades it afresh.
-    const heldBefore = !legacy && transition.complete === true && transition.earlierExtra !== undefined && stands(basisOf(basisInputs(core, id, extraBefore, own.get(id), verdictOf)));
+    const heldBefore = !legacy && transition.complete === true && transition.earlierExtra !== undefined && stands(basisOf(basisInputs(core, id, extraBefore, own.get(id), verdictOf, scheme, transition.linesBefore?.[id])));
     // … carried over only on lines its scheme-4 basis proves it was graded with.
     const linesStood = (): boolean =>
       (uses.get(id) ?? []).every((d) =>
         ((dv) =>
           !!dv && isClean(dv) && !dv.owner_overruled && (transition.complete ? confirmed[d] !== undefined || carryAny[d] !== undefined : !decide(d) && shown(d, (({ graded: _g, ...rest }) => rest)(dv)) === coreLine(d, dv)))(priorById.get(d)),
       );
-    const cause = stands(basis) || heldBefore || (held && keyShown && linesStood()) ? null : held && !keyShown ? "no comparable record" : held ? "dependency verdict" : regradeCause(pv ? { inputs: pv.basis_inputs, clean: isClean(pv) || carryAny[id] !== undefined } : null, v4 ?? inp);
+    const cause = stands(basis) || held5 || heldBefore || (held && keyShown && linesStood()) ? null : held && !keyShown ? "no comparable record" : held ? "dependency verdict" : regradeCause(pv ? { inputs: pv.basis_inputs, clean: isClean(pv) || carryAny[id] !== undefined } : null, v4 ?? inp);
     decided.set(id, cause);
     return cause !== null;
   };
@@ -1021,6 +1044,16 @@ function contractViolations(
   }
   if (!hasPatches && review.patch_review) {
     out.push("`patch_review` must be null: this core carries no fixer patches.");
+  }
+  // Every accepted weakening of a key result carries exactly one severity: the paper grade reads it.
+  if (hasPatches && review.patch_review && patches) {
+    const weakKeys = new Set(patches.patches.filter((p) => p.accepted_weakening && patches.key_results.includes(p.node)).map((p) => p.node));
+    const given = (review.patch_review.weakenings ?? []).map((w) => w.node);
+    for (const n of weakKeys) if (!given.includes(n)) out.push(`the accepted weakening of key result "${n}" has no \`patch_review.weakenings\` entry — give its severity.`);
+    for (const n of new Set(given)) {
+      if (!weakKeys.has(n)) out.push(`\`patch_review.weakenings\` names "${n}", which is not an accepted weakening of a key result.`);
+      if (given.filter((g) => g === n).length > 1) out.push(`\`patch_review.weakenings\` names "${n}" more than once.`);
+    }
   }
   const seen = new Set<string>();
   // COVERAGE. The review is the run's only correctness gate before Lean, and its verdict is
@@ -1363,11 +1396,13 @@ async function acceptCore(
   const transcribedPath = path.join(args.runDir, VERIFY_FILES.coreTranscribed);
   verify.transcribed_sha256 = existsSync(transcribedPath) ? await sha256File(transcribedPath) : null;
   const unclear = review.nodes.filter((n) => n.correctness === "unclear").length;
+  const typos = (patches?.typo_fixes ?? []).flatMap((t) => t.typos.filter((x) => x.unit !== null)).length;
   return {
     status: "completed",
     message:
       `PASS over ${review.nodes.length} node(s): ${counts(review.nodes)}; ` +
-      (patches ? `${patches.patches.length} patch(es) confirmed, ${patches.unfixable.length} descoped; ` : "") +
+      (patches && patches.patches.length + patches.unfixable.length > 0 ? `${patches.patches.length} patch(es) confirmed, ${patches.unfixable.length} descoped; ` : "") +
+      (typos > 0 ? `${typos} typo(s) of proofs corrected; ` : "") +
       `${added.length} bookkeeping assumption(s) applied` +
       (added.length > 0 ? ` (${added.map((a) => `${a.id}→${a.node}`).join(", ")})` : "") +
       `; ${unclear} unresolved note(s) recorded.`,
@@ -1603,7 +1638,8 @@ export const runStageV1_5: VerifyStage = async (args) => {
       // printed passage takes one replacement.
       const src = unitSrc;
       const bad = [
-        ...validatePatchFile(transcribed, onDisk, openErrorIds(verify.paper_errors)),
+        // (a file of typo fixes alone owes the ledger nothing, as no file does)
+        ...validatePatchFile(transcribed, onDisk, onlyTypoFixes(onDisk) ? [] : openErrorIds(verify.paper_errors)),
         ...(src ? unresolvedRepairs(onDisk, src) : []),
         ...(src ? overlapViolations(onDisk, (node) => ({ units: src.units, passage: nodePassage(src, node) })) : []),
       ];
@@ -1783,7 +1819,7 @@ export const runStageV1_5: VerifyStage = async (args) => {
   const partition = async (cited: BasisExtra): Promise<BasisPartition> => {
     const onFile = verify.confirmed_scheme ?? 1;
     if (onFile !== BASIS_SCHEME && Object.keys(verify.confirmed ?? {}).length + Object.keys(verify.level_pause?.carry ?? {}).length > 0) {
-      if (onFile === 4) log(`verdict bases: the cache was recorded under basis scheme 4: each verdict whose scheme-4 basis still holds is carried over to scheme ${BASIS_SCHEME}, with no call`);
+      if (onFile === 4 || onFile === 5) log(`verdict bases: the cache was recorded under basis scheme ${onFile}: each verdict whose scheme-${onFile} basis still holds is carried over to scheme ${BASIS_SCHEME}, with no call`);
       else {
         log(`verdict bases: the cache was recorded under basis scheme ${onFile}, not ${BASIS_SCHEME}: every node is graded afresh`);
         verify.confirmed = {};
@@ -1796,7 +1832,7 @@ export const runStageV1_5: VerifyStage = async (args) => {
     const repairs = repairBasis(patchInputs, core, paperIndex(flatTex, lineMap, envs));
     const notes = noteBasis(hasPatches ? patches : null);
     const shown = shownVerdictOf(core, repairOnFile(core, hasPatches ? patches : null, verify.paper_errors ?? {}));
-    const legacy = { own: notes, complete: priorPassComplete(prior, verify), earlierExtra: mergeBasisExtra(cited, sp.basisExtraEarlier) };
+    const legacy = { own: notes, complete: priorPassComplete(prior, verify), earlierExtra: mergeBasisExtra(cited, sp.basisExtraEarlier), ...((verify.fix_lines_before ?? verify.revision?.lines_before) ? { linesBefore: verify.fix_lines_before ?? verify.revision!.lines_before } : {}) };
     const first = partitionByBasis(core, verify.confirmed ?? {}, prior, extra, verify.level_pause?.carry ?? {}, repairs, shown, legacy);
     if (args.dryRun || first.carried.length === 0) return first;
     // A verdict carried on an unchanged basis whose texts do not compile is graded afresh.
@@ -2157,6 +2193,29 @@ export const runStageV1_5: VerifyStage = async (args) => {
   };
   await writeJsonAtomic(reviewPath, review);
   log(`verdict ${computed} over ${review.nodes.length} node(s) (${counts(review.nodes)})${paused ? ` — paused at level ${paused.tag}, ${paused.ungraded.length} node(s) above wait` : ""}`);
+  // The TYPOS the referee listed in proofs: the runner corrects the printed proof with them, as the
+  // repairs' replacements do (`patches.json` `typo_fixes`) — never a finding, a repair, a round or a
+  // decision of the owner, whatever the pass concludes; the report lists them.
+  let typoFixes: NonNullable<PatchFile["typo_fixes"]> = [];
+  if (unitSrc) {
+    const t = withRefereeTypos(await readPatchFile(runDir), review.nodes, unitSrc);
+    if (t.added.length > 0 && t.file) {
+      await writeJsonAtomic(path.join(runDir, VERIFY_FILES.patches), t.file);
+      const placed = t.added.filter((a) => a.unit !== null);
+      const noted = t.added.filter((a) => a.unit === null);
+      log(
+        `${t.added.length} typo(s) of proofs listed by the referee: ${placed.length} corrected in the proof (${placed.map((a) => a.node).join(", ") || "none"})` +
+          (noted.length > 0 ? `, ${noted.length} reported only — the snippet is not printed exactly once in one step of the proof (${noted.map((a) => a.node).join(", ")})` : ""),
+      );
+    }
+    typoFixes = t.file?.typo_fixes ?? [];
+  }
+  /** The patch file the core is accepted on, with the typo fixes this pass recorded. */
+  const overlay = (): PatchFile | null => {
+    if (typoFixes.length === 0 || !unitSrc) return acceptedOverlay(hasPatches ? patches : null, hasPatches);
+    const file = acceptedOverlay({ ...(patches ?? { key_results: [], key_contribution: "", patches: [], unfixable: [] }), typo_fixes: typoFixes }, hasPatches)!;
+    return deriveTypoProofs(file, (n) => ({ units: unitSrc.units, passage: nodePassage(unitSrc, n) }));
+  };
   const asideList = setAside.map((x) => `${x.id} — ${x.why}`).join(" | ");
   if (setAside.length > 0) log(`${setAside.length} node(s) set aside this pass, graded afresh next pass: ${asideList}`);
   /** The pass neither accepts nor refutes over a node it could not grade: it halts there instead
@@ -2253,7 +2312,7 @@ export const runStageV1_5: VerifyStage = async (args) => {
     const held = heldBySetAside();
     if (held) return held;
     noteSplitRemarks();
-    return settledForOwner() ?? acceptCore(args, transcribed, corePath, review, hasPatches ? patches : null, citedSources);
+    return settledForOwner() ?? acceptCore(args, transcribed, corePath, review, overlay(), citedSources);
   }
 
   // The revise loop fixes TRANSCRIPTION defects and is bounded. Drift left at the last allowed
@@ -2451,7 +2510,9 @@ export const runStageV1_5: VerifyStage = async (args) => {
     // A suggestion the referee objected to (or whose note it found unclear) leaves the receipt: the
     // fixer answers that node again.
     const back = [...receiptNodes].filter((id) => findings.some((f) => f.id === id));
-    const rejectedOutright = (id: string): boolean => objections.some((o) => o.id === id && o.note !== true && o.minimality !== true);
+    // A minimality grade on a suggestion counts too: the referee says it gives up more than its witness
+    // forces, and a dispute the fixer cannot settle goes to the owner at the limit, not round after round.
+    const rejectedOutright = (id: string): boolean => objections.some((o) => o.id === id && o.note !== true);
     if (back.length > 0 && onFile) {
       // The suggestion leaves the patch file, so its first finding carries what the fixer answers
       // again: the paper's error the suggestion answered and the statement the referee rejected.
@@ -2465,7 +2526,7 @@ export const runStageV1_5: VerifyStage = async (args) => {
       }
       await withdrawSuggestions(runDir, args.state, onFile, back);
       log(`the suggested repair of ${back.join(", ")} goes back to the fixer: the referee did not confirm it`);
-      // Counted when the referee rejected the weakening itself, not only its note or its minimality.
+      // Counted when the referee rejected the weakening itself or disputed its minimality, not only its note.
       const rejectedHere = back.filter(rejectedOutright);
       verify.suggestion_rejections = { ...(verify.suggestion_rejections ?? {}), ...Object.fromEntries(rejectedHere.map((id) => [id, (verify.suggestion_rejections?.[id] ?? 0) + 1])) };
     }
@@ -3017,7 +3078,7 @@ export const acceptV1_5AtCap: VerifyStage = async (args) => {
     const envsPath = path.join(runDir, VERIFY_FILES.envsJson);
     const envs = existsSync(envsPath) ? (JSON.parse(await readFile(envsPath, "utf8")) as EnvsJson) : null;
     const { sources } = await resolveCitedSources({ runDir, core, envs, fetchBytes: args.deps.fetchBytes });
-    const accepted = await acceptCore(args, await readTranscribedCore(runDir), corePath, review, hasPatches ? patches : null, sources);
+    const accepted = await acceptCore(args, await readTranscribedCore(runDir), corePath, review, acceptedOverlay(patches, hasPatches), sources);
     if (accepted.status !== "completed") return accepted;
     return {
       status: "completed",

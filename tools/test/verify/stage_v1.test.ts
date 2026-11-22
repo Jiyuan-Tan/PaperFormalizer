@@ -11,6 +11,7 @@ import path from "node:path";
 import { fileURLToPath } from "node:url";
 import { afterEach, describe, expect, it } from "vitest";
 import type { runCodex } from "../../src/shared/codex.js";
+import type { Core } from "../../src/core/schema.js";
 import type { CodexRunInput } from "../../src/shared/codex.js";
 import { createVerifyInitialState, loadState } from "../../src/state.js";
 import type { StateJson } from "../../src/types.js";
@@ -27,7 +28,8 @@ import { readV1Warnings } from "../../src/verify/lint_warnings.js";
 import { V1_SEGMENTS_FILE } from "../../src/verify/segments.js";
 import { hashSourceTree } from "../../src/verify/source_bundle.js";
 import { buildEnvsJson } from "../../src/verify/tex_envs.js";
-import { VERIFY_FILES, type EnvsJson } from "../../src/verify/types.js";
+import { VERIFY_FILES, type EnvsJson, type PrepareSource } from "../../src/verify/types.js";
+import { prepareRevision, freezeVersion, startInPlaceFix, startRevision } from "../../src/verify/revision.js";
 
 const QID = "verify_sample_paper";
 const FIXTURE = path.join(path.dirname(fileURLToPath(import.meta.url)), "fixtures", "paper");
@@ -172,6 +174,19 @@ interface CodexSpy {
 
 /** Fake agent: consumes `plan` one entry per call, writing the canned core for a
  * `pass`/`violate` round and replying `failed` (writing nothing) for a `fail` round. */
+/** The run's paper revised by `edit` and taken as its next version (`--revise`), ready for V1. */
+async function reviseRun(run: Run, edit: (sourceDir: string) => Promise<void>): Promise<void> {
+  const revised = path.join(run.repoRoot, `revised-${Date.now().toString(36)}`);
+  await cp(path.join(run.runDir, VERIFY_FILES.sourceDir), revised, { recursive: true });
+  await edit(revised);
+  const prepareSource: PrepareSource = async ({ input, sourceDir }) => {
+    await cp(input, sourceDir, { recursive: true });
+    return { sourceDir, mainFile: "main.tex", sha256: await hashSourceTree(sourceDir), inputKind: "dir" };
+  };
+  const prepared = await prepareRevision({ runDir: run.runDir, state: run.state, input: revised, prepareSource });
+  await startRevision({ runDir: run.runDir, state: run.state, prepared, frozen: await freezeVersion({ runDir: run.runDir, state: run.state }), save: async () => {} });
+}
+
 function codexSpy(
   run: Run,
   scope: readonly string[],
@@ -935,13 +950,182 @@ describe("re-entry: rewinds revise, they never rebuild", () => {
     expect(run.state.verify!.confirmed).toEqual({ "thm:rate": "kept" }); // the cache survives a revise
   });
 
-  it("when the source changed: a cold extraction, the old reference core set aside and the carried verdicts dropped", async () => {
+  it("when the source changed (a revision): the transcription is re-pointed at it — node ids, verdicts and reference core kept, no agent call", async () => {
+    const run = await prepareRun(null);
+    const first = codexSpy(run, ALL_SCOPE, ["refs"]);
+    expect((await runStageV1(stageArgs(run, { runCodex: first.runCodex }))).status).toBe("completed");
+    const before = run.state.verify!.source.sha256;
+    const transcribed = await readJson(path.join(run.runDir, VERIFY_FILES.coreTranscribed));
+    run.state.verify!.confirmed = { "thm:rate": "kept" };
+    // a revise directive pending from V1.5, and the drift it carries: neither reaches the revision
+    run.state.verify!.last_drift = { "thm:rate": "{}" };
+    await writeFile(path.join(run.runDir, VERIFY_FILES.v1ReviseDirective), JSON.stringify({ mode: "transcribe", round: 1, findings: [] }), "utf8");
+    // the author adds a paragraph after the first result: every later result moves down, none
+    // changes, and the setup (the text before the first result) is as it was (`--revise`)
+    const revised = path.join(run.repoRoot, "revised");
+    await cp(path.join(run.runDir, VERIFY_FILES.sourceDir), revised, { recursive: true });
+    const results = path.join(revised, "sec", "results.tex");
+    await writeFile(results, (await readFile(results, "utf8")).replace("\\end{thm}\n", "\\end{thm}\n\nA paragraph the revision adds.\n\nAnd another one.\n"), "utf8");
+    const prepareSource: PrepareSource = async ({ input, sourceDir }) => {
+      await cp(input, sourceDir, { recursive: true });
+      return { sourceDir, mainFile: "main.tex", sha256: await hashSourceTree(sourceDir), inputKind: "dir" };
+    };
+    const prepared = await prepareRevision({ runDir: run.runDir, state: run.state, input: revised, prepareSource });
+    await startRevision({ runDir: run.runDir, state: run.state, prepared, frozen: await freezeVersion({ runDir: run.runDir, state: run.state }), save: async () => {} });
+    // a checkpoint of an earlier V1 entry (the segmenter's) saved the revision's hash: still re-pointed
+    run.state.verify!.source.sha256 = await hashSourceTree(path.join(run.runDir, VERIFY_FILES.sourceDir));
+    const second = codexSpy(run, ALL_SCOPE, ["refs"]);
+    const logs: string[] = [];
+    const result = await runStageV1({ ...stageArgs(run, { runCodex: second.runCodex }), log: (m: string) => logs.push(m) });
+    expect(result.status).toBe("completed");
+    expect(second.calls).toHaveLength(0);
+    expect(logs.join("\n")).toMatch(/entry: re-point the existing transcription at the revised source — the revision of v1 \(sha .*\): its transcription is re-pointed at it/);
+    expect(logs.join("\n")).toMatch(/reanchor: \d+ node\(s\) unchanged, 0 changed, 0 to re-point/);
+    expect(existsSync(path.join(run.runDir, `${V1_REFS_FILE}.prev`))).toBe(false);
+    expect(run.state.verify!.source.sha256).not.toBe(before);
+    expect(run.state.verify!.confirmed).toEqual({ "thm:rate": "kept" });
+    expect(run.state.verify!.revision?.reanchor).toMatchObject({ changed: [], broken: [], cold: false });
+    expect(run.state.verify!.revision?.transcribed).toBe(true);
+    expect(existsSync(path.join(run.runDir, VERIFY_FILES.v1ReviseDirective))).toBe(false);
+    expect(run.state.verify!.last_drift).toBeUndefined();
+    // the segmenter's binding followed its lines: the orphan proof is still the unlabeled lemma's
+    const envs = (await readJson(path.join(run.runDir, VERIFY_FILES.envsJson))) as unknown as EnvsJson;
+    expect(envs.envs.find((e) => e.id === "lemma-1")?.proof).toMatch(/^This proof matches no environment/);
+    // the same nodes, the same texts; only where they are printed moved
+    const after = await readJson(path.join(run.runDir, VERIFY_FILES.coreTranscribed));
+    const strip = (c: Record<string, unknown>): unknown => JSON.parse(JSON.stringify(c, (k, v) => (k === "tex_locator" ? undefined : v)));
+    expect(strip(after)).toEqual(strip(transcribed));
+    expect(JSON.stringify(after)).not.toBe(JSON.stringify(transcribed));
+    expect(run.state.verify!.revision?.reanchored_sha).toBe(run.state.verify!.source.sha256);
+    // the revision read, the run's V1 entries are those of any run
+    const third: string[] = [];
+    await runStageV1({ ...stageArgs(run, { runCodex: codexSpy(run, ALL_SCOPE, ["refs"]).runCodex }), log: (m: string) => third.push(m) });
+    expect(third.join("\n")).toMatch(/entry: revise the existing transcription/);
+    // a V1 halted AFTER the re-pointing (the revision still open): the entry revises the re-pointed
+    // transcription, keeping what was done to it since — never re-pointing it again from the version
+    delete run.state.verify!.revision!.transcribed;
+    const refsFile = path.join(run.runDir, V1_REFS_FILE);
+    const refs = JSON.parse(await readFile(refsFile, "utf8")) as { target_estimand: string };
+    await writeFile(refsFile, JSON.stringify({ ...refs, target_estimand: "fixed by hand after the halt" }), "utf8");
+    const fourth: string[] = [];
+    await runStageV1({ ...stageArgs(run, { runCodex: codexSpy(run, ALL_SCOPE, ["refs"]).runCodex }), log: (m: string) => fourth.push(m) });
+    expect(fourth.join("\n")).toMatch(/entry: revise the existing transcription/);
+    expect((JSON.parse(await readFile(refsFile, "utf8")) as { target_estimand: string }).target_estimand).toBe("fixed by hand after the halt");
+    expect(fourth.join("\n")).not.toMatch(/read from its starting point/);
+    // … and one read AFRESH, halted before its agent wrote a reference core: the cold reading goes on —
+    // nothing is restored from the starting point, nor its record rewritten
+    run.state.verify!.revision!.reanchor = { same: 0, changed: [], broken: [], renamed: {}, cold: true, cold_reason: "62% could not be located again" };
+    await rm(refsFile);
+    const fifth: string[] = [];
+    await runStageV1({ ...stageArgs(run, { runCodex: codexSpy(run, ALL_SCOPE, ["refs"]).runCodex }), log: (m: string) => fifth.push(m) });
+    expect(fifth.join("\n")).not.toMatch(/read from its starting point/);
+    expect(run.state.verify!.revision!.reanchor).toMatchObject({ cold: true, cold_reason: "62% could not be located again" });
+  });
+
+  it("a source fixed in place is re-pointed as a fix: verdicts kept, no agent call, no new version", async () => {
+    const run = await prepareRun(null);
+    const first = codexSpy(run, ALL_SCOPE, ["refs"]);
+    expect((await runStageV1(stageArgs(run, { runCodex: first.runCodex }))).status).toBe("completed");
+    const before = run.state.verify!.source.sha256;
+    run.state.verify!.confirmed = { "thm:rate": "kept" };
+    // a template fix in the run's copy of the source (after the first result: the setup is as it was)
+    const results = path.join(run.runDir, VERIFY_FILES.sourceDir, "sec", "results.tex");
+    await writeFile(results, (await readFile(results, "utf8")).replace("\\end{thm}\n", "\\end{thm}\n\n% a neutral fix\n"), "utf8");
+    expect(await startInPlaceFix({ runDir: run.runDir, state: run.state, save: async () => {} })).not.toBeNull();
+    expect(run.state.verify!.revision?.in_place?.sha).toBe(before);
+    const second = codexSpy(run, ALL_SCOPE, ["refs"]);
+    const logs: string[] = [];
+    const result = await runStageV1({ ...stageArgs(run, { runCodex: second.runCodex }), log: (m: string) => logs.push(m) });
+    expect(result.status).toBe("completed");
+    expect(second.calls).toHaveLength(0);
+    expect(logs.join("\n")).toMatch(/entry: re-point the existing transcription/);
+    expect(logs.join("\n")).toMatch(/the source fixed in place is re-pointed; the version is unchanged/);
+    expect(run.state.verify!.source.sha256).not.toBe(before);
+    expect(run.state.verify!.confirmed).toEqual({ "thm:rate": "kept" });
+    // no version made, no revision left on record
+    expect(run.state.verify!.version ?? 1).toBe(1);
+    expect(run.state.verify!.versions ?? []).toEqual([]);
+    expect(run.state.verify!.revision).toBeUndefined();
+    expect(run.state.verify!.source.fixed_from).toEqual([before]);
+    expect(existsSync(path.join(run.runDir, "versions", "v1"))).toBe(false);
+  });
+
+  it("a revision that changes the setup: one check names the nodes it can affect — only they are graded again; no usable answer carries none", async () => {
+    for (const answer of [{ all: false, reason: "", affected: [{ id: "thm:rate", reason: "it uses the convention the revision changed" }] }, { all: false, reason: "", affected: [{ id: "thm:nowhere", reason: "?" }] }]) {
+      const run = await prepareRun(null);
+      const first = codexSpy(run, ALL_SCOPE, ["refs"]);
+      expect((await runStageV1(stageArgs(run, { runCodex: first.runCodex }))).status).toBe("completed");
+      const core = await readJson(path.join(run.runDir, VERIFY_FILES.coreTranscribed)) as unknown as Core;
+      const ids = [...core.assumptions, ...core.definitions, ...core.statements].map((n) => n.id);
+      run.state.verify!.confirmed = Object.fromEntries(ids.map((id) => [id, "kept"]));
+      // the author adds a sentence before the first result: the setup changed
+      await reviseRun(run, async (dir) => {
+        const main = path.join(dir, "main.tex");
+        await writeFile(main, (await readFile(main, "utf8")).replace("\\begin{document}", () => "\\begin{document}\nThroughout, all functions are measurable."), "utf8");
+      });
+      const second = codexSpy(run, ALL_SCOPE, ["refs"]);
+      const asked: string[] = [];
+      const runCodex = (async (input: CodexRunInput) => {
+        if (/^SETUP BEFORE:/m.test(input.prompt)) {
+          asked.push(input.prompt);
+          return { stdout: JSON.stringify(answer), stderr: "" };
+        }
+        return second.runCodex(input as never);
+      }) as unknown as typeof second.runCodex;
+      const logs: string[] = [];
+      await runStageV1({ ...stageArgs(run, { runCodex }), log: (m: string) => logs.push(m) });
+      expect(asked).toHaveLength(1);
+      expect(asked[0]).toMatch(/SETUP AFTER:[\s\S]*Throughout, all functions are measurable\./);
+      expect(asked[0]).toContain("thm:rate: ");
+      if (answer.affected[0]!.id === "thm:rate") {
+        expect(logs.join("\n")).toMatch(/verdict\(s\) carried, 1 graded again \(the check names thm:rate\)/);
+        expect(run.state.verify!.confirmed).toEqual(Object.fromEntries(ids.filter((id) => id !== "thm:rate").map((id) => [id, "kept"])));
+      } else {
+        expect(logs.join("\n")).toMatch(/the setup-change check gave no usable answer/);
+        expect(run.state.verify!.confirmed).toEqual({});
+      }
+    }
+  });
+
+  it("a segmenter asked to fill a revision's new gap may not drop what its file holds: an edit that empties it is sent back", async () => {
+    const run = await prepareRun(null);
+    const first = codexSpy(run, ALL_SCOPE, ["refs"]);
+    expect((await runStageV1(stageArgs(run, { runCodex: first.runCodex }))).status).toBe("completed");
+    const segFile = path.join(run.runDir, V1_SEGMENTS_FILE);
+    expect(JSON.parse(await readFile(segFile, "utf8")).bindings).toHaveLength(1);
+    // the author adds a proof the parser cannot attach: a new gap, the file holding the old binding
+    await reviseRun(run, async (dir) => {
+      const results = path.join(dir, "sec", "results.tex");
+      await writeFile(results, `${await readFile(results, "utf8")}\n\\begin{proof}[Proof of \\cref{lem:elsewhere}]\nA proof the revision adds.\n\\end{proof}\n`, "utf8");
+    });
+    const second = codexSpy(run, ALL_SCOPE, ["refs"]);
+    let held = "";
+    let rounds = 0;
+    const runCodex = (async (input: CodexRunInput) => {
+      if (/^SEGMENTS_FILE: /m.test(input.prompt)) {
+        // round 1 empties the file it is given (re-pointed at the revision); round 2, told so, keeps
+        // what it held (the new proof is no result's)
+        if (++rounds === 1) held = await readFile(segFile, "utf8");
+        await writeFile(segFile, rounds === 1 ? JSON.stringify({ results: [], bindings: [] }) : held, "utf8");
+        return { stdout: '{"status":"completed","message":"nothing to add"}', stderr: "" };
+      }
+      return second.runCodex(input as never);
+    }) as unknown as typeof second.runCodex;
+    const logs: string[] = [];
+    await runStageV1({ ...stageArgs(run, { runCodex }), log: (m: string) => logs.push(m) });
+    expect(logs.join("\n")).toMatch(/segments round 1: \d+ violation\(s\) — \(segment\) the edit removed 1 entry the file already held \(the proof binding of lemma-1\)/);
+    expect(logs.join("\n")).toMatch(/segments round 2: accepted/);
+    expect(JSON.parse(await readFile(segFile, "utf8")).bindings.map((b: { result: string }) => b.result)).toContain("lemma-1");
+    const envs = (await readJson(path.join(run.runDir, VERIFY_FILES.envsJson))) as unknown as EnvsJson;
+    expect(envs.envs.find((e) => e.id === "lemma-1")?.proof).toMatch(/^This proof matches no environment/);
+  });
+
+  it("when the source changed in place (not as a revision): entered otherwise than by --from-stage V1, a cold extraction, the old reference core set aside and the carried verdicts dropped", async () => {
     const run = await prepareRun(null);
     const first = codexSpy(run, ALL_SCOPE, ["refs"]);
     expect((await runStageV1(stageArgs(run, { runCodex: first.runCodex }))).status).toBe("completed");
     const before = run.state.verify!.source.sha256;
     run.state.verify!.confirmed = { "thm:rate": "stale" };
-    // a revise directive pending from V1.5, and the drift it carries: neither reaches this extraction
     run.state.verify!.last_drift = { "thm:rate": "{}" };
     await writeFile(path.join(run.runDir, VERIFY_FILES.v1ReviseDirective), JSON.stringify({ mode: "transcribe", round: 1, findings: [] }), "utf8");
     const main = path.join(run.runDir, VERIFY_FILES.sourceDir, "main.tex");
@@ -951,7 +1135,7 @@ describe("re-entry: rewinds revise, they never rebuild", () => {
     const result = await runStageV1({ ...stageArgs(run, { runCodex: second.runCodex }), log: (m: string) => logs.push(m) });
     expect(result.status).toBe("completed");
     expect(second.calls).toHaveLength(1);
-    expect(logs.join("\n")).toMatch(/entry: cold extraction — the source changed/);
+    expect(logs.join("\n")).toMatch(/entry: cold extraction — the source changed .*, not as a revision/);
     expect(existsSync(path.join(run.runDir, `${V1_REFS_FILE}.prev`))).toBe(true);
     expect(run.state.verify!.source.sha256).not.toBe(before);
     expect(run.state.verify!.confirmed).toEqual({});

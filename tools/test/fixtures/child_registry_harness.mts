@@ -6,6 +6,7 @@
 // argv[2] = mode: "group"    one detached `bash` whose background `sleep` stays in its group
 //                 "setsid"   the `sleep` leaves the group (setsid), like a self-detaching worker
 //                 "maplimit" three such workers through mapLimit at concurrency 1
+//                 "env"      print whether the model-worker variable survived the handlers, and exit
 // argv[3] = outDir: grandchild pids go to grandchild.pid, started items to started.txt,
 //           handler log lines to log.txt.
 import { appendFileSync } from "node:fs";
@@ -23,6 +24,10 @@ installStopHandlers({
   },
 });
 setChildrenFile(path.join(outDir, "children.json"));
+if (mode === "env") {
+  console.log(`MODEL_WORKER=${process.env.PAPERFORMALIZER_MODEL_WORKER ?? "unset"}`);
+  process.exit(0);
+}
 
 const pidFile = path.join(outDir, "grandchild.pid");
 const worker = (tag: string) =>

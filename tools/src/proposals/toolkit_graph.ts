@@ -1,5 +1,5 @@
 // The toolkit dependency graph, `<toolkit>/doc/toolkit_graph.json`: DERIVED from the Lean (one
-// `lake exe candidate_scan -- --graph` pass), never authored. Nodes are declarations — the
+// `lake exe candidate_scan -- --graph` pass, its compact form `GraphScan`), never authored. Nodes are declarations — the
 // toolkit's, the papers' (as consumers), and the base libraries' as leaves (only those a toolkit
 // declaration uses; never expanded). One stored edge direction: `uses` (A → B: A's type or proof
 // references B); "used by" is the reversal.
@@ -20,7 +20,7 @@ import { readdir, readFile } from "node:fs/promises";
 import path from "node:path";
 import type { ToolkitConfig } from "../toolkit/config.js";
 import { loadLedger } from "../toolkit/ledger.js";
-import { type CandidateScan } from "./candidate_scan.js";
+import { type GraphScan } from "./candidate_scan.js";
 
 export type NodeLayer = "toolkit" | "paper" | "base";
 export type NodeTier = "main" | "aux";
@@ -39,7 +39,8 @@ export interface GraphNode {
   tier?: NodeTier;
   /** Auxiliary: the main node(s) it exists to prove. */
   owners?: string[];
-  /** sha1 of the whitespace-normalized statement with the node's own name removed. */
+  /** sha1 of the whitespace-normalized statement with the node's own name removed. Toolkit nodes,
+   *  and the paper nodes of an apply's graph (`refreshToolkitGraph` `scope`). */
   statement_hash?: string;
   /** Toolkit: where it came from (the ledger), when recorded. */
   origin?: { kind: string; slug: string; date?: string };
@@ -53,6 +54,52 @@ export interface ToolkitGraph {
   nodes: GraphNode[];
   /** `[from, to]`: `from` uses `to`. */
   edges: Array<[string, string]>;
+  /** The papers (`Papers.<Pascal>`) the whole library's scan left out: their modules did not build,
+   *  so what they use of the toolkit is not in the graph (`GraphScan.excluded_papers`). */
+  excluded_papers?: string[];
+  /** Per paper left out: the toolkit declarations its declarations used in the last graph that had
+   *  it (`refreshToolkitGraph`: the graph on file, or the uses that graph carried for it). */
+  excluded_paper_uses?: Record<string, string[]>;
+  /** The toolkit generation the scan was taken against (a workspace's pin, `GraphScan.generation`). */
+  generation?: number;
+}
+
+/** What the papers `excluded` used of the toolkit in `prior` (the last graph on file): a paper in it
+ *  — its declarations' edges to toolkit declarations; one left out of it too — what it carried. */
+export function carriedPaperUses(prior: Pick<ToolkitGraph, "nodes" | "edges" | "excluded_paper_uses"> | null, excluded: readonly string[]): Record<string, string[]> {
+  const out: Record<string, string[]> = {};
+  if (!prior || excluded.length === 0) return out;
+  const want = new Set(excluded);
+  const paperOf = new Map<string, string>();
+  const toolkit = new Set<string>();
+  for (const n of prior.nodes) {
+    if (n.layer === "paper" && n.paper && want.has(n.paper)) paperOf.set(n.id, n.paper);
+    else if (n.layer === "toolkit") toolkit.add(n.id);
+  }
+  const uses = new Map<string, Set<string>>();
+  for (const [a, b] of prior.edges) {
+    const p = paperOf.get(a);
+    if (p && toolkit.has(b)) uses.set(p, (uses.get(p) ?? new Set()).add(b));
+  }
+  const seen = new Set(paperOf.values());
+  for (const p of [...want].sort()) {
+    const got = seen.has(p) ? [...(uses.get(p) ?? [])] : (prior.excluded_paper_uses?.[p] ?? []);
+    if (got.length) out[p] = [...new Set(got)].sort();
+  }
+  return out;
+}
+
+/** The order of `String.prototype.localeCompare`, without building a collator per call. */
+const byLocale = new Intl.Collator().compare;
+
+/** `edges` sorted by source, then target, in `byLocale` order: each name ranked once, the edges
+ *  (millions over every paper) compared by rank. */
+function sortEdges(edges: Array<[string, string]>): Array<[string, string]> {
+  const names = [...new Set(edges.flat())].sort(byLocale);
+  const rank = new Map(names.map((n, i) => [n, i] as const));
+  const keyed = edges.map((e) => ({ e, a: rank.get(e[0])!, b: rank.get(e[1])! }));
+  keyed.sort((x, y) => x.a - y.a || x.b - y.b);
+  return keyed.map((k) => k.e);
 }
 
 export function statementHash(name: string, type: string): string {
@@ -61,8 +108,14 @@ export function statementHash(name: string, type: string): string {
   return createHash("sha1").update(norm).digest("hex");
 }
 
+/** The graph hashes types, not definition bodies or inductive constructors. Equal types identify
+ *  theorem statements, but cannot establish that two definitions, structures or instances agree. */
+export function duplicateStatementHash(node: GraphNode): string | undefined {
+  return node.kind === "theorem" ? node.statement_hash : undefined;
+}
+
 export interface GraphInputs {
-  scan: CandidateScan;
+  scan: GraphScan;
   /** Toolkit declarations' tier, owners and origin, from the ledger (`declarations[]`). */
   toolkitRecords?: ReadonlyMap<string, { tier?: NodeTier; owners?: string[]; origin?: { kind: string; slug: string }; date?: string }>;
   /** Paper declarations a paper statement maps to (its theorems, lemmas and definitions): main. */
@@ -91,20 +144,19 @@ export function buildToolkitGraph(inp: GraphInputs): ToolkitGraph {
     nodes.set(d.name, {
       id: d.name, layer, kind: d.kind, module: d.module,
       ...(layer === "toolkit" ? { division: segs[1] ?? "", topic: segs[2] ?? "" } : { paper: paperOf(d.module) }),
-      statement_hash: statementHash(d.name, d.type),
+      ...(d.type !== undefined ? { statement_hash: statementHash(d.name, d.type) } : {}),
       ...(layer === "toolkit" && rec?.origin ? { origin: { ...rec.origin, ...(rec.date ? { date: rec.date } : {}) } } : {}),
     });
   }
   for (const d of scan.declarations) {
     const from = nodes.get(d.name)!;
-    for (const c of [...d.type_constants, ...d.body_constants]) {
-      if (c.name === d.name) continue;
-      if (c.class === "base") {
-        // Base leaves only where a toolkit declaration attaches to the base libraries.
-        if (from.layer !== "toolkit") continue;
-        if (!nodes.has(c.name)) nodes.set(c.name, { id: c.name, layer: "base", kind: "base", module: c.module });
-      } else if (!nodes.has(c.name)) continue;
-      edges.add(`${d.name}\u0000${c.name}`);
+    for (const u of d.uses) if (u !== d.name && nodes.has(u)) edges.add(`${d.name}\u0000${u}`);
+    // Base leaves only where a toolkit declaration attaches to the base libraries.
+    if (from.layer !== "toolkit") continue;
+    for (const b of d.base ?? []) {
+      if (b.name === d.name) continue;
+      if (!nodes.has(b.name)) nodes.set(b.name, { id: b.name, layer: "base", kind: "base", module: b.module });
+      edges.add(`${d.name}\u0000${b.name}`);
     }
   }
   const edgeList = [...edges].map((e) => e.split("\u0000") as [string, string]);
@@ -123,6 +175,7 @@ export function buildToolkitGraph(inp: GraphInputs): ToolkitGraph {
   }
   // Owners of auxiliaries without recorded ones: the main nodes of the same layer and paper reaching them.
   const out = adjacency(edgeList);
+  const found = new Map<string, Set<string>>();
   for (const m of nodes.values()) {
     if (m.tier !== "main") continue;
     const seen = new Set<string>([m.id]);
@@ -134,18 +187,22 @@ export function buildToolkitGraph(inp: GraphInputs): ToolkitGraph {
       const n = nodes.get(x);
       if (!n || n.tier !== "aux" || n.layer !== m.layer || n.paper !== m.paper) continue;
       if (inp.toolkitRecords?.get(n.id)?.owners?.length) continue;
-      n.owners = [...new Set([...(n.owners ?? []), m.id])].sort();
-      stack.push(...(out.get(x) ?? []));
+      if (!found.has(x)) found.set(x, new Set());
+      found.get(x)!.add(m.id);
+      for (const y of out.get(x) ?? []) stack.push(y);
     }
   }
+  for (const [x, owners] of found) nodes.get(x)!.owners = [...owners].sort();
   for (const n of nodes.values()) if (n.tier === "aux" && !(n.owners?.length)) n.tier = "main";
   return {
     version: 1,
     built_at: (inp.now ?? (() => new Date()))().toISOString(),
     toolkit_prefix: tk,
     papers_prefix: pp,
-    nodes: [...nodes.values()].sort((a, b) => a.id.localeCompare(b.id)),
-    edges: edgeList.sort((a, b) => a[0].localeCompare(b[0]) || a[1].localeCompare(b[1])),
+    nodes: [...nodes.values()].sort((a, b) => byLocale(a.id, b.id)),
+    edges: sortEdges(edgeList),
+    ...(scan.excluded_papers ? { excluded_papers: [...scan.excluded_papers] } : {}),
+    ...(scan.generation !== undefined ? { generation: scan.generation } : {}),
   };
 }
 
@@ -156,6 +213,14 @@ function adjacency(edges: ReadonlyArray<readonly [string, string]>): Map<string,
     m.get(a)!.push(b);
   }
   return m;
+}
+
+/** The graph without its paper nodes (the toolkit and its base leaves): what a scan of the toolkit
+ *  alone shows, so two graphs compare whatever papers each was taken with. */
+export function toolkitOnly(g: ToolkitGraph): ToolkitGraph {
+  const papers = new Set(g.nodes.filter((n) => n.layer === "paper").map((n) => n.id));
+  if (papers.size === 0) return g;
+  return { ...g, nodes: g.nodes.filter((n) => !papers.has(n.id)), edges: g.edges.filter(([a, b]) => !papers.has(a) && !papers.has(b)) };
 }
 
 /** The main view: each auxiliary collapsed into its owners, edges lifted between groups. */
@@ -171,7 +236,7 @@ export function mainView(g: ToolkitGraph): ToolkitGraph {
   return {
     ...g,
     nodes: g.nodes.filter((n) => n.tier !== "aux"),
-    edges: [...edges].map((e) => e.split("\u0000") as [string, string]).sort((a, b) => a[0].localeCompare(b[0]) || a[1].localeCompare(b[1])),
+    edges: sortEdges([...edges].map((e) => e.split("\u0000") as [string, string])),
   };
 }
 
@@ -180,7 +245,7 @@ export interface ToolkitHealth {
   toolkit_nodes: number;
   /** Toolkit nodes no other node (paper or toolkit) uses. */
   isolated: string[];
-  /** Groups of toolkit nodes with the same normalized statement. */
+  /** Groups of toolkit theorems with the same normalized statement. */
   duplicates: string[][];
   /** Per paper: its nodes, and how many reach a toolkit node. */
   papers: Array<{ paper: string; nodes: number; reaching_toolkit: number }>;
@@ -214,26 +279,31 @@ export function toolkitHealth(full: ToolkitGraph, opts: { view?: "main" | "full"
   const out = adjacency(g.edges);
   const isolated = toolkit.filter((n) => (users.get(n.id) ?? []).every((u) => u === n.id)).map((n) => n.id);
   const byHash = new Map<string, string[]>();
-  for (const n of toolkit) if (n.statement_hash) byHash.set(n.statement_hash, [...(byHash.get(n.statement_hash) ?? []), n.id]);
+  for (const n of toolkit) {
+    const hash = duplicateStatementHash(n);
+    if (!hash) continue;
+    if (!byHash.has(hash)) byHash.set(hash, []);
+    byHash.get(hash)!.push(n.id);
+  }
   const duplicates = [...byHash.values()].filter((xs) => xs.length > 1);
-  const reachesToolkit = (id: string): boolean => {
-    const seen = new Set<string>();
-    const stack = [id];
-    while (stack.length) {
-      const x = stack.pop()!;
-      if (seen.has(x)) continue;
-      seen.add(x);
-      for (const y of out.get(x) ?? []) {
-        if (byId.get(y)?.layer === "toolkit") return true;
-        if (byId.get(y)?.layer === "paper") stack.push(y);
-      }
+  // The paper nodes reaching a toolkit node through paper nodes: walked back once from the toolkit.
+  const reaching = new Set<string>();
+  const back = toolkit.map((n) => n.id);
+  while (back.length) {
+    for (const u of users.get(back.pop()!) ?? []) {
+      if (byId.get(u)?.layer === "paper" && !reaching.has(u)) { reaching.add(u); back.push(u); }
     }
-    return false;
-  };
-  const paperIds = [...new Set(g.nodes.filter((n) => n.layer === "paper").map((n) => n.paper!))].sort();
+  }
+  const nodesOfPaper = new Map<string, GraphNode[]>();
+  for (const n of g.nodes) {
+    if (n.layer !== "paper") continue;
+    if (!nodesOfPaper.has(n.paper!)) nodesOfPaper.set(n.paper!, []);
+    nodesOfPaper.get(n.paper!)!.push(n);
+  }
+  const paperIds = [...nodesOfPaper.keys()].sort();
   const papers = paperIds.map((p) => {
-    const ns = g.nodes.filter((n) => n.paper === p);
-    return { paper: p, nodes: ns.length, reaching_toolkit: ns.filter((n) => reachesToolkit(n.id)).length };
+    const ns = nodesOfPaper.get(p)!;
+    return { paper: p, nodes: ns.length, reaching_toolkit: ns.filter((n) => reaching.has(n.id)).length };
   });
   const attachment = toolkit.map((n) => {
     const deps = (out.get(n.id) ?? []).map((d) => byId.get(d)).filter((d): d is GraphNode => !!d);
@@ -241,10 +311,30 @@ export function toolkitHealth(full: ToolkitGraph, opts: { view?: "main" | "full"
     const tk = deps.filter((d) => d.layer === "toolkit").length;
     return { id: n.id, division: n.division ?? "", base, toolkit: tk, shape: (tk === 0 ? "foundation" : "trick") as "foundation" | "trick" };
   });
+  // Per toolkit module: its nodes, the edges between two of them, and the edges to each other module.
+  const idsOfModule = new Map<string, string[]>();
+  for (const n of toolkit) {
+    if (!idsOfModule.has(n.module)) idsOfModule.set(n.module, []);
+    idsOfModule.get(n.module)!.push(n.id);
+  }
+  const inModule = new Map<string, Array<[string, string]>>();
+  const crossEdges = new Map<string, number>();
+  for (const e of g.edges) {
+    const x = byId.get(e[0]), y = byId.get(e[1]);
+    if (!x || !y) continue;
+    if (x.module === y.module) {
+      if (x.layer !== "toolkit" || y.layer !== "toolkit") continue;
+      if (!inModule.has(x.module)) inModule.set(x.module, []);
+      inModule.get(x.module)!.push(e);
+    } else {
+      const key = x.module < y.module ? `${x.module}\u0000${y.module}` : `${y.module}\u0000${x.module}`;
+      crossEdges.set(key, (crossEdges.get(key) ?? 0) + 1);
+    }
+  }
   const split_suggestions: ToolkitHealth["split_suggestions"] = [];
-  for (const mod of [...new Set(toolkit.map((n) => n.module))].sort()) {
-    const ids = toolkit.filter((n) => n.module === mod).map((n) => n.id);
-    const comps = components(ids, g.edges);
+  for (const mod of [...idsOfModule.keys()].sort()) {
+    const ids = idsOfModule.get(mod)!;
+    const comps = components(ids, inModule.get(mod) ?? []);
     if (comps.length > 1 && ids.length > 2) split_suggestions.push({ module: mod, components: comps });
   }
   const merge_suggestions: ToolkitHealth["merge_suggestions"] = [];
@@ -259,9 +349,9 @@ export function toolkitHealth(full: ToolkitGraph, opts: { view?: "main" | "full"
     for (let i = 0; i < mods.length; i += 1) {
       for (let j = i + 1; j < mods.length; j += 1) {
         const a = mods[i]!, b = mods[j]!;
-        const sizeA = toolkit.filter((n) => n.module === a).length;
-        const sizeB = toolkit.filter((n) => n.module === b).length;
-        const cross = g.edges.filter(([x, y]) => (byId.get(x)?.module === a && byId.get(y)?.module === b) || (byId.get(x)?.module === b && byId.get(y)?.module === a)).length;
+        const sizeA = idsOfModule.get(a)!.length;
+        const sizeB = idsOfModule.get(b)!.length;
+        const cross = crossEdges.get(a < b ? `${a}\u0000${b}` : `${b}\u0000${a}`) ?? 0;
         if (cross > 0 && cross >= Math.min(sizeA, sizeB)) merge_suggestions.push({ modules: [a, b], cross_edges: cross });
       }
     }
@@ -269,7 +359,7 @@ export function toolkitHealth(full: ToolkitGraph, opts: { view?: "main" | "full"
   const fan_in = toolkit
     .map((n) => ({ id: n.id, papers: new Set((users.get(n.id) ?? []).map((u) => byId.get(u)?.paper).filter(Boolean)).size }))
     .filter((x) => x.papers > 0)
-    .sort((a, b) => b.papers - a.papers || a.id.localeCompare(b.id))
+    .sort((a, b) => b.papers - a.papers || byLocale(a.id, b.id))
     .slice(0, 10);
   const now = opts.now ?? new Date();
   const stale = toolkit.filter((n) => {
@@ -300,7 +390,7 @@ function components(ids: readonly string[], edges: ReadonlyArray<readonly [strin
   for (const [a, b] of edges) if (inSet.has(a) && inSet.has(b)) parent.set(find(a), find(b));
   const groups = new Map<string, string[]>();
   for (const i of ids) groups.set(find(i), [...(groups.get(find(i)) ?? []), i]);
-  return [...groups.values()].map((g) => g.sort()).sort((a, b) => a[0]!.localeCompare(b[0]!));
+  return [...groups.values()].map((g) => g.sort()).sort((a, b) => byLocale(a[0]!, b[0]!));
 }
 
 const local = (n: string): string => n.slice(n.lastIndexOf(".") + 1);
@@ -412,26 +502,45 @@ export async function paperMainDecls(cfg: ToolkitConfig): Promise<Set<string>> {
 
 /**
  * Re-derive `doc/toolkit_graph.json` from the Lean (one `candidate_scan --graph` pass, or a scan
- * given by a test) and the ledger's tiers. Returns the graph written.
+ * given by a test) and the ledger's tiers. Returns the graph written. With `scope`: an apply's graph
+ * — the toolkit and the run's paper (`scope.papers`; none for a round-A apply), its paper nodes with
+ * statement hashes — returned, never written: the toolkit's measures that read other papers (reuse,
+ * fan-in, results no paper uses) are not in it, and an apply reads only what its moves can change
+ * (`healthRegressions`, the duplicate-statement check).
  */
 export async function refreshToolkitGraph(args: {
   toolkit: ToolkitConfig;
   log: (m: string) => void;
-  scan?: () => Promise<CandidateScan>;
+  scope?: { qid: string; papers: readonly string[] };
+  scan?: () => Promise<GraphScan>;
   now?: () => Date;
+  /** false: a scoped scan outside a workspace runs in the shared tree (`withScanRoot`); default in a workspace. */
+  local?: boolean;
 }): Promise<ToolkitGraph> {
   const { runGraphScan } = await import("./candidate_scan.js");
-  const scan = args.scan ? await args.scan() : await runGraphScan({ toolkit: args.toolkit, log: args.log });
+  const scan = args.scan ? await args.scan() : await runGraphScan({ toolkit: args.toolkit, log: args.log, ...(args.scope ? { scope: args.scope } : {}), ...(args.local !== undefined ? { local: args.local } : {}) });
   const graph = buildToolkitGraph({
     scan,
     toolkitRecords: await toolkitRecords(args.toolkit),
     paperMain: await paperMainDecls(args.toolkit),
     ...(args.now ? { now: args.now } : {}),
   });
+  const count = (layer: NodeLayer) => graph.nodes.filter((n) => n.layer === layer).length;
+  const counts = `${count("toolkit")} toolkit and ${count("paper")} paper declaration(s), ${graph.edges.length} edge(s)`;
+  if (args.scope) {
+    args.log(`toolkit graph (the toolkit${args.scope.papers.length ? ` and ${args.scope.papers.join(", ")}` : ""}${graph.generation !== undefined ? `, generation ${graph.generation}` : ""}): ${counts}`);
+    return graph;
+  }
+  // a paper left out: its uses as the last graph on file had them, so a result it uses is not "unused"
+  if (graph.excluded_papers?.length) {
+    const prior = await readToolkitGraph(args.toolkit).catch(() => null);
+    const carried = carriedPaperUses(prior, graph.excluded_papers);
+    if (Object.keys(carried).length) graph.excluded_paper_uses = carried;
+  }
   const { writeJsonAtomic } = await import("../shared/json_atomic.js");
   await writeJsonAtomic(toolkitGraphPath(args.toolkit), graph);
-  const count = (layer: NodeLayer) => graph.nodes.filter((n) => n.layer === layer).length;
-  args.log(`toolkit graph: ${count("toolkit")} toolkit and ${count("paper")} paper declaration(s), ${graph.edges.length} edge(s) → ${toolkitGraphPath(args.toolkit)}`);
+  const left = graph.excluded_papers ?? [];
+  args.log(`toolkit graph: ${counts}${left.length ? `; ${left.length} paper(s) left out (they do not build): ${left.join(", ")}` : ""} → ${toolkitGraphPath(args.toolkit)}`);
   return graph;
 }
 

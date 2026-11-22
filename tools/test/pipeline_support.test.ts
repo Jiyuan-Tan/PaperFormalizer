@@ -14,8 +14,8 @@ vi.mock("../src/shared/codex.js", async (importOriginal) => {
   };
 });
 
-import { defaultDeps, logicalStageId, readPrompt } from "../src/pipeline_support.js";
-import { formalizationDir, logsDir, promptPath } from "../src/paths.js";
+import { defaultDeps, logicalStageId, readPrompt, watchToolkitSources } from "../src/pipeline_support.js";
+import { formalizationDir, logsDir, pipelineLogPath, promptPath } from "../src/paths.js";
 import { createInitialState } from "../src/state.js";
 import { tk } from "./toolkit/helpers.js";
 
@@ -59,3 +59,87 @@ describe("agent-call accounting", () => {
     expect(await readFile(path.join(logs, "stages", stages[0]), "utf8")).toContain("prove t1");
   });
 });
+
+// While shared builds may run, a toolkit-source change during a formalization worker call is recorded
+// (console, pipeline log; never the authors' notes, never attributed) and the stage goes on.
+describe("watchToolkitSources", () => {
+  const fixture = async (sharedOn = true) => {
+    const repoRoot = await mkdtemp(path.join(tmpdir(), "tc-watch-"));
+    if (sharedOn) {
+      await mkdir(path.join(repoRoot, ".lake", "paperformalizer"), { recursive: true });
+      await writeFile(path.join(repoRoot, ".lake", "paperformalizer", "lake-shared-mode"), "");
+    }
+    await mkdir(path.join(repoRoot, "Toolkit"), { recursive: true });
+    await mkdir(path.join(repoRoot, "Papers", "P"), { recursive: true });
+    await writeFile(path.join(repoRoot, "Toolkit.lean"), "module\n");
+    await writeFile(path.join(repoRoot, "Toolkit", "A.lean"), "module\n");
+    await writeFile(path.join(repoRoot, "Papers", "P", "Main.lean"), "module\n");
+    return { repoRoot, qid: "watch_run" };
+  };
+  const notes = (ctx: { repoRoot: string; qid: string }) => readFile(path.join(ctx.repoRoot, "runs", ctx.qid, "orchestrator_notes.md"), "utf8").catch(() => "");
+  const logged = (ctx: { repoRoot: string; qid: string }) => readFile(pipelineLogPath(ctx.repoRoot, ctx.qid), "utf8").catch(() => "");
+
+  it("a worker that edits only its paper's files (or a study's Staging) is silent", async () => {
+    const ctx = await fixture();
+    try {
+      const lines: string[] = [];
+      const warn = vi.spyOn(console, "warn").mockImplementation((l: string) => { lines.push(l); });
+      expect(await watchToolkitSources(ctx, "4", async () => {
+        await writeFile(path.join(ctx.repoRoot, "Papers", "P", "Main.lean"), "module\ntheorem t : True := trivial\n");
+        await mkdir(path.join(ctx.repoRoot, "Toolkit", "Staging"), { recursive: true });
+        await writeFile(path.join(ctx.repoRoot, "Toolkit", "Staging", "S.lean"), "module\n");
+        return 7;
+      })).toBe(7);
+      warn.mockRestore();
+      expect(lines).toEqual([]);
+      expect(await logged(ctx)).toBe("");
+      expect(await notes(ctx)).toBe("");
+    } finally {
+      await rm(ctx.repoRoot, { recursive: true, force: true });
+    }
+  });
+
+  it("with the switch off nothing is watched", async () => {
+    const ctx = await fixture(false);
+    try {
+      const lines: string[] = [];
+      const warn = vi.spyOn(console, "warn").mockImplementation((l: string) => { lines.push(l); });
+      expect(await watchToolkitSources(ctx, "4", async () => {
+        await writeFile(path.join(ctx.repoRoot, "Toolkit", "A.lean"), "module\n-- a promotion's write\n");
+        return 1;
+      })).toBe(1);
+      warn.mockRestore();
+      expect(lines).toEqual([]);
+      expect(await logged(ctx)).toBe("");
+    } finally {
+      await rm(ctx.repoRoot, { recursive: true, force: true });
+    }
+  });
+
+  it("a worker that changes a toolkit source is reported loudly, and the stage goes on (or its error does)", async () => {
+    const ctx = await fixture();
+    try {
+      const lines: string[] = [];
+      const warn = vi.spyOn(console, "warn").mockImplementation((l: string) => { lines.push(l); });
+      expect(await watchToolkitSources(ctx, "4", async () => {
+        await writeFile(path.join(ctx.repoRoot, "Toolkit", "A.lean"), "module\n-- edited by a worker\n");
+        return "done";
+      })).toBe("done");
+      expect(lines.join("\n")).toMatch(/\(F4\b.*toolkit sources changed during this worker call: Toolkit\/A\.lean \(by a promotion or study apply, or by the worker/);
+      expect(lines.join("\n")).not.toMatch(/undo/);
+      expect(await logged(ctx)).toMatch(/"status":"toolkit-sources-changed".*Toolkit\/A\.lean/);
+      // never in the authors' notes
+      expect(await notes(ctx)).toBe("");
+      // one that edits and then fails: reported, and its error goes on
+      await expect(watchToolkitSources(ctx, "4", async () => {
+        await rm(path.join(ctx.repoRoot, "Toolkit", "A.lean"));
+        throw new Error("worker died");
+      })).rejects.toThrow(/worker died/);
+      expect((await logged(ctx)).trim().split("\n").filter((l) => l.includes("toolkit-sources-changed"))).toHaveLength(2);
+      warn.mockRestore();
+    } finally {
+      await rm(ctx.repoRoot, { recursive: true, force: true });
+    }
+  });
+});
+

@@ -1,0 +1,16 @@
+#!/usr/bin/env bash
+# Runs `<real lake> <args…>` for the lake shim (`src/shared/lake_shim.ts`) as the leader of a
+# process group of its own (the shim starts it detached), so the shim can stop lake and all its
+# `lean` workers at once; and stops that whole group itself when the shim is gone (a tool timeout
+# SIGKILLs the shim's group, which this group is not part of): nothing builds on unlocked.
+# Exit status: lake's.
+#
+#   lake_group <shim pid> <real lake> <args…>
+shim="$1"; shift
+"$@" <&0 &
+lake=$!
+while kill -0 "$lake" 2>/dev/null; do
+  kill -0 "$shim" 2>/dev/null || kill -KILL 0
+  sleep 0.5
+done
+wait "$lake"

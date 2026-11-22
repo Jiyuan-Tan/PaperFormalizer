@@ -21,7 +21,6 @@ export function createInitialSubstrateState(slug: string): SubstrateState {
     terminalRequirementHash: null,
     terminalEscalationKind: null,
     requirementVersion: 0,
-    pendingApply: null,
   };
 }
 

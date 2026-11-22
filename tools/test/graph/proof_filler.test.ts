@@ -254,6 +254,6 @@ describe("filler context — the page carries this round's work, not every open 
     expect(prompt).toContain("PROOF ROADMAP (proof_tex): ROADMAP_T1");
     expect(prompt).not.toContain(corePath);
     expect(prompt).toContain("do not read the typed core");
-    expect(schema).toMatchObject({ type: "object", required: ["added_assumptions", "escalate", "summary"] });
+    expect(schema).toMatchObject({ type: "object", required: ["added_assumptions", "escalate", "printed_step_fixes", "summary"] });
   });
 });

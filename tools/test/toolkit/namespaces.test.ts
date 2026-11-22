@@ -87,7 +87,18 @@ describe("toolkit conventions", () => {
       const out = /--out '?([^'\s]+)'?/.exec(cmd)?.[1];
       if (out) {
         await mkdir(path.dirname(out), { recursive: true });
-        await writeFile(out, JSON.stringify({ declarations: [{ module, type_constants: [{ module: "Mathlib.Probability.Independence.Basic" }], body_constants: [{ module: "Init.Core" }] }] }));
+        // candidate_scan --graph emits compact base/uses records, not type_constants.
+        await writeFile(out, JSON.stringify({
+          schema: 1, graph: true, toolkit_prefix: "Toolkit", papers_prefix: "Papers", modules: [module],
+          declarations: [
+            { name: "Toolkit.Foundations.Probability.cond_preimage", kind: "theorem", module,
+              uses: ["Toolkit.Foundations.Probability.helper", "Toolkit.Foundations.Probability.support"],
+              base: [{ name: "IndepFun", module: "Mathlib.Probability.Independence.Basic" }, { name: "True", module: "Init.Core" }] },
+            { name: "Toolkit.Foundations.Probability.helper", kind: "theorem", module, uses: [] },
+            { name: "Toolkit.Foundations.Probability.support", kind: "theorem",
+              module: "Toolkit.Foundations.Probability.Support", uses: [] },
+          ],
+        }));
       }
       const probe = /lake env lean '?([^'\s]+)'?/.exec(cmd)?.[1];
       if (probe) {
@@ -100,13 +111,16 @@ describe("toolkit conventions", () => {
       toolkit: cfg, toolsDir: "/tools", stagingDir: staging, leanFiles: [], slug: "s", modulePrefix: "Toolkit.Staging.S", indexStep: null,
       manifest: { ops: [{ kind: "create_file", target: "Toolkit/Foundations/Probability/Conditioning.lean", from: "c.lean", newModule: module }], notes: "" },
     }, { ...realApplyDeps, run });
-    expect(r.ok).toBe(true);
+    expect(r.ok, r.log).toBe(true);
     const text = await readFile(path.join(root, "Toolkit/Foundations/Probability/Conditioning.lean"), "utf8");
     expect(text).toContain("namespace Toolkit.Foundations.Probability\n");
     expect(text).not.toContain("namespace IndepFun");
     expect(text).toContain("public import Mathlib.Probability.Independence.Basic\n");
+    expect(text).toContain("public import Toolkit.Foundations.Probability.Support\n");
+    expect(text).not.toContain(`public import ${module}\n`);
+    expect(text).not.toContain("public import Init.Core\n");
     expect(text).not.toContain("Mathlib.Tactic");
-    expect(r.log).toContain("header trimmed to 1 import(s)");
+    expect(r.log).toContain("header trimmed to 2 import(s)");
     const ledger = JSON.parse(await readFile(cfg.ledgerPath, "utf8")) as { declarations: Array<{ name: string }> };
     expect(ledger.declarations.map((d) => d.name)).toEqual(["Toolkit.Foundations.Probability.cond_preimage"]);
   });

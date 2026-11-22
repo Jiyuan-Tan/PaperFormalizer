@@ -477,3 +477,103 @@ describe("a statement whose units the paper cuts across an environment (a minipa
     }
   }, 120_000);
 });
+
+describe("a statement printed as a prose heading (a segment, no theorem environment) whose repair replaces it and a proof step", () => {
+  // The repair changes a grouping only (`\frac{1}{2}c` → `\frac{1}{2c}`): braces that group more than
+  // one token count, so the statement is paired like its proof step, never left as printed.
+  const flat = [
+    "\\documentclass{article}", // 1
+    "\\begin{document}", // 2
+    "\\noindent\\textsc{Corollary 1.} \\textit{$P\\{A\\}\\leqslant\\frac{1}{2}c$, for all $c>0$.}", // 3
+    "", // 4
+    "\\noindent\\textsc{Proof.} $P\\{A\\}\\leqslant(\\frac{1}{2}c)ER$, as in Theorem 1.", // 5
+    "", // 6
+    "\\end{document}", // 7
+  ].join("\n");
+  const statement = "\\noindent\\textsc{Corollary 1.} \\textit{$P\\{A\\}\\leqslant\\frac{1}{2}c$, for all $c>0$.}";
+  const proof = "\\noindent\\textsc{Proof.} $P\\{A\\}\\leqslant(\\frac{1}{2}c)ER$, as in Theorem 1.";
+  const revised = "\\noindent\\textsc{Corollary 1.} \\textit{$P\\{A\\}\\leqslant\\frac{1}{2c}$, for all $c>0$.}";
+  const step = "\\noindent\\textsc{Proof.} $P\\{A\\}\\leqslant\\frac{1}{2c}ER$, as in Theorem 1.";
+  const c = {
+    ...core(),
+    statements: [{ id: "thm:cor-1", kind: "theorem", statement, proof_tex: proof, depends_on: [], status: "to-prove", tex_locator: { file: "main.tex", from: 3, to: 3, env: "segment", label: null } }],
+  } as unknown as Core;
+  const plan = (): ReturnType<typeof planAnnotations> =>
+    planAnnotations(input({
+      files: { "main.tex": flat },
+      flatText: flat,
+      lineMap: flat.split("\n").map((_, i) => ({ file: "main.tex", line: i + 1 })),
+      envs: {
+        main_file: "main.tex",
+        files: ["main.tex"],
+        newtheorem: {},
+        envs: [{ id: "cor-1", kind: "corollary", envName: "segment", label: null, title: "Corollary 1", body: statement, proof, proofLines: { file: "main.tex", from: 5, to: 5, env: "segment-proof", label: null }, section: null, lines: { file: "main.tex", from: 3, to: 3, env: "segment", label: null }, refs: [] }],
+        bibliography: [],
+      } as never,
+      transcribed: c,
+      core: c,
+      patches: {
+        patches: [{ node: "thm:cor-1", corrected_statement: revised, proof_note: step, ops: [{ op: "replace", unit: "cor-1/1/1", tex: revised }, { op: "replace", unit: "cor-1/proof/1/1", tex: step }] as never }],
+        unfixable: [],
+      },
+      paperErrors: { "thm:cor-1": { detail: "the bound has the wrong constant", witness: null } },
+    }));
+
+  it("both pairs: the statement red then blue with its note, the proof step red then blue", () => {
+    const p = plan();
+    expect(p.unlocated).toEqual([]);
+    const out = applyEdits(flat, p.edits["main.tex"] ?? []);
+    expect(out).toContain(`\\vsOriginal{${statement}} \\vsCorrected{${revised}} \\vsNote{`);
+    expect(out).toContain(`\\vsStep{${proof}} \\vsCorrectedStep{${step}}`);
+  });
+
+  it("places an added proof after an aligned prose-heading statement, outside its italic group", () => {
+    const source = flat.replace(proof, "Following discussion.");
+    const inp = input({
+      files: { "main.tex": source }, flatText: source,
+      lineMap: source.split("\n").map((_, i) => ({ file: "main.tex", line: i + 1 })),
+      envs: {
+        main_file: "main.tex", files: ["main.tex"], newtheorem: {}, bibliography: [],
+        envs: [{ id: "cor-1", kind: "corollary", envName: "segment", label: null,
+          title: "Corollary 1", body: statement, proof: null, proofLines: null,
+          lines: { file: "main.tex", from: 3, to: 3, env: "segment", label: null }, refs: [] }],
+      } as never,
+      transcribed: c, core: c, paperErrors: {}, correctedView: true,
+      patches: { patches: [{ node: "thm:cor-1", corrected_statement: null,
+        proof_note: "Apply the bound with $c>0$." }], unfixable: [] },
+    });
+    const p = planAnnotations(inp);
+    expect(p.unlocated).toEqual([]);
+    const out = correctedTex(applyEdits(source, p.edits["main.tex"] ?? []), { proofEnv: true }).tex;
+    expect(out).toContain(`${statement}\n\n\\begin{proof}\nApply the bound with $c>0$.\n\\end{proof}`);
+    expect(out.indexOf("\\end{proof}")).toBeLessThan(out.indexOf("Following discussion."));
+    // A stale or unaligned segment must remain unplaced, rather than using its line span blindly.
+    inp.files["main.tex"] = source.replace(statement, "A different statement.");
+    expect(planAnnotations(inp).unlocated.some((u) => u.node === "thm:cor-1" && u.kind === "corrected proof")).toBe(true);
+  });
+
+  it("an added proof after a prose-heading statement follows its added condition, even past a trailing comment", () => {
+    const source = flat.replace(proof, "Following discussion.").replace(`${statement}\n`, `${statement} % the authors' note\n`);
+    const cc = structuredClone(c);
+    cc.assumptions.push({ id: "ass:bk-1", kind: "regularity", condition: "$c \\le 1$", bookkeeping: { flag: true, added_by: "V1.5", reason: "the proof needs it" } } as Core["assumptions"][number]);
+    cc.statements[0]!.depends_on.push("ass:bk-1");
+    const p = planAnnotations(input({
+      files: { "main.tex": source }, flatText: source,
+      lineMap: source.split("\n").map((_, i) => ({ file: "main.tex", line: i + 1 })),
+      envs: {
+        main_file: "main.tex", files: ["main.tex"], newtheorem: {}, bibliography: [],
+        envs: [{ id: "cor-1", kind: "corollary", envName: "segment", label: null,
+          title: "Corollary 1", body: statement, proof: null, proofLines: null,
+          lines: { file: "main.tex", from: 3, to: 3, env: "segment", label: null }, refs: [] }],
+      } as never,
+      transcribed: cc, core: cc, paperErrors: {},
+      patches: { patches: [{ node: "thm:cor-1", corrected_statement: null, proof_note: "Apply the bound with $c>0$." }], unfixable: [] },
+    }));
+    expect(p.unlocated).toEqual([]);
+    const out = applyEdits(source, p.edits["main.tex"] ?? []);
+    const condition = out.indexOf("\\vsCondition{$c \\le 1$}");
+    expect(condition).toBeGreaterThan(out.indexOf("% the authors' note"));
+    expect(out.indexOf("Apply the bound with $c>0$.")).toBeGreaterThan(condition);
+    expect(out.indexOf("Apply the bound with $c>0$.")).toBeLessThan(out.indexOf("Following discussion."));
+  });
+});

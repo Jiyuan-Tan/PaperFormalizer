@@ -21,13 +21,14 @@ it uses). The filters themselves are TypeScript; this exe only reports facts.
 
     lake exe candidate_scan -- --paper Papers.<Pascal> --out <json> [--modules M1,M2,…]
     lake exe candidate_scan -- --graph --out <json> [--modules Toolkit,Papers] [--rename old=new,…]
-      [--toolkit-prefix Toolkit] [--papers-prefix Papers] [--fingerprints]
+      [--toolkit-prefix Toolkit] [--papers-prefix Papers] [--fingerprints] [--types-of Papers.<Pascal>,…]
 
 `--paper` reports that paper's declarations (imports `--modules`, default the paper's barrel);
 `--graph` reports every toolkit and paper declaration (imports `--modules`, default the toolkit
-and papers roots). `--fingerprints` reports only each declaration's name, kind, place and hashes
-(`stmt_hash`, `closure_hash`): what the promotion gate and the F4 review cache read. Run from the
-toolkit root after the modules are built. -/
+and papers roots) in the toolkit graph's compact form (`graphDecl`; the types of the toolkit's
+declarations and of the papers `--types-of` names). `--fingerprints` reports only
+each declaration's name, kind, place and hashes (`stmt_hash`, `closure_hash`): what the promotion
+gate and the F4 review cache read. Run from the toolkit root after the modules are built. -/
 
 open Lean
 
@@ -301,13 +302,41 @@ def scanDecl (env : Environment) (c : ScanCtx) (pairs : Array (Name × Name)) (c
     ("body_constants", refsJson (classify env c n bodyNames))
   ]
 
+/-- One declaration of a `--graph` scan (without `--fingerprints`), as the toolkit graph reads it:
+name, kind, module, `uses` — the reported declarations of the scan's scope its type or body
+mentions, by owner — and, for a toolkit declaration, the base constants it mentions (`base`) and
+its docstring. The pretty-printed type (the graph's statement hash) for a toolkit declaration and
+for one of a module under `typed` (the paper a promotion moves from). Nothing else: a paper
+declaration's base constants, axioms, source lines and hashes are read by no graph reader (over
+every paper they made the scan gigabytes), and pretty-printing every paper's types was most of
+its time. -/
+def graphDecl (env : Environment) (c : ScanCtx) (typed : Array Name) (n : Name) : CoreM (Option Json) := do
+  let some ci := env.find? n | return none
+  let some kind ← kindOf env n ci | return none
+  let some m := moduleNameOf? c.mods env n | return none
+  let (typeNames, bodyNames) := constsOfInfo env ci
+  let refs := classify env c n (typeNames ++ bodyNames)
+  let uses := refs.filterMap fun (r, cls, _) => if cls == "toolkit" || cls == "paper" then some (Json.str r) else none
+  let isToolkit := c.toolkit.isPrefixOf m
+  let type ← if isToolkit || typed.any (·.isPrefixOf m) then pure [("type", Json.str (← ppType ci))] else pure []
+  let common := [("name", Json.str (toString (userNameOf n))), ("kind", Json.str kind),
+    ("module", Json.str m.toString)] ++ type ++ [("uses", Json.arr uses)]
+  if !isToolkit then return some (Json.mkObj common)
+  let base := refs.filterMap fun (r, cls, rm) =>
+    if cls == "base" then some (Json.mkObj [("name", Json.str r), ("module", Json.str rm)]) else none
+  let doc ← findDocString? env n
+  return some <| Json.mkObj (common ++ [("base", Json.arr base),
+    ("doc", match doc with | some d => Json.str d | none => Json.null)])
+
 unsafe def main (args : List String) : IO Unit := do
   let get (flag : String) : Option String := do
     let i ← args.idxOf? flag
     args[i + 1]?
-  let usage := "usage: candidate_scan (--paper <Papers.Pascal> | --graph) --out <path> [--toolkit-prefix Toolkit] [--papers-prefix Papers] [--modules m1,m2,…] [--rename old1=new1,old2=new2,…] [--fingerprints]"
+  let usage := "usage: candidate_scan (--paper <Papers.Pascal> | --graph) --out <path> [--toolkit-prefix Toolkit] [--papers-prefix Papers] [--modules m1,m2,…] [--rename old1=new1,old2=new2,…] [--fingerprints] [--types-of p1,p2,…]"
   let graph := args.contains "--graph"
   let hashesOnly := args.contains "--fingerprints"
+  -- The toolkit graph's scan: compact declarations, written without indentation.
+  let graphOnly := graph && !hashesOnly
   let some out := get "--out" | throw <| IO.userError usage
   let toolkit := (get "--toolkit-prefix").map (·.toName) |>.getD `Toolkit
   let paperStr ← match get "--paper", graph with
@@ -323,6 +352,10 @@ unsafe def main (args : List String) : IO Unit := do
       |>.filterMap (fun s =>
           let t := s.trimAscii.toString
           if t.isEmpty then none else some t.toName)
+      |>.toArray
+  -- `--types-of`: the papers whose declarations' types a `--graph` scan reports too.
+  let typed : Array Name := ((get "--types-of").getD "").splitOn ","
+      |>.filterMap (fun s => let t := s.trimAscii.toString; if t.isEmpty then none else some t.toName)
       |>.toArray
   -- `--rename`: read each constant under these prefixes' new names when hashing statements.
   let pairs : Array (Name × Name) :=
@@ -352,6 +385,9 @@ unsafe def main (args : List String) : IO Unit := do
     let mut decls : Array Json := #[]
     let mut cache : ClosureCache := {}
     for n in reported.toArray.qsort (fun a b => (userNameOf a).toString < (userNameOf b).toString) do
+      if graphOnly then
+        if let some j ← graphDecl env c typed n then decls := decls.push j
+        continue
       let (closure, cache') := (closureFingerprint env c n).run cache
       cache := cache'
       if let some j ← scanDecl env c pairs closure hashesOnly n then decls := decls.push j
@@ -369,6 +405,6 @@ unsafe def main (args : List String) : IO Unit := do
   let (json, _) ← run.toIO ctx { env }
   if let some parent := (System.FilePath.mk out).parent then
     IO.FS.createDirAll parent
-  IO.FS.writeFile out (json.pretty ++ "\n")
+  IO.FS.writeFile out ((if graphOnly then json.compress else json.pretty) ++ "\n")
   let n := match json.getObjValD "declarations" with | .arr a => a.size | _ => 0
   IO.println s!"candidate_scan: {n} declarations -> {out}"

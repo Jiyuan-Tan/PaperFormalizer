@@ -10,7 +10,8 @@ import { existsSync } from "node:fs";
 import { mkdir, readFile, readdir } from "node:fs/promises";
 import path from "node:path";
 import { isPaperTmpPath } from "../paths.js";
-import { withLakeBuildLock } from "../shared/build_mutex.js";
+import { greenBuildCurrent, recordGreenBuild, recordScan, scanCurrent, sourceSignature } from "../shared/build_inputs.js";
+import { LAKE_NO_BUILD_EXIT, WOULD_BUILD, withLakeBuildLock, withScannerHold } from "../shared/build_mutex.js";
 import { toolkitConfigFileIn, toolkitConfigFromJson, type ToolkitConfig } from "../toolkit/config.js";
 import { readLakefileTargets } from "../toolkit/lakefile.js";
 
@@ -63,15 +64,18 @@ export function parseStatementFingerprints(text: string, leanSubdir: string): St
  *  was. Pure. */
 export function statementChanges(before: StatementFingerprints, after: StatementFingerprints): string[] {
   const own = (file: string) => file.startsWith(`${before.leanSubdir}/`) || file === `${before.leanSubdir}.lean`;
-  const flat = (fp: StatementFingerprints) => new Map([...fp.byFile.entries()].filter(([f]) => own(f)).flatMap(([, ds]) => ds).map((d) => [d.name, d] as const));
+  // By file and name: a private declaration's user name can repeat across files, and a name-only
+  // map keeps the last row (scan order reads as a change; a change in an earlier row is hidden).
+  const key = (d: { file: string; name: string }) => `${d.file}\u0000${d.name}`;
+  const flat = (fp: StatementFingerprints) => new Map([...fp.byFile.entries()].filter(([f]) => own(f)).flatMap(([, ds]) => ds).map((d) => [key(d), d] as const));
   const [b, a] = [flat(before), flat(after)];
   const out: string[] = [];
-  for (const [name, d] of b) {
-    const now = a.get(name);
-    if (!now) out.push(`${name} (${d.file}) is gone`);
-    else if (now.hash !== d.hash) out.push(`${name} (${d.file}) states something else`);
+  for (const [k, d] of b) {
+    const now = a.get(k);
+    if (!now) out.push(`${d.name} (${d.file}) is gone`);
+    else if (now.hash !== d.hash) out.push(`${d.name} (${d.file}) states something else`);
   }
-  for (const [name, d] of a) if (!b.has(name)) out.push(`${name} (${d.file}) is new`);
+  for (const [k, d] of a) if (!b.has(k)) out.push(`${d.name} (${d.file}) is new`);
   return out;
 }
 
@@ -108,7 +112,9 @@ async function lakeExec(args: string[], cwd: string): Promise<{ code: number | n
 
 /**
  * The closure fingerprints of the run in `leanDir`, taken from a fresh build of its modules under
- * the toolkit's lake lock (a no-op on the green tree F4 and F5 hold). Null — with the reason
+ * the toolkit's lake lock (a no-op on the green tree F4 and F5 hold). Every input provably unchanged
+ * (`shared/build_inputs.ts`) since the last scan: that scan's output, without the lock; since a
+ * green build of these modules (the compile gate's): the scan alone. Null — with the reason
  * logged — whenever they cannot be had: no `candidate_scan` exe, a red build, a failed scan, a
  * scan with no `closure_hash`. A caller reads null as "no target is current", never as a pass.
  * A build stopped by its timeout (a stalled lake, not a red tree) is retried once before that:
@@ -144,18 +150,50 @@ export async function takeStatementFingerprints(
   const tail = (s: string) => s.split("\n").filter((l) => l.trim()).slice(-8).join("\n");
   try {
     await mkdir(path.dirname(out), { recursive: true });
-    const failure = await withLakeBuildLock(toolkitRoot, async () => {
-      let build = await exec(["build", ...modules, "candidate_scan"], toolkitRoot);
-      if (build.killed) {
-        console.warn(`[${log.tag}] \`lake build\` for the statement fingerprints was stopped by its timeout — retrying once`);
-        build = await exec(["build", ...modules, "candidate_scan"], toolkitRoot);
+    // A scan is a function of the sources: one taken of them as they stand still holds.
+    if (await scanCurrent(out, modules, await sourceSignature(cfg, leanDir))) {
+      const fp = parseStatementFingerprints(await readFile(out, "utf8"), leanSubdir);
+      if (fp) {
+        console.warn(`[${log.tag}] statement fingerprints: every input unchanged since the last scan — reusing it`);
+        return { ...fp, modules };
       }
-      if (build.code !== 0) return `\`lake build\` of the run's modules and candidate_scan ${build.killed ? "timed out" : "failed"}:\n${tail(build.output)}`;
-      const scan = await exec([
+    }
+    // The Lake turns, under the lock: nothing builds the toolkit meanwhile, so sources unchanged
+    // since a green build of these modules mean the oleans the scan reads are that build's. Under a
+    // shared hold of the paper (`withScannerHold`: the toolkit clean, the exe up to date) only its
+    // modules are built and the exe runs `--no-build`; else exclusive, the exe built too.
+    const turns = async (shared: boolean): Promise<string | null | typeof WOULD_BUILD> => {
+      const sig = await sourceSignature(cfg, leanDir);
+      await recordScan(out, null);
+      const scan = () => exec([...(shared ? ["--no-build"] : []),
         "exe", "candidate_scan", "--", "--graph", "--fingerprints", "--toolkit-prefix", cfg.lib,
         "--papers-prefix", cfg.papersLib, "--modules", modules.join(","), "--out", out,
       ], toolkitRoot);
-      return scan.code === 0 ? null : `candidate_scan failed:\n${tail(scan.output)}`;
+      const targets = shared ? modules : [...modules, "candidate_scan"];
+      if (await greenBuildCurrent(toolkitRoot, leanDir, modules, sig)) {
+        const first = await scan();
+        if (shared && first.code === LAKE_NO_BUILD_EXIT) return WOULD_BUILD;
+        if (first.code === 0) { await recordScan(out, { sig, modules }); return null; }
+        console.warn(`[${log.tag}] candidate_scan failed on the tree built green before — building it again:\n${tail(first.output)}`);
+      }
+      let build = await exec(["build", ...targets], toolkitRoot);
+      if (build.killed) {
+        console.warn(`[${log.tag}] \`lake build\` for the statement fingerprints was stopped by its timeout — retrying once`);
+        build = await exec(["build", ...targets], toolkitRoot);
+      }
+      if (build.code !== 0) return `\`lake build\` of the run's modules and candidate_scan ${build.killed ? "timed out" : "failed"}:\n${tail(build.output)}`;
+      await recordGreenBuild(toolkitRoot, leanDir, modules, sig);
+      const r = await scan();
+      if (shared && r.code === LAKE_NO_BUILD_EXIT) return WOULD_BUILD;
+      if (r.code !== 0) return `candidate_scan failed:\n${tail(r.output)}`;
+      await recordScan(out, { sig, modules });
+      return null;
+    };
+    const what = `${log.tag} fingerprints: lake build ${modules.length} module(s) + candidate_scan`;
+    const failure = await withScannerHold<string | null>(toolkitRoot, [leanSubdir.split("/").join(".")], what, {
+      exeFresh: async () => (await exec(["build", "--no-build", "candidate_scan"], toolkitRoot)).code === 0,
+      shared: () => turns(true),
+      exclusive: () => withLakeBuildLock(toolkitRoot, async () => (await turns(false)) as string | null, what),
     });
     if (failure) return none(failure);
     const fp = parseStatementFingerprints(await readFile(out, "utf8"), leanSubdir);

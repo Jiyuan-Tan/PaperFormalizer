@@ -9,6 +9,27 @@ import type { V15Review } from "../../src/verify/types.js";
 import { PINNED_CORE } from "./fixtures/pinned_core.js";
 
 describe("binding readings (V1.5 pins and appended conditions)", () => {
+  it("shows a source node's later owner ruling when reviewing its generated reading", () => {
+    const core = structuredClone(PINNED_CORE);
+    core.assumptions.push({
+      id: "ass:pin-owner-1", kind: "regularity", condition: "The repaired procedure uses the full family.",
+      bookkeeping: { flag: true, added_by: "owner", reason: "pins reading of thm:scale: adopted by the owner" },
+    }, {
+      id: "ass:pin-owner-2", kind: "regularity", condition: "An unrelated ruling.",
+      bookkeeping: { flag: true, added_by: "owner", reason: "pins reading of lem:unpinned: adopted by the owner" },
+    });
+    expect(bindingReadings(core, "ass:pin-1")).toEqual([
+      expect.objectContaining({ id: "ass:pin-owner-1", of: "thm:scale" }),
+    ]);
+    expect(bindingReadings(core, "ass:pin-owner-1")).toEqual([]);
+    // its own readings (V1.5's basis of it, the F-stage core view): none, as before
+    expect(bindingReadings(core, "ass:pin-1", { ownOnly: true })).toEqual([]);
+    // a condition appended to the core is no reading of a node: no ruling reaches it
+    core.assumptions.push({ id: "ass:bk-9", kind: "regularity", condition: "$n \\ge 2$", bookkeeping: { flag: true, added_by: "V1.5", reason: "the proof divides by $n-1$" } });
+    expect(bindingReadings(core, "ass:bk-9")).toEqual([]);
+    expect(bindingReadings(PINNED_CORE, "ass:pin-1")).toEqual([]);
+  });
+
   it("the F1.5/F2 core JSON puts them right under the node's text", () => {
     const view = formalizationCoreContextValue(PINNED_CORE) as { statements: Array<Record<string, unknown>>; assumptions: Array<Record<string, unknown>> };
     const scale = view.statements.find((s) => s.id === "thm:scale")!;

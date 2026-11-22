@@ -118,6 +118,10 @@ export const VS_PREAMBLE_BLOCK = [
   "\\newcommand{\\vsStep}[1]{\\vsBlock{vsRed}{}{Original:}{#1}}",
   // A revised step of the paper's proof, right after the printed step it replaces, and a step added.
   "\\newcommand{\\vsCorrectedStep}[1]{\\vsBlock{vsBlue}{}{Revised:}{#1}}",
+  // A step corrected for a typo the referee found (`patches.json` `typo_fixes`), and one the Lean proof
+  // had to depart from (`source: "lean"`): no repair, so labelled apart from a revised step.
+  "\\newcommand{\\vsTypoStep}[1]{\\vsBlock{vsBlue}{}{Corrected typo:}{#1}}",
+  "\\newcommand{\\vsLeanStep}[1]{\\vsBlock{vsBlue}{}{Corrected (Lean proof):}{#1}}",
   // A block a repair splits off a result, after the result: {node id}{the result}{content} — a
   // corollary of the corrected result, or a proposition the printed statement bundled in
   // (`SPLIT_MACROS`). The id is for the reader of the source (the UI); it prints nothing.
@@ -150,7 +154,7 @@ export const VS_PREAMBLE_BLOCK = [
 
 /** The macro for a blue part: a corrected statement or step, a clarification, a repair awaiting the
  * owner's decision. */
-export type BlueMacro = "vsCorrected" | "vsClarified" | "vsProposed" | "vsCorrectedStep" | "vsProposedStep";
+export type BlueMacro = "vsCorrected" | "vsClarified" | "vsProposed" | "vsCorrectedStep" | "vsProposedStep" | "vsTypoStep" | "vsLeanStep";
 
 /** The macro crossing out printed text (`\vsStruck`), or colouring it red where a line cannot cross it
  * (`\vsStruckRed`: display math, an environment, a paragraph break, a footnote, verbatim, a command

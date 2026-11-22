@@ -118,10 +118,6 @@ export const substrateStateSchema = z.object({
    * one deterministic requirement-correction re-entry; unchanged input remains terminal. */
   terminalRequirementHash: z.union([z.string(), z.null()]).default(null),
   terminalEscalationKind: z.enum(["scaffolder", "coordinate-timeout", "coordinate-recovery"]).nullable().default(null),
-  /** The coordinate attempt in flight (set before it starts, cleared when it returns). Still set
-   *  on load = the process died mid-apply or mid-gate; the next attempt first restores the toolkit
-   *  from the apply's write-ahead journal (`coordinate_journal.json`), so no op is applied twice. */
-  pendingApply: z.object({ round: z.number().int().positive(), journal: z.string() }).nullable().default(null),
   requirementVersion: z.number().int().nonnegative().default(0),
 });
 export type SubstrateState = z.infer<typeof substrateStateSchema>;

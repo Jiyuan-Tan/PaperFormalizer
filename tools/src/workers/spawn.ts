@@ -1,6 +1,7 @@
 import { execa } from "execa";
 import { spawn as cpSpawn } from "node:child_process";
 import path from "node:path";
+import { lakeLockChildEnv, leanWsChildEnv } from "../shared/build_mutex.js";
 import { CALL_TAG_ENV, haltIfStopping, isStopping, newCallTag, reapCallTag, registerChild } from "../shared/child_registry.js";
 
 export interface SpawnWithTimeoutOpts {
@@ -96,7 +97,9 @@ export async function spawnWithInactivityTimeout(
   const callTag = opts.callTag ?? newCallTag();
   const child = execa(cmd, args, {
     cwd: opts.cwd,
-    env: { ...opts.env, [CALL_TAG_ENV]: callTag },
+    // a child of a chain holding the Lake lock runs inside that hold (`lakeLockChildEnv`); a run's
+    // child builds in its workspace, when it has one (`leanWsChildEnv`)
+    env: { ...opts.env, ...lakeLockChildEnv(), ...leanWsChildEnv(opts.env), [CALL_TAG_ENV]: callTag },
     reject: false,
     input: opts.input,
     // POSIX: own process group so killTree can SIGKILL the whole tree.

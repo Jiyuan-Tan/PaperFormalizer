@@ -6,7 +6,7 @@ import os from "node:os";
 import path from "node:path";
 import type { ToolkitConfig } from "../toolkit/config.js";
 import { pendingDecisions } from "../verify/annotate_run.js";
-import { isProofOp, isStatementOp, type PatchOp } from "../verify/ops.js";
+import { isProofOp, isStatementOp, PROOF_UNCHANGED, type PatchOp } from "../verify/ops.js";
 import { isWithdrawn } from "../verify/patches.js";
 import { gradesRepair } from "../verify/weakening.js";
 import { splitKinds, type SplitKind } from "../verify/core_graph.js";
@@ -15,6 +15,7 @@ import type { V15NodeVerdict, VerifyState } from "../verify/types.js";
 import { newTopics, parseChecklist, recommendationKeys, topicKey, type ChecklistDecision } from "../proposals/checklist.js";
 import type { ProposalBatch } from "../proposals/schema.js";
 import { declSource, displayWhole, flatLeanRows, partAlone } from "../formalization/nl_links.js";
+import { LEAN_PROOF_ENGLISH_ARTIFACT, type LeanProofEnglish as LeanProofEnglishFile } from "../formalization/lean_proof_english.js";
 import { leanStatementView, squash, viewRows } from "../formalization/lean_rows.js";
 import { leanNameLeaf } from "../presentation/lean_decl_name.js";
 import { applyLinks, eachRow, leanDefs, linksRefusal, type PageDef, type PageSegment, type PageView } from "./lean_view.js";
@@ -23,6 +24,7 @@ import { applyPidLine, heartbeatAgeMs, heartbeatLiveness, livenessOf } from "../
 import { failsRun } from "../verify/findings.js";
 import { readShare, shareableOf, shareRecordView, type Shareable, type ShareView } from "../verify/share_record.js";
 import { frontMatter, labelAnchor, nodeAnchor, readPreamble, resolveDigitIfs, stripComments } from "./tex_html.js";
+import { versionDir, type VersionRecord } from "../verify/revision.js";
 
 export const STAGES: ReadonlyArray<{ id: string; label: string }> = [
   { id: "V1", label: "Typed core" }, { id: "V1.5", label: "Referee" },
@@ -142,19 +144,52 @@ interface StateFile {
 }
 
 export const runsDir = (cfg: ToolkitConfig): string => path.join(cfg.toolkitRoot, "runs");
-export const runDir = (cfg: ToolkitConfig, slug: string): string => path.join(runsDir(cfg), slug);
 
 /** A run's slug is a directory name: letters, digits, `_`, `-`, `.` — never a path. */
+const plainSlug = (slug: string): boolean => /^[A-Za-z0-9][A-Za-z0-9_.-]{0,120}$/.test(slug) && !slug.includes("..");
+
+/**
+ * An earlier VERSION of a run, frozen when the authors' revision was run under the same slug
+ * (`verify/revision.ts` `freezeVersion`): addressed `<slug>@v<n>`, read from `runs/<slug>/versions/v<n>/`
+ * by the same views as the run, and read only. Null for a run's own slug. Pure.
+ */
+export function versionRef(slug: string): { base: string; n: number } | null {
+  const m = /^(.+)@v([1-9]\d{0,3})$/.exec(slug);
+  return m && plainSlug(m[1]!) ? { base: m[1]!, n: Number(m[2]) } : null;
+}
+export const isVersionSlug = (slug: string): boolean => versionRef(slug) !== null;
+/** The slug of version `n` of run `base`. */
+export const versionSlug = (base: string, n: number): string => `${base}@v${n}`;
+
+/** A run's directory; a version's (`<slug>@v<n>`) is its frozen copy under the run's `versions/`. */
+export const runDir = (cfg: ToolkitConfig, slug: string): string => {
+  const v = versionRef(slug);
+  return v ? versionDir(path.join(runsDir(cfg), v.base), v.n) : path.join(runsDir(cfg), slug);
+};
+/** Where the UI keeps what it makes for a run's page (the TikZ pictures it typesets): the run's own
+ *  directory — a version's is its run's, since nothing is written into a frozen version. */
+export const runWorkDir = (cfg: ToolkitConfig, slug: string): string => runDir(cfg, versionRef(slug)?.base ?? slug);
+
+/** A run's slug, or a version's (`versionRef`): never a path. */
 export function validSlug(slug: string): boolean {
-  return /^[A-Za-z0-9][A-Za-z0-9_.-]{0,120}$/.test(slug) && !slug.includes("..");
+  return plainSlug(slug) || versionRef(slug) !== null;
 }
 
-/** Verify runs: directories with a state.json holding a `verify` record (study and `_` runs left out). */
+/** Whether `slug` names a run on disk (its state.json): a version only when its frozen copy holds its
+ *  `version.json` and its run is one. */
+export function runExists(cfg: ToolkitConfig, slug: string): boolean {
+  if (!validSlug(slug) || !existsSync(path.join(runDir(cfg, slug), "state.json"))) return false;
+  const v = versionRef(slug);
+  return !v || (existsSync(path.join(runDir(cfg, slug), "version.json")) && existsSync(path.join(runDir(cfg, v.base), "state.json")));
+}
+
+/** Verify runs: directories with a state.json holding a `verify` record (study and `_` runs left out).
+ *  A run's earlier versions are its own (`versionsOf`), never runs of the list. */
 export function listRunSlugs(cfg: ToolkitConfig): string[] {
   const dir = runsDir(cfg);
   if (!existsSync(dir)) return [];
   return readdirSync(dir, { withFileTypes: true })
-    .filter((d) => d.isDirectory() && !d.name.startsWith("_") && !d.name.startsWith("study_") && validSlug(d.name))
+    .filter((d) => d.isDirectory() && !d.name.startsWith("_") && !d.name.startsWith("study_") && plainSlug(d.name))
     .map((d) => d.name)
     .filter((s) => existsSync(path.join(dir, s, "state.json")))
     .sort();
@@ -202,13 +237,12 @@ export function recentEvents(cfg: ToolkitConfig, slug: string): RunEvent[] {
 }
 
 /** The apply of a promotion round: `live` while its process runs (`proposals/apply_<R>.pid`),
- *  `stopped` when it began (the decisions of the batch on file are recorded, or a move is half-way)
- *  and did not finish, else null. A decisions file older than the batch is an earlier round's
+ *  `stopped` when it began (the decisions of the batch on file are recorded) and did not finish,
+ *  else null. A decisions file older than the batch is an earlier round's
  *  (the run was rewound and the round proposed again): no apply of this one. */
 export function applyOf(dir: string, round: "A" | "B"): "live" | "stopped" | null {
   // (the runner's rule: its pid on this machine, the file's freshness on another of the mount)
   if (heartbeatLiveness(path.join(dir, "proposals", `apply_${round}.pid`)).live) return "live";
-  if (existsSync(path.join(dir, "proposals", "move_pending.json"))) return "stopped";
   return roundDecided(dir, round) ? "stopped" : null;
 }
 
@@ -336,6 +370,8 @@ export function markStarted(cfg: ToolkitConfig, slug: string, pid: number): void
  * within the last minutes and that process lives, the heartbeat still to come.
  */
 export function runLive(cfg: ToolkitConfig, slug: string): { live: boolean; pid: number | null; elsewhere?: string; starting?: true; since?: string; left?: true } {
+  // a frozen version runs never
+  if (isVersionSlug(slug)) return { live: false, pid: null };
   const dir = runDir(cfg, slug);
   try {
     const hb = heartbeatLiveness(path.join(dir, "logs", ".run.active"));
@@ -355,6 +391,7 @@ export function runLive(cfg: ToolkitConfig, slug: string): { live: boolean; pid:
  * and the apply of a promotion round live. The watcher pushes when this changes.
  */
 export function runPulse(cfg: ToolkitConfig, slug: string): { key: string; atWork: boolean } {
+  if (isVersionSlug(slug)) return { key: "", atWork: false };
   const dir = runDir(cfg, slug);
   const { live, starting, since } = runLive(cfg, slug);
   let orch: OrchFile | null = null;
@@ -403,11 +440,33 @@ async function titleOf(cfg: ToolkitConfig, slug: string, state: StateFile | null
     (await readCached(path.join(runDir(cfg, slug), "discovery", "flat.tex"))) ??
     (main ? await readCached(path.join(runDir(cfg, slug), "source", main)) : null);
   if (!text) return { title: slug, authors: "" };
-  const plainText = stripComments(text);
-  const fm = frontMatter(resolveDigitIfs(plainText, readPreamble(plainText).textMacros));
-  const plain = (t: string) => t.replace(/\\(?:thanks|footnote)\s*\{(?:[^{}]|\{[^{}]*\})*\}/g, "").replace(/\\\\/g, " ")
+  const fm = titleText(stripComments(text));
+  return { title: fm.title || slug, authors: fm.authors };
+}
+
+/** The paper's title and authors as plain text, from its comment-free TeX (`frontMatter`): a title set
+ *  by a macro (`\title{\ttl}`, `\newcommand{\ttl}{…}`) expanded, footnotes, their marks and
+ *  superscripts left out. Pure. */
+export function titleText(plainText: string): { title: string; authors: string } {
+  const { textMacros } = readPreamble(plainText);
+  const fm = frontMatter(resolveDigitIfs(plainText, textMacros));
+  const expand = (t: string) => {
+    for (let i = 0; i < 4; i++) {
+      const next = t.replace(/\\[A-Za-z]+(?![A-Za-z])/g, (c) => (textMacros[c]?.n === 0 ? textMacros[c]!.body : c));
+      if (next === t) break;
+      t = next;
+    }
+    return t;
+  };
+  const plain = (t: string) => expand(t)
+    .replace(/\\(?:thanks|footnote)\s*(?:\[[^\]]*\])?\s*\{(?:[^{}]|\{(?:[^{}]|\{[^{}]*\})*\})*\}/g, "")
+    .replace(/\\footnotemark\s*(?:\[[^\]]*\])?/g, "")
+    // (a footnote's symbols set as a superscript at the end of the title or of one of its lines —
+    // `QUEUE$^{*\dagger}$`, `PROBLEM\textsuperscript{*}` — not a formula's `L^2` or `C$^*$-algebras`)
+    .replace(/(?:\\textsuperscript\s*|(?<!\\)\^\s*)(?:\{(?:\s*(?:\*|\\(?:dagger|ddagger|S|P|star|ast)(?![A-Za-z])|,))+\s*\}|\*|\\(?:dagger|ddagger|S|P|star|ast)(?![A-Za-z]))(?=[\s$}]*(?:\\\\|$))/g, "")
+    .replace(/\\\\(?:\[[^\]]*\])?/g, " ")
     .replace(/\\&/g, "&").replace(/~/g, " ").replace(/\\[A-Za-z]+\*?/g, " ").replace(/[{}$]/g, "").replace(/\s+/g, " ").trim();
-  return { title: plain(fm.title) || slug, authors: plain(fm.authors) };
+  return { title: plain(fm.title), authors: plain(fm.authors) };
 }
 
 /** The promotion round waiting on the owner (phase proposals_A / proposals_B), if any. */
@@ -424,11 +483,21 @@ function roundProposed(state: StateFile | null): "A" | "B" | null {
   return round && (round === "A" ? state?.verify?.promotion_a : state?.verify?.promotion) ? round : null;
 }
 
-/** The TeX `text` cut to `n` characters, never inside a formula: a `$…$` the cut would split is left out. Pure. */
+/** The TeX `text` cut to `n` characters, never inside a formula or a group: a `$…$` the cut would split is
+ *  left out, and so is a `{…}` it would leave open, with the command before it (`\texttt{Papers/…` printed as
+ *  raw TeX, one word too long for the box it is in). Pure. */
 export function texCut(text: string, n: number): string {
   if (text.length <= n) return text;
-  const cut = text.slice(0, n), open = (cut.match(/(?<!\\)\$/g) ?? []).length % 2 === 1;
-  return `${(open ? cut.slice(0, cut.lastIndexOf("$")) : cut).trimEnd()}…`;
+  let cut = text.slice(0, n);
+  const open: number[] = [];
+  for (let i = 0; i < cut.length; i++) {
+    if (cut[i] === "\\") i++; // (an escaped brace or dollar is text)
+    else if (cut[i] === "{") open.push(i);
+    else if (cut[i] === "}") open.pop();
+  }
+  if (open.length) { const at = open[0]!, cmd = /\\[A-Za-z]+\s*$/.exec(cut.slice(0, at)); cut = cut.slice(0, cmd ? cmd.index : at); }
+  if ((cut.match(/(?<!\\)\$/g) ?? []).length % 2 === 1) cut = cut.slice(0, cut.lastIndexOf("$"));
+  return `${cut.trimEnd()}…`;
 }
 function headlineOf(ev: RunEvent | null): string {
   if (!ev) return "";
@@ -471,6 +540,7 @@ function orchAlive(o: OrchFile | null, file: string): boolean {
 
 /** The agent session attached to a run (orch.json, written by `orch.mjs watch`), when it still lives. */
 export async function orchOf(cfg: ToolkitConfig, slug: string): Promise<{ agent: string; since: string; watching: boolean; starts: boolean } | null> {
+  if (isVersionSlug(slug)) return null;
   const file = path.join(runDir(cfg, slug), "orch.json");
   const o = await readJsonCached<OrchFile>(file);
   return o && orchAlive(o, file) ? { agent: o.agent ?? "agent", since: o.attached_at ?? "", watching: watcherArmed(o, file), starts: o.starts === true } : null;
@@ -547,7 +617,9 @@ export async function runSummary(cfg: ToolkitConfig, slug: string, newer?: Map<s
   const confirming = pd?.confirming ? pd.weakening.length : 0;
   const pending = { weakening: confirming || rcp ? 0 : pd?.weakening.length ?? 0, rewind: Boolean(pd?.rewind), cap: Boolean(pd?.cap), promotion, checkpoint: halted };
   const updatedAt = updatedOf(cfg, slug);
-  const supersededBy = live ? null : newer?.has(slug) ? newer.get(slug)! : await newerRunOf(cfg, slug, verify?.source?.sha256, updatedAt);
+  // a frozen version is history of its run, never of another run of the same paper
+  const frozen = versionRef(slug);
+  const supersededBy = live || frozen ? null : newer?.has(slug) ? newer.get(slug)! : await newerRunOf(cfg, slug, verify?.source?.sha256, updatedAt);
   const orch = await orchOf(cfg, slug);
   const requests = ((await readJsonCached<OrchRequest[]>(path.join(dir, "orch_requests.json"))) ?? []).filter((r) => r && r.text);
   const reviews = ((await readJsonCached<OrchDecision[]>(path.join(dir, DECISIONS_FILE))) ?? []).filter((d) => d && d.text && !d.review);
@@ -560,6 +632,18 @@ export async function runSummary(cfg: ToolkitConfig, slug: string, newer?: Map<s
   let status: RunStatus = "idle";
   let headline = "";
   let toResume = false;
+  if (frozen) {
+    // a frozen version asks nothing of anyone: what it concluded, or that it was frozen before its report
+    status = report ? (failedAt !== null ? "failed" : "done") : "idle";
+    headline = report ? `${report.verdict ? verdictWords(report.verdict) : "report written"}${report.paper_grade?.grade ? ` · paper: ${gradeWords(report.paper_grade.grade)}` : ""}` : "no report yet (frozen before the run finished)";
+    return {
+      slug, title, authors, stage, stageIndex, failedAt, phase, live: false, status, headline, lastEvent: last,
+      pending: { weakening: 0, rewind: false, cap: false, promotion: null, checkpoint: false }, redoing: false,
+      verdict: report?.verdict ?? null,
+      buckets: report?.summary ? Object.fromEntries(Object.entries(report.summary).filter(([, v]) => typeof v === "number" && v > 0)) : null,
+      updatedAt, supersededBy: null, orch: null, fullAuto: false, requests: [], unread: 0, reviews: [], tokens: null, share: null, shareable: null,
+    };
+  }
   // a superseded run is history — unless its agent still asks something or a ruling awaits review
   if (supersededBy && !requests.length && !reviews.length) { status = "superseded"; headline = `superseded by ${supersededBy}, a later run of the same paper`; }
   else if (requests.length && !live) { status = "needs-you"; headline = `the agent asks you: ${texCut(requests[0]!.text, 160)}`; }
@@ -683,6 +767,39 @@ export interface ResultView {
    *  propositions, and it is `proved` exactly when all of them are. */
   umbrella?: true;
   blocks?: string[];
+  /** The Lean Proof in English (`lean_proof_english.json`, F5): the result's proof as the Lean gives
+   *  it (the helpers only it uses proved inside), the shared lemmas it cites, and how the printed proof compares; null: none written. */
+  leanProof?: LeanProofView | null;
+}
+
+/** One piece of the Lean Proof in English as the drawer draws it: the English (anchors and ⟦id⟧
+ *  references as written), the review of it against the Lean, and the Lean it renders. */
+export interface LeanProofPiece { id: string; kind: string; statement: string | null; proof: string | null; review: { faithful: boolean; issues: string[]; readability: string[] } | null; lean: { decl: string; file: string; line: number; source: string; inline?: Array<{ decl: string; file: string; line: number; source: string }> } }
+export interface LeanProofView {
+  proof: LeanProofPiece;
+  aux: LeanProofPiece[];
+  comparison: { verdict: "follows" | "other-route" | "departs"; summary: string; routes: Array<{ printed: string; lean: string }>; unclear?: Array<{ printed: string; lean: string; suggestion?: string }>; departures: Array<{ kind: string; printed: string; intended: string; reason: string; placed: boolean }> } | null;
+  noPrintedProof?: true;
+  /** A block a repair split off this printed result (its printed proof is that result's). */
+  splitFrom?: string;
+  /** The paper nodes it cites, named as the page names them when it shows no heading for one. */
+  refs: Record<string, { kind: string; label: string | null }>;
+}
+
+/** The drawer's view of result `id` in a stored Lean Proof in English; null when it has no piece for
+ *  it, or none was written. Pure. */
+export function leanProofView(file: LeanProofEnglishFile | null, id: string): LeanProofView | null {
+  const r = file?.results?.find((x) => x.id === id);
+  if (!r?.proof) return null;
+  const piece = (p: LeanProofEnglishFile["auxiliary"][number]): LeanProofPiece => ({ id: p.id, kind: p.kind, statement: p.statement, proof: p.proof, review: p.review ? { faithful: p.review.faithful, issues: p.review.issues, readability: p.review.readability ?? [] } : null, lean: { decl: p.decl, file: p.file, line: p.line, source: p.source, ...(p.inline?.length ? { inline: p.inline.map((d) => ({ decl: d.decl, file: d.file, line: d.line, source: d.source })) } : {}) } });
+  const aux = new Map((file!.auxiliary ?? []).map((a) => [a.id, a] as const));
+  return {
+    proof: piece(r),
+    aux: (r.aux ?? []).flatMap((a) => (aux.get(a)?.statement ? [piece(aux.get(a)!)] : [])),
+    comparison: r.comparison ?? null,
+    ...(r.no_printed_proof ? { noPrintedProof: true as const, ...(r.split_from ? { splitFrom: r.split_from } : {}) } : {}),
+    refs: file!.refs ?? {},
+  };
 }
 
 export interface RunDetail {
@@ -705,6 +822,51 @@ export interface RunDetail {
   messages: ThreadEntry[];
   /** The run's last share on the site of shared papers (`share.json`, written by `paperformalizer share`), less its token. */
   share: ShareView | null;
+  /** The paper's versions, when the authors' revisions were run under this slug (the page's version
+   *  picker); null when it has only the one. */
+  versions: VersionsView | null;
+  /** An earlier version whose Lean its bundle did not keep: the toolkit's is the current version's,
+   *  so none is shown for it. */
+  leanNotKept?: true;
+}
+
+/** One version of a paper, as the page's picker offers it: `current`, the run as it now stands;
+ *  `report`: the version has a report of its own (one frozen mid-run has none). */
+export interface VersionChoice { n: number; current: boolean; frozenAt: string | null; report: boolean }
+/** A paper's versions, newest first, and the one shown (`viewing`). */
+export interface VersionsView { base: string; current: number; viewing: number; list: VersionChoice[] }
+
+/** Whether the run or version at `dir` holds a report of its own as it stands (`reportCurrent`). */
+export async function hasReport(dir: string): Promise<boolean> {
+  return reportCurrent(await readJsonCached<StateFile>(path.join(dir, "state.json"))) && existsSync(path.join(dir, "report.json"));
+}
+
+/** The frozen versions of run `base` on disk (`versions/v<n>/` holding its `version.json`; not the
+ *  snapshot of a fix in place, `versions/.inplace/`), oldest first; the version the run now is apart. */
+export async function frozenVersions(cfg: ToolkitConfig, base: string): Promise<{ current: number; frozen: Array<{ n: number; record: VersionRecord | null }> }> {
+  const dir = path.join(runsDir(cfg), base);
+  const verify = (await readJsonCached<StateFile>(path.join(dir, "state.json")))?.verify;
+  const current = verify?.version ?? 1;
+  // (a versions/ that cannot be read lists none: the run's own page stands)
+  let onFile: number[] = [];
+  try { onFile = existsSync(path.join(dir, "versions")) ? readdirSync(path.join(dir, "versions")).flatMap((d) => (/^v[1-9]\d{0,3}$/.test(d) ? [Number(d.slice(1))] : [])) : []; } catch { onFile = []; }
+  const frozen: Array<{ n: number; record: VersionRecord | null }> = [];
+  for (const n of onFile.sort((a, b) => a - b)) {
+    if (n === current || !existsSync(path.join(versionDir(dir, n), "version.json"))) continue;
+    const record = (await readJsonCached<VersionRecord>(path.join(versionDir(dir, n), "version.json"))) ?? verify?.versions?.find((r) => r.version === n) ?? null;
+    frozen.push({ n, record });
+  }
+  return { current, frozen };
+}
+
+/** The version picker of the page of `slug` (a run, or one of its versions); null for a run never revised. */
+export async function versionsOf(cfg: ToolkitConfig, slug: string): Promise<VersionsView | null> {
+  const v = versionRef(slug), base = v?.base ?? slug;
+  const { current, frozen } = await frozenVersions(cfg, base);
+  if (!frozen.length) return null;
+  const list: VersionChoice[] = [{ n: current, current: true, frozenAt: null, report: await hasReport(runDir(cfg, base)) }];
+  for (const f of [...frozen].reverse()) list.push({ n: f.n, current: false, frozenAt: f.record?.frozen_at ?? null, report: await hasReport(runDir(cfg, versionSlug(base, f.n))) });
+  return { base, current, viewing: v?.n ?? current, list };
 }
 
 /** One repair that weakens what the paper claims: the owner accepts it, declines it, or asks for another. */
@@ -886,7 +1048,7 @@ const pageSegments = (segments: NonNullable<NlFile["results"]>[number]["segments
  * records it reads (report, links, graph) and every Lean file it read are unchanged. The views are
  * shared between answers: never changed after this.
  */
-async function leanStatements(cfg: ToolkitConfig, dir: string, leanDir: string, ids: string[], given?: RunReport): Promise<{ of: Map<string, LeanStatement>; defs: Record<string, PageDef> }> {
+async function leanStatements(leanRoot: string, dir: string, leanDir: string, ids: string[], given?: RunReport): Promise<{ of: Map<string, LeanStatement>; defs: Record<string, PageDef> }> {
   const records = ["report.json", "nl_links.json", "graph.json"].map((f) => path.join(dir, f));
   const held = given ? createHash("sha256").update(JSON.stringify(given.results ?? [])).digest("hex") : "";
   return deriveRead(`lean:${dir}`, [leanDir, held, ...records.map(signature), ...ids].join("|"), async (read) => {
@@ -894,7 +1056,7 @@ async function leanStatements(cfg: ToolkitConfig, dir: string, leanDir: string, 
     const byReport = new Map((report?.results ?? []).map((r) => [r.node_id, r]));
     const byNl = new Map((nl?.results ?? []).map((r) => [r.node, r]));
     const cited = citedNames(graph);
-    const named = leanDefs(cfg.toolkitRoot, leanDir, cited, read);
+    const named = leanDefs(leanRoot, leanDir, cited, read);
     const inGraph = provedInGraph(graph);
     const of = new Map<string, LeanStatement>();
     for (const id of ids) {
@@ -971,6 +1133,7 @@ export async function runDetail(cfg: ToolkitConfig, slug: string, opts: { lean: 
   const review = await readJsonCached<{ nodes?: ReviewNode[] }>(path.join(dir, "discovery", "v1_5_review.json"));
   const report = opts.report ?? (reportCurrent(state) ? await readJsonCached<RunReport>(path.join(dir, "report.json")) : null);
   const nl = await readJsonCached<NlFile>(path.join(dir, "nl_links.json"));
+  const english = opts.lean ? await readJsonCached<LeanProofEnglishFile>(path.join(dir, LEAN_PROOF_ENGLISH_ARTIFACT)) : null;
   const keys = new Set((patches as { key_results?: string[] } | null)?.key_results ?? []);
   const byReview = new Map((review?.nodes ?? []).map((n) => [n.id, n]));
   const byReport = new Map((report?.results ?? []).map((r) => [r.node_id, r]));
@@ -980,16 +1143,22 @@ export async function runDetail(cfg: ToolkitConfig, slug: string, opts: { lean: 
   // … or when a repair that would weaken it waits for their decision
   // A suggestion is the owner's to rule on once the run has halted with it: while the runner lives
   // the referee is still grading it, and no ruling can be sent.
-  const repairs = summary.live ? [] : await repairViews(dir, verify);
+  const frozen = versionRef(slug);
+  const repairs = summary.live || frozen ? [] : await repairViews(dir, verify);
   const needs = new Set<string>([...summary.reviews.map((d) => d.node), ...repairs.map((r) => r.node)]);
   const ids = new Set(statements.map((s) => s.id));
   const kinds = splitKinds({ statements });
-  const leanDir = state?.lean_subdir ? path.join(cfg.toolkitRoot, state.lean_subdir) : null;
+  // A frozen version's Lean is the copy its bundle holds (`bundle/lean/`, laid out as the toolkit):
+  // the toolkit's own is the run's as it now stands, newer than the version — with no copy, none is shown.
+  const leanRoot = frozen ? path.join(dir, "bundle", "lean") : cfg.toolkitRoot;
+  const leanDir = state?.lean_subdir && (!frozen || existsSync(path.join(leanRoot, state.lean_subdir))) ? path.join(leanRoot, state.lean_subdir) : null;
+  // … a version that had Lean (frozen once a Lean stage had run) and whose bundle kept no copy: the drawers say so
+  const leanNotKept = Boolean(frozen) && !leanDir && Boolean(state?.lean_subdir) && !["", "init", "V1", "V1.5"].includes(state?.stage_completed ?? "");
   const graph = await readJsonCached<ProofGraph>(path.join(dir, "graph.json"));
   // What an earlier state of the run left is not this one's: the Lean statements are the current
   // report's (`reportCurrent`), and a proof counts as closed from the graph only while the graph is
   // the scaffold's of the core as it stands (`graphCurrent`).
-  const stated = opts.lean && leanDir && report ? await leanStatements(cfg, dir, leanDir, statements.map((s) => s.id), opts.report) : null;
+  const stated = opts.lean && leanDir && report ? await leanStatements(leanRoot, dir, leanDir, statements.map((s) => s.id), opts.report) : null;
   const closed = report || !graphCurrent(state) ? new Set<string>() : closedProofs(graph);
   // a result the paper cites without proving: Lean states it as a proposition its users assume (a gate)
   const gates = new Map((graph?.nodes ?? []).filter((n) => n.kind === "gate" && n.lean?.decl_name).map((n) => [n.id, leanNameLeaf(n.lean!.decl_name!)]));
@@ -1037,6 +1206,7 @@ export async function runDetail(cfg: ToolkitConfig, slug: string, opts: { lean: 
       ...(s.cited_in ? { citedIn: s.cited_in } : {}),
       ...(s.source?.cite ? { cites: `${s.source.cite}, ${s.source.locator ?? ""}`, ...(opts.lean ? { citedSource: await citedSourceOf(dir, s.source.cite) } : {}) } : {}),
       ...(s.umbrella ? { umbrella: true as const, blocks: statements.filter((x) => x.split_from === s.id).map((x) => x.id) } : {}),
+      ...(opts.lean ? { leanProof: leanProofView(english, s.id) } : {}),
     });
   }
   // An umbrella is established through its blocks: proved exactly when all of them are.
@@ -1048,7 +1218,7 @@ export async function runDetail(cfg: ToolkitConfig, slug: string, opts: { lean: 
     results,
     leanDefs: stated?.defs ?? {},
     places: Object.fromEntries(Object.entries(coreWhere(core).places).filter(([id]) => formalized.has(id))),
-    promotion: await promotionView(cfg, slug, state),
+    promotion: frozen ? null : await promotionView(cfg, slug, state),
     repairs,
     objections: ((await readJsonCached<OwnerObjection[]>(path.join(dir, OBJECTIONS_FILE))) ?? []).filter((o) => o && o.comment && o.text),
     messages: (await messagesOf(dir)).map((m) => ({
@@ -1057,11 +1227,13 @@ export async function runDetail(cfg: ToolkitConfig, slug: string, opts: { lean: 
       ...(m.files?.length ? { files: m.files.map((f) => ({ name: String(f.name), bytes: Number(f.bytes) || 0 })) } : {}),
     })),
     share: summary.share,
+    versions: await versionsOf(cfg, slug).catch(() => null),
+    ...(leanNotKept ? { leanNotKept: true as const } : {}),
   };
 }
 
 /** What only a result's drawer shows of it: sent apart from the page's detail, which a run at work changes every few seconds. */
-const DRAWER_KEYS = ["review", "paperError", "axioms", "conditions", "rows", "leanView", "linksStale", "linksUnanswered", "leanMissing", "segments", "uncovered", "citedSource"] as const;
+const DRAWER_KEYS = ["review", "paperError", "axioms", "conditions", "rows", "leanView", "linksStale", "linksUnanswered", "leanMissing", "segments", "uncovered", "citedSource", "leanProof"] as const;
 type DrawerKey = (typeof DRAWER_KEYS)[number];
 /** A run's detail as the page draws it before any drawer opens (`runDetail` with `lean: false`). Of a
  *  result's review it keeps the grade its badge shows. */
@@ -1079,10 +1251,14 @@ export function drawersOf(d: RunDetail): RunDrawers {
   return { results: Object.fromEntries(d.results.map((r) => [r.id, pick(r)])), leanDefs: d.leanDefs, places: d.places };
 }
 
-/** Where a patch changes its result (`ResultView.repair`). */
-function repairPlace(patch: { ops?: PatchOp[]; corrected_statement?: string | null } | undefined): "statement" | "proof" | "none" {
+/** Where a patch changes its result (`ResultView.repair`). A result the paper prints no proof of is
+ *  repaired in its proof by a `proof_note` alone (the full proof, no ops); `PROOF_UNCHANGED` says the
+ *  printed proof stands. */
+export function repairPlace(patch: { ops?: PatchOp[]; corrected_statement?: string | null; proof_note?: string | null } | undefined): "statement" | "proof" | "none" {
   if (!patch) return "none";
-  return patch.corrected_statement || (patch.ops ?? []).some(isStatementOp) ? "statement" : (patch.ops ?? []).some(isProofOp) ? "proof" : "none";
+  if (patch.corrected_statement || (patch.ops ?? []).some(isStatementOp)) return "statement";
+  const note = patch.proof_note?.trim();
+  return (patch.ops ?? []).some(isProofOp) || (note && note !== PROOF_UNCHANGED) ? "proof" : "none";
 }
 
 /** Whether a repair of the run's last receipt is being redone: the receipt closed as `redo`, or as

@@ -230,7 +230,7 @@ function weightedNameOverlap(terms: Set<string>, nameT: Set<string>): number {
 
 // ─── precomputed per-decl index (memoized by root) ──────────────────────────
 
-interface IndexedDecl {
+export interface IndexedDecl {
   d: LibDecl;
   library: string;
   nameT: Set<string>;
@@ -332,17 +332,22 @@ function getIndexed(src: IndexSource, library: string): IndexedDecl[] | null {
     indexCache.set(key, null);
     return null;
   }
-  const arr = lib.entries.map((d) => ({
+  const arr = lib.entries.map((d) => prepareDecl(d, library, lib.sidecars));
+  indexCache.set(key, arr);
+  return arr;
+}
+
+/** A declaration prepared for scoring, as `search` prepares each entry of an index. */
+export function prepareDecl(d: LibDecl, library: string, sidecars: Record<string, AreaSidecar> = {}): IndexedDecl {
+  return {
     d,
     library,
     nameT: new Set(nameTokens(d.name)),
     docT: new Set(tokenize(firstPara(d.doc))),
     stmtT: new Set(tokenize(d.statement)),
     sym: symbolSet(d.statement),
-    tier1: isTier1(d, lib.sidecars),
-  }));
-  indexCache.set(key, arr);
-  return arr;
+    tier1: isTier1(d, sidecars),
+  };
 }
 
 /** Name → IndexedDecl, memoized per source — lets semantic-only hits recover display metadata. */
@@ -419,7 +424,10 @@ function prepConcept(q: Extract<Query, { mode: "concept" }>, lexicon: readonly A
 }
 
 function scoreConcept(q: Extract<Query, { mode: "concept" }>, ix: IndexedDecl, lexicon: readonly AliasEntry[]): Scored {
-  const { terms, origTerms, specific } = prepConcept(q, lexicon);
+  return scorePreparedConcept(prepConcept(q, lexicon), ix);
+}
+
+function scorePreparedConcept({ terms, origTerms, specific }: PreparedConcept, ix: IndexedDecl): Scored {
 
   const nameOv = weightedNameOverlap(terms, ix.nameT);
   const docOv = overlap(terms, ix.docT);
@@ -445,6 +453,15 @@ function scoreConcept(q: Extract<Query, { mode: "concept" }>, ix: IndexedDecl, l
   const via: Candidate["matchedVia"] =
     nameOv > 0 ? (origNameOv > 0 ? "name" : "alias") : docOv > 0 ? "doc" : "statement";
   return { score, via };
+}
+
+const NO_ALIASES: readonly AliasEntry[] = [];
+/** The scores `search` gives prepared declarations for the concept query `q` in a library with no
+ *  alias file (the query prepared once) — for a caller that streams its declarations instead of
+ *  indexing them all at once (the statement store's recurrence, `findRecurrence`). */
+export function conceptScorer(q: Extract<Query, { mode: "concept" }>): (ix: IndexedDecl) => number {
+  const prepared = prepConcept(q, NO_ALIASES);
+  return (ix) => scorePreparedConcept(prepared, ix).score;
 }
 
 // Operators in almost every Prop — they carry no discriminating shape, so a pattern made

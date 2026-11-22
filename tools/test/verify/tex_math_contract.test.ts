@@ -35,6 +35,9 @@ describe("texMathProblems", () => {
     expect(texMathProblems(doubled).join(" ")).toContain("doubled backslash");
     // inside an environment `\\\\` before a letter is a row break, not a command escaped twice (live Yang–Ding)
     expect(texMathProblems("$$\\begin{pmatrix}p_i(H_i-m_i)\\\\s_iQ_i\\delta_i\\end{pmatrix}$$")).toEqual([]);
+    // so it is inside \substack{…} (a correct verdict was set aside over it), but not after the group closes
+    expect(texMathProblems("$Q=\\sum_{\\substack{i<j\\\\q_i+q_j>0}}a_{ij}$")).toEqual([]);
+    expect(texMathProblems("$\\sum_{\\substack{i<j}} \\\\alpha$").join(" ")).toContain("doubled backslash");
     // Under-escaped: "\theta" and "\neq" in the JSON decode to a tab and a line break.
     const tab = (JSON.parse(String.raw`{"why": "$a \theta$"}`) as { why: string }).why;
     expect(texMathProblems(tab).join(" ")).toMatch(/control character \(U\+0009\)[^"]*before "heta"/u);

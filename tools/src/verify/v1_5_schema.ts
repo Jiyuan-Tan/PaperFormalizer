@@ -29,6 +29,7 @@ export const V15_NODE_REPLY: Record<string, unknown> = {
     "split",
     "witness_regime",
     "witness_instance",
+    "typos",
   ],
   properties: {
     id: { type: "string" },
@@ -45,6 +46,15 @@ export const V15_NODE_REPLY: Record<string, unknown> = {
     split: { anyOf: [{ type: "object", additionalProperties: false, required: ["why"], properties: { why: { type: "string" } } }, { type: "null" }] },
     witness_regime: { type: ["string", "null"], enum: ["in_scope", "degenerate", null] },
     witness_instance: { type: ["string", "null"] },
+    typos: {
+      type: "array",
+      items: {
+        type: "object",
+        additionalProperties: false,
+        required: ["printed", "intended", "reason"],
+        properties: { printed: { type: "string" }, intended: { type: "string" }, reason: { type: "string" } },
+      },
+    },
     fix: DRIFT_FIX_JSON_SCHEMA,
     bookkeeping_assumption: {
       anyOf: [
@@ -76,8 +86,20 @@ export const PATCH_REVIEW_REPLY: Record<string, unknown> = {
     {
       type: "object",
       additionalProperties: false,
-      required: ["key_results_ok", "detail"],
-      properties: { key_results_ok: { type: "boolean" }, detail: { type: "string" } },
+      required: ["key_results_ok", "detail", "weakenings"],
+      properties: {
+        key_results_ok: { type: "boolean" },
+        detail: { type: "string" },
+        weakenings: {
+          type: "array",
+          items: {
+            type: "object",
+            additionalProperties: false,
+            required: ["node", "severity", "reason"],
+            properties: { node: { type: "string" }, severity: { type: "string", enum: ["substantial", "limited"] }, reason: { type: "string" } },
+          },
+        },
+      },
     },
     { type: "null" },
   ],
@@ -97,6 +119,11 @@ export const REJECTION_VERDICTS_REPLY: Record<string, unknown> = {
     { type: "null" },
   ],
 };
+
+/** A typo of a result's PROOF that the referee hands the runner to correct (`patches.ts` `typo_fixes`):
+ * `printed` a verbatim snippet of the printed proof, `intended` what replaces it, `reason` one line. */
+export const ProofTypoSchema = z.object({ printed: z.string(), intended: z.string(), reason: z.string() });
+export type ProofTypo = z.infer<typeof ProofTypoSchema>;
 
 export const NodeVerdictSchema = z.object({
   id: z.string().min(1),
@@ -118,9 +145,16 @@ export const NodeVerdictSchema = z.object({
   split: z.object({ why: z.string() }).nullable().optional(),
   witness_regime: z.enum(["in_scope", "degenerate"]).nullable().optional(),
   witness_instance: z.string().nullable().optional(),
+  // a reply in the shape before the field (and a review file written before it) has none
+  typos: z.array(ProofTypoSchema).default([]),
 });
 
-export const PatchReviewSchema = z.object({ key_results_ok: z.boolean(), detail: z.string() });
+export const PatchReviewSchema = z.object({
+  key_results_ok: z.boolean(),
+  detail: z.string(),
+  // optional: reviews written before 2026-11-14 have none
+  weakenings: z.array(z.object({ node: z.string(), severity: z.enum(["substantial", "limited"]), reason: z.string() })).optional(),
+});
 export const RejectionVerdictsSchema = z.array(z.object({ node: z.string(), upheld: z.boolean(), detail: z.string() }));
 
 /** The per-node fields in prose — the `nodes` entry of every referee reply that grades nodes. */
@@ -195,6 +229,12 @@ export const NODE_FIELDS_TEXT = `      id                      the core node id,
                               the sentence stating the premise), wire_into [statement ids].
                               Anchors are copied from the source exactly as printed. Leave null
                               when the fix needs judgement the runner cannot make.
+      typos                   the TYPOS of this result's proof (the brief's "Slips, by where
+                              they sit"), each {printed, intended, reason}: printed, a
+                              verbatim snippet of the printed proof (as in its proof_tex),
+                              long enough to occur once in it; intended, its replacement;
+                              reason, one line. The runner corrects the proof with them; they
+                              change no grade. [] when there is none.
       bookkeeping_assumption  REQUIRED when correctness is "bookkeeping", and with a
                               "degenerate" witness_regime (the exclusion):
                               {"condition": "<the single condition, in the paper's

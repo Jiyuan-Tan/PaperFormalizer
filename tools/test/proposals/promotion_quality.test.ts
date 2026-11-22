@@ -151,9 +151,8 @@ describe("candidates", () => {
     }] };
     const rec = await findRecurrence(store, "paper_a", [{ name: "Papers.A.ind_mean", type: a, doc: null }], work);
     expect(rec.get("Papers.A.ind_mean")?.map((r) => [r.slug, r.name, r.kind])).toEqual([["paper_b", "Papers.B.onehot_mean", "pattern"]]);
-    // one temporary index at a time: a later call over other entries drops the earlier one
-    await findRecurrence({ ...store, entries: [{ ...store.entries[0]!, name: "Papers.B.other_mean" }] }, "paper_a", [{ name: "Papers.A.ind_mean", type: a, doc: null }], work);
-    expect((await readdir(work)).filter((f) => f.startsWith("statements_index."))).toHaveLength(1);
+    // no temporary index of every other paper's entries is written any more
+    expect((await readdir(work)).filter((f) => f.startsWith("statements_index."))).toHaveLength(0);
   });
 });
 

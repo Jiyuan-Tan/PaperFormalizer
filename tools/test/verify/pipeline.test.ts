@@ -139,6 +139,17 @@ describe("runVerifyPipeline", () => {
     expect((await loadState(repoRoot, QID)).persist).toBe(false);
   });
 
+  it("--from-stage V6 closes a pending F-stage rewind as refused, so the finished run asks nothing", async () => {
+    const repoRoot = await tmpRepo();
+    await runVerifyPipeline({ ...baseArgs(repoRoot, newTrace()), runFormalization: fakeFormalization(newTrace(), "2") });
+    const s = await loadState(repoRoot, QID);
+    s.verify!.cross_stage_rewind = { intent: "incremental_repair", status: "pending", presented: true, stage: "F2.5", route: "fix-source", axis: "correctness", detail: "[claim-false] x", nodes: ["thm:main"], at: "x" } as never;
+    await saveState(repoRoot, QID, s);
+    const ended = await runVerifyPipeline({ ...baseArgs(repoRoot, newTrace()), resume: true, fromStage: "V6" });
+    expect(ended.phase).toBe("done");
+    expect(ended.cross_stage_rewind).toMatchObject({ status: "refused", why: expect.stringMatching(/--from-stage V6/) });
+  });
+
   it("--persist leaves a report alone once the Lean is complete", async () => {
     const repoRoot = await tmpRepo();
     await runVerifyPipeline({ ...baseArgs(repoRoot, newTrace()), persist: true, runFormalization: fakeFormalization(newTrace(), "5") });
@@ -189,6 +200,96 @@ describe("runVerifyPipeline", () => {
     expect((await loadState(repoRoot, QID)).verify!.targets).toEqual(["thm:other"]);
     await runVerifyPipeline({ ...baseArgs(repoRoot, newTrace()), resume: true, fromStage: "V6", targets: ["thm:main"], runFormalization: fakeFormalization(newTrace(), "5") });
     expect((await loadState(repoRoot, QID)).verify!.targets).toEqual(["thm:other"]);
+  });
+
+  it("--revise freezes the version that stands, takes the revised source and re-enters V1; refused without a run, with --resume, or on the same source", async () => {
+    const repoRoot = await tmpRepo();
+    const revisedPrepare: PrepareSource = async ({ sourceDir }) => {
+      await mkdir(sourceDir, { recursive: true });
+      await writeFile(path.join(sourceDir, "main.tex"), "revised", "utf8");
+      return { sourceDir, mainFile: "main.tex", sha256: "def456", inputKind: "tex" };
+    };
+    await expect(runVerifyPipeline({ ...baseArgs(repoRoot, newTrace()), revise: true })).rejects.toThrow(/no run of .* to revise/);
+    await runVerifyPipeline({ ...baseArgs(repoRoot, newTrace()), runFormalization: fakeFormalization(newTrace(), "5") });
+    const runDir = verifyRunDir(repoRoot, QID);
+    await writeFile(path.join(runDir, "report.md"), "# version 1", "utf8");
+    await expect(runVerifyPipeline({ ...baseArgs(repoRoot, newTrace()), revise: true, resume: true })).rejects.toThrow(/does not combine with --resume/);
+    await expect(runVerifyPipeline({ ...baseArgs(repoRoot, newTrace()), revise: true })).rejects.toThrow(/is the source of version 1 as it stands/);
+    const trace = newTrace();
+    const done = await runVerifyPipeline({ ...baseArgs(repoRoot, trace), input: "/papers/sample_paper_v2.tex", revise: true, deps: { prepareSource: revisedPrepare }, runFormalization: fakeFormalization(trace, "5") });
+    expect(done.phase).toBe("done");
+    expect(trace.stages[0]).toMatch(/^V1@/);
+    expect(trace.stages.slice(0, 2)).toEqual(["V1@init", "V1.5@v1"]);
+    expect(await readFile(path.join(runDir, "versions", "v1", "report.md"), "utf8")).toBe("# version 1");
+    // frozen before the re-entry rewound anything: the version as it was delivered
+    const v1 = JSON.parse(await readFile(path.join(runDir, "versions", "v1", "version.json"), "utf8"));
+    expect(v1).toMatchObject({ version: 1, input: "/papers/sample_paper.tex", source_sha256: "abc123", phase: "done" });
+    expect(v1.stage_completed).not.toBe("init");
+    expect(await readFile(path.join(runDir, "source", "main.tex"), "utf8")).toBe("revised");
+    const s = (await loadState(repoRoot, QID)).verify!;
+    expect(s).toMatchObject({ version: 2, revision: { from_version: 1 }, source: { input: "/papers/sample_paper_v2.tex" } });
+    expect(s.versions?.map((v) => v.version)).toEqual([1]);
+    // the revision's starting point is on file beside the frozen version
+    expect(existsSync(path.join(runDir, "versions", "v1", "base", "state.json"))).toBe(true);
+  });
+
+  it("a plain entry on an existing run reads a different paper as its revision (as --revise) and refuses the same paper as before", async () => {
+    const repoRoot = await tmpRepo();
+    const revisedPrepare: PrepareSource = async ({ sourceDir }) => {
+      await mkdir(sourceDir, { recursive: true });
+      await writeFile(path.join(sourceDir, "main.tex"), "revised", "utf8");
+      return { sourceDir, mainFile: "main.tex", sha256: "def456", inputKind: "tex" };
+    };
+    await runVerifyPipeline({ ...baseArgs(repoRoot, newTrace()), runFormalization: fakeFormalization(newTrace(), "5") });
+    await expect(runVerifyPipeline({ ...baseArgs(repoRoot, newTrace()), explicitSlug: true })).rejects.toThrow(/A verify run already exists at .*is its paper as it stands/);
+    // a slug taken from the file's name may name another paper's run: refused as before
+    await expect(runVerifyPipeline({ ...baseArgs(repoRoot, newTrace()), input: "/papers/sample_paper_v2.tex", deps: { prepareSource: revisedPrepare } })).rejects.toThrow(/A verify run already exists at .*Continue it with --resume/);
+    const trace = newTrace();
+    const done = await runVerifyPipeline({ ...baseArgs(repoRoot, trace), explicitSlug: true, input: "/papers/sample_paper_v2.tex", deps: { prepareSource: revisedPrepare }, runFormalization: fakeFormalization(trace, "5") });
+    expect(done.phase).toBe("done");
+    expect(trace.stages.slice(0, 2)).toEqual(["V1@init", "V1.5@v1"]);
+    const s = (await loadState(repoRoot, QID)).verify!;
+    expect(s).toMatchObject({ version: 2, revision: { from_version: 1 }, source: { input: "/papers/sample_paper_v2.tex" } });
+    expect(existsSync(path.join(verifyRunDir(repoRoot, QID), "versions", "v1", "version.json"))).toBe(true);
+    // the paper of version 1 given again is no revision of version 2 unless asked for
+    await expect(runVerifyPipeline({ ...baseArgs(repoRoot, newTrace()), explicitSlug: true })).rejects.toThrow(/is the paper of version 1 of .*not a revision of it/);
+    // … nor the paper as it was before a fix in place of its source
+    const st = await loadState(repoRoot, QID);
+    st.verify!.source.fixed_from = ["ghi789"];
+    await saveState(repoRoot, QID, st);
+    const prefix: PrepareSource = async ({ sourceDir }) => {
+      await mkdir(sourceDir, { recursive: true });
+      await writeFile(path.join(sourceDir, "main.tex"), "before the fix", "utf8");
+      return { sourceDir, mainFile: "main.tex", sha256: "ghi789", inputKind: "tex" };
+    };
+    await expect(runVerifyPipeline({ ...baseArgs(repoRoot, newTrace()), explicitSlug: true, input: "/papers/sample_paper_prefix.tex", deps: { prepareSource: prefix } })).rejects.toThrow(/as it was before a fix in place of its source/);
+  });
+
+  it("--revise sets a pending patch directive aside: the revision is re-pointed first, never patched as the old transcription", async () => {
+    const repoRoot = await tmpRepo();
+    const revisedPrepare: PrepareSource = async ({ sourceDir }) => {
+      await mkdir(sourceDir, { recursive: true });
+      await writeFile(path.join(sourceDir, "main.tex"), "revised", "utf8");
+      return { sourceDir, mainFile: "main.tex", sha256: "def456", inputKind: "tex" };
+    };
+    await runVerifyPipeline({ ...baseArgs(repoRoot, newTrace()), runFormalization: fakeFormalization(newTrace(), "5") });
+    const directive = path.join(verifyRunDir(repoRoot, QID), "discovery", "v1_revise_directive.json");
+    await writeFile(directive, JSON.stringify({ mode: "patch", round: 1, findings: [] }), "utf8");
+    const trace = newTrace();
+    await runVerifyPipeline({ ...baseArgs(repoRoot, trace), input: "/papers/sample_paper_v2.tex", revise: true, deps: { prepareSource: revisedPrepare }, runFormalization: fakeFormalization(trace, "5") });
+    expect(existsSync(directive)).toBe(false);
+  });
+
+  it("an open revision (not yet read by V1) is entered at V1 only", async () => {
+    const repoRoot = await tmpRepo();
+    await runVerifyPipeline({ ...baseArgs(repoRoot, newTrace()), runFormalization: fakeFormalization(newTrace(), "5") });
+    const s = await loadState(repoRoot, QID);
+    s.verify!.revision = { from_version: 1, started_at: "t" };
+    s.verify!.versions = [{ version: 1, input: "x", main_file: "main.tex", source_sha256: "abc123", stage_completed: "V6", phase: "done", frozen_at: "t" }];
+    await saveState(repoRoot, QID, s);
+    for (const fromStage of ["V1.5", "F1", "V6"]) {
+      await expect(runVerifyPipeline({ ...baseArgs(repoRoot, newTrace()), fromStage })).rejects.toThrow(/has not been read by V1 yet/);
+    }
   });
 
   it("a cold --from-stage V1 sets the review items and reported issues aside with the patch file: they name the old transcription", async () => {

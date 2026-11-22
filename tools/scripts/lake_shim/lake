@@ -1,0 +1,130 @@
+#!/usr/bin/env bash
+# `lake` for the pipeline's model workers (first on their PATH, and $LAKE; `workerEnv`): a command
+# that writes build output (`build`, `exe`, `lean`, `setup-file`, `clean`, `update`, …, and
+# `env lean -o/-i/-c/-b`) runs under the toolkit's Lake build lock (`src/shared/build_mutex.ts`),
+# queued with the pipeline's own builds; `serve`, plain `env`, `--version`/`--help` and the
+# `check-*` queries pass straight through. A command that builds one paper's modules and nothing
+# else asks for a shared hold, beside other papers' builds (`lake_shim.ts`). Never held for the life of `lake serve` (note that the
+# server's own `lake setup-file` calls go to the real lake: `lake serve` sets $LAKE to itself). A run
+# with a workspace of its own builds there instead, under that workspace's lock (below).
+set -u
+here="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd -P)"
+# The real lake: the first on PATH outside this directory. PATH itself stays as it is: a lake
+# command's own `lake` calls (`lake env bash -c 'lake build'`) come back through the shim.
+real=""
+IFS=: read -ra dirs <<< "$PATH"
+for d in "${dirs[@]}"; do
+  [[ -z "$d" || "$d" -ef "$here" ]] && continue
+  if [[ -f "$d/lake" && -x "$d/lake" ]]; then real="$d/lake"; break; fi
+done
+if [[ -z "$real" || "$real" -ef "${BASH_SOURCE[0]}" ]]; then
+  echo "lake shim: no lake on PATH besides $here" >&2
+  exit 127
+fi
+
+# The subcommand (Lake's default is `build`) and the project directory (`-d`/`--dir`, else cwd).
+cmd="" dir="" skip="" query=""
+for a in "$@"; do
+  if [[ -n "$skip" ]]; then [[ "$skip" == dir ]] && dir="$a"; skip=""; continue; fi
+  case "$a" in
+    -d|--dir) skip=dir ;;
+    --dir=*) dir="${a#--dir=}" ;;
+    -f|--file|-K|--packages) skip=1 ;;
+    --version|-h|--help) query=1 ;;
+    -*) ;;
+    *) cmd="$a"; break ;;
+  esac
+done
+lock=1
+case "$cmd" in
+  "") [[ -n "$query" ]] && lock="" ;;
+  serve|help|check-build|check-test|check-lint|translate-config|reservoir-config|new|init) lock="" ;;
+  env)
+    # `lake env` runs its program with the REAL lake first on PATH (and as $LAKE): a program that
+    # may call lake (a shell, a script, lake itself) runs under the lock. Only `lean` with no
+    # output flag, `printenv`, or no program at all passes through.
+    prog="" seen="" out=""
+    for a in "$@"; do
+      if [[ -z "$seen" ]]; then [[ "$a" == env ]] && seen=1; continue; fi
+      if [[ -z "$prog" ]]; then prog="${a##*/}"; continue; fi
+      case "$a" in -o|-i|-c|-b|--o=*|--i=*|--c=*|--bc=*) out=1 ;; esac
+    done
+    case "$prog" in
+      "") lock="" ;;
+      printenv) lock="" ;;
+      lean) [[ -z "$out" ]] && lock="" ;;
+    esac ;;
+esac
+# A run with a Lake workspace of its own ($PAPERFORMALIZER_LEAN_WS, `src/shared/workspace.ts`; cleared, or
+# a hold's token set, in the shared tree's call chains): a command on the shared toolkit runs in the
+# workspace instead — the directory, `-d`/`--dir` and the paths under the toolkit (but its `.lake`,
+# which the workspace has its own of) rewritten to the workspace's — and takes no shared-tree lock;
+# one that writes build output holds the workspace's own lock (`flock`), which a lake it starts
+# passes by (two processes of one run may build at once; a lake under it never waits on it).
+ws="${PAPERFORMALIZER_LEAN_WS:-}"
+if [[ -n "$ws" && -z "${PAPERFORMALIZER_LAKE_LOCK_HELD:-}" && "${PAPERFORMALIZER_LAKE_SHIM:-1}" != 0 && -s "$ws/.pf-toolkit" ]]; then
+  mapfile -t roots < "$ws/.pf-toolkit"
+  to_ws() {
+    local t
+    for t in "${roots[@]}"; do
+      [[ -n "$t" ]] || continue
+      if [[ "$1" == "$t" ]]; then printf '%s' "$ws"; return; fi
+      if [[ "$1" == "$t"/* && "$1" != "$t"/.lake && "$1" != "$t"/.lake/* ]]; then printf '%s' "$ws${1#"$t"}"; return; fi
+    done
+    printf '%s' "$1"
+  }
+  wcwd="$(to_ws "$PWD")"
+  [[ "$wcwd" == "$PWD" ]] && wcwd="$(to_ws "$(pwd -P)")"
+  wargs=()
+  for a in "$@"; do
+    case "$a" in
+      --dir=*) wargs+=("--dir=$(to_ws "${a#--dir=}")") ;;
+      *) wargs+=("$(to_ws "$a")") ;;
+    esac
+  done
+  wproj="$wcwd"
+  if [[ -n "$dir" ]]; then wproj="$(to_ws "$dir")"; [[ "$wproj" == /* ]] || wproj="$wcwd/$wproj"; fi
+  if [[ "$wproj" == "$ws" || "$wproj" == "$ws"/* ]]; then
+    cd "$wcwd" || exit 1
+    # The workspace reads the toolkit's path dependencies (Causalean, StatLean) from the shared tree:
+    # a build there while they may be stale would rebuild them there, unlocked. So a command that
+    # writes build output holds off while a flux session is open or the toolkit is not stamped
+    # clean (a flux session drops the stamp; the clean build after it stamps it again), as a
+    # worker's build does in the shared tree, for 25 min at most — then it does not build (75).
+    if [[ -n "$lock" && "${PAPERFORMALIZER_LEAN_WS_LOCKED:-}" != "$ws" ]]; then
+      pf="${roots[0]}/.lake/paperformalizer"
+      waited=0 told=""
+      for (( ; ; )); do
+        why=""
+        if [[ -e "$pf/toolkit-flux" ]] || compgen -G "$pf/toolkit-flux.d/[0-9a-z]*-[0-9a-f][0-9a-f][0-9a-f][0-9a-f][0-9a-f][0-9a-f]" > /dev/null; then
+          why="the toolkit is in flux (paperformalizer toolkit-flux on)"
+        elif ! grep -qE '"ok"[[:space:]]*:[[:space:]]*true' "$pf/toolkit-clean.json" 2>/dev/null; then
+          why="the toolkit is not stamped clean (its path dependencies may be stale)"
+        fi
+        [[ -z "$why" ]] && break
+        if (( waited >= ${PAPERFORMALIZER_LAKE_FLUX_WAIT_MAX_S:-1500} )); then
+          echo "lake shim: $why, still after $(( waited / 60 )) min — not building in the workspace (it could rebuild a shared path dependency unlocked); retry later" >&2
+          exit 75
+        fi
+        [[ -z "$told" ]] && { told=1; echo "lake shim: $why — holding off before building in the workspace (25 min at most)" >&2; }
+        sleep "${PAPERFORMALIZER_LAKE_FLUX_WAIT_S:-15}"
+        waited=$(( waited + ${PAPERFORMALIZER_LAKE_FLUX_WAIT_S:-15} ))
+      done
+      export PAPERFORMALIZER_LEAN_WS_LOCKED="$ws"
+      exec flock "$ws/.lake/build.lock" "$real" ${wargs[@]+"${wargs[@]}"}
+    fi
+    exec "$real" ${wargs[@]+"${wargs[@]}"}
+  fi
+fi
+root="${dir:-.}"
+# Not a Lake project (lake fails on its own): nothing to lock.
+[[ -f "$root/lakefile.toml" || -f "$root/lakefile.lean" ]] || lock=""
+if [[ -z "$lock" || "${PAPERFORMALIZER_LAKE_SHIM:-1}" == 0 ]]; then
+  exec "$real" "$@"
+fi
+tools="$(cd "$here/../.." && pwd -P)"
+if ! command -v node >/dev/null 2>&1; then
+  echo "lake shim: no node on PATH — running lake WITHOUT the toolkit's build lock" >&2
+  exec "$real" "$@"
+fi
+exec node --import "$tools/node_modules/tsx/dist/loader.mjs" "$tools/src/shared/lake_shim.ts" "$root" "$real" "$@"

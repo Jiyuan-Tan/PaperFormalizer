@@ -51,7 +51,8 @@ import { fullReadingText, resultTexName, splitKinds, type SplitKind } from "./co
 import { locatorKey, THEOREM_LIKE_KINDS } from "./transcription_lint.js";
 import { mainTheoremIds } from "./weakening.js";
 import type { V1Warnings } from "./lint_warnings.js";
-import type { EnvKind, EnvsJson, TexEnv, V15Review, VerifyFinding } from "./types.js";
+import { renderRevision } from "./revision.js";
+import type { EnvKind, EnvsJson, PatchWeakening, TexEnv, V15Review, VerifyFinding } from "./types.js";
 
 export type ReportBucket =
   | "verified"
@@ -265,7 +266,7 @@ export interface VerifyReportJson {
   run_level_findings: VerifyFinding[];
   /** The confirming referee's judgement of the repair's key results and contribution, when the
    * paper was repaired. */
-  patch_review: { key_results_ok: boolean; detail: string } | null;
+  patch_review: { key_results_ok: boolean; detail: string; weakenings?: PatchWeakening[] } | null;
   /** V1.5 `unclear` observations: never a failure, always disclosed. */
   unclear_notes: Array<{ node: string; detail: string }>;
   /** The symbol readings V1.5 pinned (each the symbol's settled meaning in the table): suggestions
@@ -276,6 +277,15 @@ export interface VerifyReportJson {
   /** Findings the paper's owner withdrew (`--reject-finding`): no error of the paper — never refuted,
    * never repaired — each with the owner's reading and the pin carrying it. Absent before the field. */
   withdrawn_findings?: WithdrawnFinding[];
+  /** The typos the referee listed in proofs (`V15NodeVerdict.typos`): never an error, a repair or a
+   * grade. `corrected`: the runner corrected the printed proof (`patches.json` `typo_fixes`); false: the
+   * snippet was not printed exactly once in one step of the proof, so it is reported only. Absent when
+   * there is none. */
+  typos?: ReportTypo[];
+  /** How each result's printed proof compares with its Lean Proof in English (F5,
+   * `lean_proof_english.json`); the corrections it made are among `typos` (`source: "lean"`). Absent
+   * when none was written. */
+  lean_proof_english?: Array<{ node: string; verdict: string; summary: string; departures: number; gaps?: number; routes: number; unclear: number; unconfirmed: boolean }>;
   /** The structured explanation of each error for the paper's author, by node ("Claim / What is
    * wrong / Why / Proposed fix / Gives up"). Absent when none is on file. */
   explanations?: Record<string, NoteProse>;
@@ -294,6 +304,8 @@ export interface VerifyReportJson {
   annotated?: Record<string, unknown>;
   /** The corrected-paper bundle (`bundle.ts`). Absent before the field. */
   bundle?: ReportBundle;
+  /** What the revision of the paper this version is changed (`revision.ts`); absent on a first version. */
+  revision?: import("./revision.js").ReportRevision;
 }
 
 /** Where the corrected-paper bundle is and what its mechanical checks leave open. */
@@ -328,6 +340,18 @@ export interface ReportBundle {
   f4_seal?: { code: string; problems: string[]; reviews: string | null };
   /** The page snapshot (`ui/page_snapshot.ts`), relative to the bundle; null when it was not written. */
   page?: string | null;
+}
+
+/** One typo of a proof (`VerifyReportJson.typos`). */
+export interface ReportTypo {
+  node: string;
+  printed: string;
+  intended: string;
+  reason: string;
+  corrected: boolean;
+  /** `lean`: a printed step the Lean proof had to depart from (the F-stage filler's); absent: a typo the
+   * V1.5 referee listed. */
+  source?: "lean";
 }
 
 /** A finding the paper's owner withdrew (`state.verify.rejected_rewinds`, `by: "owner"`). */
@@ -370,7 +394,15 @@ export interface ReportInput {
   transcribed?: Core | null;
   /** The repairs on file (`discovery/patches.json`): the fixer's key results, and which repairs weaken
    * the result they repair (`accepted_weakening`). Absent = none read. */
-  patches?: { key_results: readonly string[]; patches: ReadonlyArray<{ node: string; accepted_weakening?: boolean; given_up?: string }>; owner_readings?: ReadonlyArray<{ node: string }> } | null;
+  patches?: {
+    key_results: readonly string[];
+    patches: ReadonlyArray<{ node: string; accepted_weakening?: boolean; given_up?: string }>;
+    owner_readings?: ReadonlyArray<{ node: string }>;
+    /** The typos of proofs the runner recorded (`typo_fixes`): `unit` null = not corrected. */
+    typo_fixes?: ReadonlyArray<{ node: string; typos: ReadonlyArray<{ printed: string; intended: string; reason: string; unit: string | null; source?: "lean" }> }>;
+  } | null;
+  /** The run's Lean Proof in English (`lean_proof_english.json`), when written. */
+  leanProofEnglish?: { results: ReadonlyArray<{ id: string; proof: string | null; review: { faithful: boolean } | null; comparison: { verdict: string; summary: string; departures: ReadonlyArray<{ kind?: string; placed?: boolean }>; routes: readonly unknown[]; unclear?: readonly unknown[] } | null; no_printed_proof?: true }> } | null;
   flags: { verify_no_d_rewind?: string | null };
   stageCompleted: string;
   earlyStop: boolean;
@@ -782,6 +814,7 @@ export function buildReport(input: ReportInput): { json: VerifyReportJson; md: s
     return st.tex_locator?.label || st.split_from || !title ? resultTexName(named, id) : `${resultWord(st)} (${title})`;
   };
 
+  const typos = reportTypos(input.patches?.typo_fixes ?? [], input.review?.nodes ?? []);
   const json: VerifyReportJson = {
     schema: 1,
     run: {
@@ -803,6 +836,12 @@ export function buildReport(input: ReportInput): { json: VerifyReportJson; md: s
     unclear_notes,
     symbol_readings: (input.review?.symbols ?? []).flatMap((s) => (s.ambiguity === "pinned" && s.reading ? [{ symbol: s.name, reading: fullReadingText(s.reading, tagName), evidence: s.reading.evidence }] : [])),
     ...(input.withdrawn?.length ? { withdrawn_findings: input.withdrawn } : {}),
+    ...(typos.length > 0 ? { typos } : {}),
+    ...(input.leanProofEnglish?.results?.some((r) => r.proof) ? { lean_proof_english: input.leanProofEnglish.results.filter((r) => r.proof).map((r) => ({
+      node: r.id, verdict: r.comparison?.verdict ?? (r.no_printed_proof ? "no printed proof" : "not compared"), summary: r.comparison?.summary ?? "",
+      // a gap listed only (not marked in the paper) is no correction
+      departures: (r.comparison?.departures ?? []).filter((d) => !listedGap(d)).length, gaps: (r.comparison?.departures ?? []).filter(listedGap).length, routes: r.comparison?.routes.length ?? 0, unclear: r.comparison?.unclear?.length ?? 0, unconfirmed: r.review?.faithful === false,
+    })) } : {}),
     ...(input.explanations && Object.keys(input.explanations).length > 0 ? { explanations: input.explanations } : {}),
     v1_warnings: { lint: input.warnings.lint, parser: input.warnings.parser },
     lean_build: input.lean ? input.lean.build : null,
@@ -816,13 +855,36 @@ export function buildReport(input: ReportInput): { json: VerifyReportJson; md: s
 }
 
 /**
+ * The typos of proofs to report: those the runner recorded (`typo_fixes`, corrected when located), then
+ * any other the review lists (no unit read for it: reported only), once each by node and snippet. Pure.
+ */
+export function reportTypos(
+  fixes: NonNullable<NonNullable<ReportInput["patches"]>["typo_fixes"]>,
+  nodes: ReadonlyArray<{ id: string; typos?: ReadonlyArray<{ printed: string; intended: string; reason: string }> | null }>,
+): ReportTypo[] {
+  const out: ReportTypo[] = [];
+  const key = (node: string, printed: string): string => `${node}\u0000${printed.replace(/\s+/gu, " ").trim()}`;
+  const seen = new Set<string>();
+  const add = (t: ReportTypo): void => {
+    if (seen.has(key(t.node, t.printed))) return;
+    seen.add(key(t.node, t.printed));
+    out.push(t);
+  };
+  for (const f of fixes) for (const t of f.typos) add({ node: f.node, printed: t.printed, intended: t.intended, reason: t.reason, corrected: t.unit !== null, ...(t.source ? { source: t.source } : {}) });
+  const words = (x: string): string => x.replace(/\s+/gu, " ").trim();
+  for (const n of nodes) for (const t of n.typos ?? []) if (words(t.printed) && words(t.printed) !== words(t.intended)) add({ node: n.id, printed: t.printed.trim(), intended: t.intended.trim(), reason: t.reason, corrected: false });
+  return out;
+}
+
+/**
  * The paper's grade. MAJOR: a main result (`mainTheoremIds`: the paper's theorems and corollaries, and
- * the fixer's key results; a block split off one counts with it) holds only weakened with its contribution
- * lost (the referee's patch review not finding the key results kept), is false with no
+ * the fixer's key results; a block split off one counts with it) holds only weakened with its headline claim
+ * cut (a key result the referee grades `substantial` in `patch_review.weakenings`; with no grade, the patch
+ * review not finding the key results kept), is false with no
  * repair, is left out of the formalization, or rests (`restsOn`: its dependency closure) on a result
  * still false; or the run holds a refutation with no repair that no result carries. MINOR: an error
- * repaired without weakening a main result, a main result weakened only in constants or corner cases (the
- * contribution kept), an intermediate result narrowed or left false with no main
+ * repaired without weakening a main result, a main result weakened only in constants or corner cases (a
+ * key result graded `limited`), an intermediate result narrowed or left false with no main
  * result on it, a reading pinned (by the referee or the owner, of a result or a symbol), a bookkeeping
  * condition, a result not stated precisely enough to check. ERROR-FREE: none of these. Pure.
  */
@@ -842,13 +904,18 @@ export function paperGrade(
     return r ? r.bucket === "refuted" || r.change?.descoped === true : runLevel.some((f) => f.node === id && isPaperRefutation(f) && !isRepaired(f));
   };
   const isMain = (r: ReportRow): boolean => mains.has(r.node_id) || (r.split_from !== undefined && mains.has(r.split_from));
-  // A main result weakened only in its constants or corner cases, the referee finding its key results and
-  // the contribution kept (`patch_review.key_results_ok`), is minor; weakened otherwise, major.
+  // A weakened key result is graded by the referee's severity (`patch_review.weakenings`): substantial is
+  // major, limited minor. Without one (a review written before 2026-11-14, or a main result outside the key
+  // results): a main result weakened with the key results and the contribution kept
+  // (`patch_review.key_results_ok`) is minor; weakened otherwise, major.
   const contributionKept = review?.patch_review?.key_results_ok === true;
+  const severity = new Map((review?.patch_review?.weakenings ?? []).map((w) => [w.node, w]));
   for (const p of patches?.patches ?? []) {
     if (!p.accepted_weakening) continue;
     const what = `weakened${p.given_up ? `: ${p.given_up}` : ""}`;
-    if (!mains.has(p.node)) add(minor, p.node, what);
+    const w = patches?.key_results.includes(p.node) ? severity.get(p.node) : undefined;
+    if (w) add(w.severity === "substantial" ? major : minor, p.node, `${what} (${w.severity}: ${w.reason})`);
+    else if (!mains.has(p.node)) add(minor, p.node, what);
     else if (contributionKept) add(minor, p.node, `${what} (the referee found the key results and the contribution kept)`);
     else add(major, p.node, what);
   }
@@ -1061,6 +1128,7 @@ export function renderReport(json: VerifyReportJson): string {
   L.push(`**Verdict: ${VERDICT_TEXT[json.verdict]}**`, "");
   L.push(...renderGrade(json));
   L.push(...renderPlainSections(json));
+  L.push(...renderRevision(json.revision));
   L.push("# Technical appendix", "");
   L.push("The records behind the report above, by the run's own identifiers.", "");
   L.push(
@@ -1319,6 +1387,30 @@ export function renderReport(json: VerifyReportJson): string {
     L.push("");
   }
 
+  // Slips of proofs: never errors, never suggestions — the runner corrected each it could place. The
+  // referee's typos and the printed steps the Lean proof had to depart from, one list.
+  if ((json.typos ?? []).length > 0) {
+    L.push("## Proof slips corrected", "");
+    L.push("Not errors: slips in proofs that leave the result true — typos the referee found, and printed steps the Lean proof had to depart from — corrected in the printed proof (the corrected paper prints the correction).", "");
+    for (const t of json.typos!) {
+      L.push(`- \`${t.node}\`: ${cell(t.printed)} → ${cell(t.intended)}${t.reason.trim() ? ` — ${cell(t.reason)}` : ""}${t.source === "lean" ? " (from the Lean proof)" : ""}${t.corrected ? "" : " (not corrected: the passage is not printed exactly once in one step of the proof)"}`);
+    }
+    L.push("");
+  }
+
+  // The Lean Proof in English: the printed proofs read against what the Lean proves (its corrections are
+  // among the slips above, "from the Lean proof").
+  if ((json.lean_proof_english ?? []).length > 0) {
+    const verdictWords: Record<string, string> = { follows: "follows the printed proof", "other-route": "argues some steps differently", departs: "corrects the printed proof", "not compared": "not compared", "no printed proof": "the paper prints no proof; the Lean Proof in English is the only one" };
+    L.push("## Lean Proof in English", "");
+    L.push("Each result's Lean proof written out in English from the Lean alone (reviewed against it; the paper's page shows it beside the printed proof), and how the printed proof compares.", "");
+    for (const r of json.lean_proof_english!) {
+      const extra = [r.departures ? `${r.departures} step(s) corrected` : "", r.gaps ? `${r.gaps} step(s) left out in print` : "", r.routes ? `${r.routes} step(s) argued differently` : "", r.unclear ? `${r.unclear} step(s) left unclear in print` : "", r.unconfirmed ? "the English is not confirmed faithful to the Lean" : ""].filter(Boolean).join("; ");
+      L.push(`- \`${r.node}\`: ${r.verdict === "departs" && !r.departures ? "leaves steps out of the printed proof" : verdictWords[r.verdict] ?? r.verdict}${extra ? ` (${extra})` : ""}${r.summary.trim() ? ` — ${cell(r.summary)}` : ""}`);
+    }
+    L.push("");
+  }
+
   L.push("## Added conditions", "");
   const anyBk = json.results.some((r) => r.bookkeeping.length > 0);
   const premises = new Map<string, { premise: ReportRow["added_premises"][number]; where: string[] }>();
@@ -1489,3 +1581,6 @@ export function renderReport(json: VerifyReportJson): string {
 
   return L.join("\n");
 }
+
+/** A gap in the printed proof the Lean proof found, listed with the result only (never marked in the paper). */
+function listedGap(d: { kind?: string; placed?: boolean }): boolean { return d.kind === "printed-gap" && d.placed !== true; }

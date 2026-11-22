@@ -145,12 +145,14 @@ export function convertWeakeningPatches(file: PatchFile, findings: ReadonlyArray
  * What an earlier file settled that a fixer reply may not undo: an unfixable entry carrying a
  * suggestion (pending, or declined by the owner) stands as it was, and a patch the owner accepted
  * as a weakening keeps that mark while the fixer returns it unchanged. New suggestions are stamped
- * as the fixer's.
+ * as the fixer's. The owner's readings and the runner's typo fixes stand as they were.
  */
 export function pinOwnerEntries(file: PatchFile, prior: PatchFile | null, restated: ReadonlySet<string> = new Set()): PatchFile {
   const pinned = (prior?.unfixable ?? []).filter((u) => u.suggested_repair);
   // The owner's readings are the owner's: a fixer reply never carries them, and never drops them.
   const ownerReadings = prior?.owner_readings ?? [];
+  // Likewise the typos of proofs the runner corrected (`typo_fixes`): the referee's, never the fixer's.
+  const typoFixes = prior?.typo_fixes ?? [];
   const pinnedIds = new Set(pinned.map((u) => u.node));
   const accepted = new Map((prior?.patches ?? []).filter((p) => p.accepted_weakening).map((p) => [p.node, p] as const));
   // A runner narrowing sent back only to be restated (`restated`) keeps its mark under a new
@@ -163,10 +165,11 @@ export function pinOwnerEntries(file: PatchFile, prior: PatchFile | null, restat
   };
   const same = (a: PatchFile["patches"][number], b: PatchFile["patches"][number]): boolean =>
     key(a) === key(b) || (restated.has(b.node) && a.narrowed_by === "runner");
-  const { owner_readings: _o, ...reply } = file;
+  const { owner_readings: _o, typo_fixes: _t, ...reply } = file;
   return {
     ...reply,
     ...(ownerReadings.length > 0 ? { owner_readings: ownerReadings } : {}),
+    ...(typoFixes.length > 0 ? { typo_fixes: typoFixes } : {}),
     patches: file.patches
       .filter((p) => !pinnedIds.has(p.node))
       .map((p) => {

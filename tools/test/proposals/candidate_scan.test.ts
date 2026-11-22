@@ -1,7 +1,9 @@
 // Round-B candidate filter over fixture scans: axiom / sorry / private /
 // other-paper rejection, the closure fixpoint, headline exclusion, definitions travelling with the
 // theorems that need them, and the scan cache keyed by the paper's source hash.
-import { mkdir, mkdtemp, readFile, rm, writeFile } from "node:fs/promises";
+import { execFileSync } from "node:child_process";
+import { existsSync } from "node:fs";
+import { chmod, mkdir, mkdtemp, readFile, rm, writeFile } from "node:fs/promises";
 import os from "node:os";
 import path from "node:path";
 import { afterEach, describe, expect, it } from "vitest";
@@ -11,12 +13,19 @@ import {
   obtainScan,
   paperObjects,
   reportHeadlineDecls,
+  runCandidateScan,
+  runGraphScan,
+  scopedGraphScanPath,
   syntheticScan,
   type CandidateScan,
   type ScanConstRef,
   type ScanDecl,
 } from "../../src/proposals/candidate_scan.js";
-import { writeSkeleton } from "../toolkit/helpers.js";
+import { cleanSharedToolkit, writeSkeleton } from "../toolkit/helpers.js";
+import { lakeHoldMode, LEAN_WS_ENV } from "../../src/shared/build_mutex.js";
+import { toolkitLayout, toolkitSignature } from "../../src/shared/build_inputs.js";
+import { gensDir, publishGeneration } from "../../src/shared/workspace.js";
+import { withPromoWorkspace } from "../../src/shared/commit.js";
 
 const tmp: string[] = [];
 afterEach(async () => {
@@ -166,6 +175,40 @@ describe("paper objects and the scan cache", () => {
     expect(await reportHeadlineDecls(cfg, "p")).toEqual([]);
   });
 
+  it("a paper's scan runs under a shared hold of it when shared mode is on, the toolkit clean and the exe up to date; else exclusive", async () => {
+    const root = await mkdtemp(path.join(os.tmpdir(), "cands-shared-"));
+    tmp.push(root);
+    const cfg = await writeSkeleton(root);
+    await mkdir(path.join(root, "Papers", "P"), { recursive: true });
+    await writeFile(path.join(root, "Papers", "P.lean"), "module\npublic import Papers.P.Main\n");
+    await writeFile(path.join(root, "Papers", "P", "Main.lean"), "module\n");
+    const undo = await cleanSharedToolkit(root);
+    try {
+      const calls: string[] = [];
+      let fresh = 0;
+      const exec = async (_cmd: string, argv: string[]) => {
+        calls.push(`${argv.filter((a) => a !== "--").slice(0, 3).join(" ")} [${lakeHoldMode(root)}]`);
+        if (argv[0] === "build" && argv[1] === "--no-build") return { code: fresh, stdout: "", stderr: "" };
+        if (argv.includes("exe")) {
+          const out = argv[argv.indexOf("--out") + 1]!;
+          await mkdir(path.dirname(out), { recursive: true });
+          await writeFile(out, JSON.stringify(scan([decl("x")])));
+        }
+        return { code: 0, stdout: "", stderr: "" };
+      };
+      const run = async () => {
+        calls.length = 0;
+        await runCandidateScan({ toolkit: cfg, qid: "p", leanSubdir: "Papers/P", exec, log: () => undefined, local: false });
+        return [...calls];
+      };
+      expect(await run()).toEqual(["build --no-build candidate_scan [null]", "build Papers.P [shared]", "--no-build exe candidate_scan [shared]"]);
+      fresh = 1;
+      expect(await run()).toEqual(["build --no-build candidate_scan [null]", "build Papers.P candidate_scan [exclusive]", "exe candidate_scan --paper [exclusive]"]);
+    } finally {
+      await undo();
+    }
+  });
+
   it("obtainScan reuses the scan while the paper's sources are unchanged and re-runs after an edit", async () => {
     const root = await mkdtemp(path.join(os.tmpdir(), "cands-"));
     tmp.push(root);
@@ -183,7 +226,7 @@ describe("paper objects and the scan cache", () => {
       }
       return { code: 0, stdout: "", stderr: "" };
     };
-    const args = { toolkit: cfg, qid: "p", leanSubdir: "Papers/P", exec, log: () => undefined };
+    const args = { toolkit: cfg, qid: "p", leanSubdir: "Papers/P", exec, log: () => undefined, local: false };
     await obtainScan(args);
     expect(calls.map((c) => c[1])).toEqual(["build", "exe"]);
     expect(calls[1]).toEqual(expect.arrayContaining(["--paper", "Papers.P", "--toolkit-prefix", "Toolkit", "--papers-prefix", "Papers", "--modules", "Papers.P"]));
@@ -202,6 +245,128 @@ describe("paper objects and the scan cache", () => {
     await mkdir(path.join(root, "Papers", "P"), { recursive: true });
     await writeFile(path.join(root, "Papers", "P.lean"), "module\n");
     const exec = async () => ({ code: 1, stdout: "", stderr: "error: boom" });
-    await expect(obtainScan({ toolkit: cfg, qid: "p", leanSubdir: "Papers/P", exec, log: () => undefined })).rejects.toThrow(/lake build Papers\.P candidate_scan.*failed[\s\S]*boom/);
+    await expect(obtainScan({ toolkit: cfg, qid: "p", leanSubdir: "Papers/P", exec, log: () => undefined, local: false })).rejects.toThrow(/lake build Papers\.P candidate_scan.*failed[\s\S]*boom/);
+  });
+});
+
+const haveTools = (() => { try { execFileSync("bash", ["-c", "command -v zstd && command -v flock"]); return true; } catch { return false; } })();
+
+describe("a run's scans in a workspace (`withScanRoot`)", () => {
+  /** A toolkit with paper P and a graph-capable scanner; `exec` records each lake command's cwd and
+   *  whether a hold of the shared tree's Lake lock was in force. */
+  async function fixture() {
+    const dir = await mkdtemp(path.join(os.tmpdir(), "cands-local-"));
+    tmp.push(dir);
+    const root = path.join(dir, "tk");
+    const cfg = await writeSkeleton(root);
+    await mkdir(path.join(root, "Papers", "P"), { recursive: true });
+    await writeFile(path.join(root, "Papers", "P.lean"), "module\npublic import Papers.P.Main\n");
+    await writeFile(path.join(root, "Papers", "P", "Main.lean"), "module\n");
+    await writeFile(path.join(root, "CandidateScan.lean"), 'def main : IO Unit := pure () -- get "--types-of"\n');
+    await writeFile(path.join(root, "lakefile.toml"), `${await readFile(path.join(root, "lakefile.toml"), "utf8").catch(() => "")}\n[[lean_exe]]\nname = "candidate_scan"\nroot = "CandidateScan"\n`);
+    await mkdir(path.join(root, ".lake", "paperformalizer"), { recursive: true });
+    const calls: Array<{ argv: string[]; cwd: string; held: string | null }> = [];
+    const exec = async (_cmd: string, argv: string[], o: { cwd: string }) => {
+      calls.push({ argv, cwd: o.cwd, held: lakeHoldMode(root) });
+      if (argv.includes("exe")) {
+        const out = argv[argv.indexOf("--out") + 1]!;
+        await mkdir(path.dirname(out), { recursive: true });
+        await writeFile(out, JSON.stringify(argv.includes("--graph")
+          ? { schema: 1, graph: true, toolkit_prefix: "Toolkit", papers_prefix: "Papers", modules: [], declarations: [] }
+          : scan([decl("x")])));
+      }
+      return { code: 0, stdout: "", stderr: "" };
+    };
+    // (no shared-tree lock asked for: its lock file is made by the first request)
+    const sharedLockAsked = () => existsSync(path.join(root, ".lake-build.lock"));
+    return { dir, root, cfg, calls, exec, sharedLockAsked };
+  }
+
+  it("(a) a config rebased to a workspace scans there, as it is; its generation recorded", async () => {
+    const f = await fixture();
+    await writeFile(path.join(f.root, ".pf-gen"), JSON.stringify({ gen: 5 }));
+    const g = await runGraphScan({ toolkit: f.cfg, scope: { qid: "p", papers: ["Papers.P"] }, exec: f.exec, log: () => undefined });
+    expect(f.calls.map((c) => c.argv.slice(0, 2).join(" "))).toEqual(["build Toolkit", "exe candidate_scan"]);
+    expect(f.calls[0]!.argv).toEqual(["build", "Toolkit", "Papers.P", "candidate_scan"]);
+    expect(f.calls.every((c) => c.cwd === f.root)).toBe(true);
+    expect(g.generation).toBe(5);
+    expect(JSON.parse(await readFile(scopedGraphScanPath(f.cfg, "p"), "utf8")).generation).toBe(5);
+  });
+
+  it("(b) the run's own workspace: through the lake shim, no shared-tree lock", async () => {
+    const f = await fixture();
+    const W = path.join(f.dir, "ws", "p");
+    await mkdir(W, { recursive: true });
+    await writeFile(path.join(W, ".pf-toolkit"), `${f.root}\n`);
+    await writeFile(path.join(W, ".pf-gen"), JSON.stringify({ gen: 7 }));
+    process.env[LEAN_WS_ENV] = W;
+    try {
+      const s1 = await runCandidateScan({ toolkit: f.cfg, qid: "p", leanSubdir: "Papers/P", exec: f.exec, log: () => undefined });
+      expect(s1.generation).toBe(7);
+    } finally { delete process.env[LEAN_WS_ENV]; }
+    expect(f.calls.map((c) => c.argv.slice(0, 3).join(" "))).toEqual(["build Papers.P candidate_scan", "exe candidate_scan --"]);
+    expect(f.calls.every((c) => c.cwd === f.root && c.held === null)).toBe(true);
+    expect(f.sharedLockAsked()).toBe(false);
+  });
+
+  it("`local` false (the gardener's graph after its carry-out): the shared tree", async () => {
+    const f = await fixture();
+    await runCandidateScan({ toolkit: f.cfg, qid: "p", leanSubdir: "Papers/P", exec: f.exec, log: () => undefined, local: false });
+    expect(f.calls.some((c) => c.held === "exclusive")).toBe(true);
+    expect(f.sharedLockAsked()).toBe(true);
+  });
+
+  it.skipIf(process.platform === "win32" || !haveTools)("(c) no run workspace (an apply): the run's promotion workspace, prepared; never while its moves (or another scan) hold it", async () => {
+    const f = await fixture();
+    const bin = path.join(f.dir, "bin");
+    await mkdir(bin, { recursive: true });
+    await writeFile(path.join(bin, "lean"), "#!/bin/sh\necho 'Lean (version 4.0.0, test)'\n");
+    await chmod(path.join(bin, "lean"), 0o755);
+    const PATH = process.env.PATH;
+    process.env.PATH = `${bin}:${PATH}`;
+    process.env.PAPERFORMALIZER_LEAN_LOCAL_ROOT = path.join(f.dir, "local");
+    try {
+      await mkdir(path.join(f.root, ".lake", "build", "lib", "lean"), { recursive: true });
+      await writeFile(path.join(f.root, ".lake", "build", "lib", "lean", "Toolkit.olean"), "olean\n");
+      await mkdir(gensDir(f.root), { recursive: true });
+      await publishGeneration(f.root, await toolkitSignature(await toolkitLayout(f.root)), () => {});
+      const logs: string[] = [];
+      const s1 = await obtainScan({ toolkit: f.cfg, qid: "p", leanSubdir: "Papers/P", exec: f.exec, log: (m) => logs.push(m) });
+      expect(f.calls.map((c) => c.argv.slice(0, 3).join(" "))).toEqual(["build Papers.P candidate_scan", "exe candidate_scan --"]);
+      // every lake command in the promotion workspace, none under a hold of the shared tree
+      expect(f.calls.every((c) => c.cwd.includes(`${path.sep}ws${path.sep}p.promo`) && c.held === null)).toBe(true);
+      expect(f.sharedLockAsked()).toBe(false);
+      expect(s1.generation).toBe(1);
+      // recorded in the run's own file, through the workspace's link to runs/
+      expect(JSON.parse(await readFile(candidateScanPath(f.cfg, "p"), "utf8")).generation).toBe(1);
+      expect(logs.some((l) => /in .*p\.promo.*generation 1 — not seeded/.test(l))).toBe(true);
+      // the toolkit alone (a round-A apply's graph): in the same workspace
+      f.calls.length = 0;
+      const g = await runGraphScan({ toolkit: f.cfg, scope: { qid: "p", papers: [] }, exec: f.exec, log: () => undefined });
+      expect(f.calls[0]!.argv).toEqual(["build", "Toolkit", "candidate_scan"]);
+      expect(f.calls.every((c) => c.cwd.includes(`${path.sep}ws${path.sep}p.promo`))).toBe(true);
+      expect(g.generation).toBe(1);
+      // its moves holding the workspace (`withPromoWorkspace`, as another process's would): the scan
+      // waits for them, never resetting it under them, then runs
+      let release!: () => void;
+      const done = new Promise<void>((r) => { release = r; });
+      let reached!: () => void;
+      const inMoves = new Promise<void>((r) => { reached = r; });
+      const moves = withPromoWorkspace(f.root, "p", [], {}, async () => { reached(); await done; });
+      await inMoves;
+      f.calls.length = 0;
+      const waits: string[] = [];
+      const later = runGraphScan({ toolkit: f.cfg, scope: { qid: "p", papers: ["Papers.P"] }, exec: f.exec, log: (m) => waits.push(m) });
+      await new Promise((r) => setTimeout(r, 1500));
+      expect(f.calls).toEqual([]);
+      expect(waits.some((l) => /p\.promo .*held by another process — waiting for it/.test(l))).toBe(true);
+      release();
+      await moves;
+      expect((await later).generation).toBe(1);
+      expect(f.calls[0]!.argv).toEqual(["build", "Toolkit", "Papers.P", "candidate_scan"]);
+    } finally {
+      process.env.PATH = PATH;
+      delete process.env.PAPERFORMALIZER_LEAN_LOCAL_ROOT;
+    }
   });
 });

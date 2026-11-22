@@ -167,8 +167,9 @@ export const collectLeanEvidence: CollectLeanEvidence = async (args) => {
       log_tail: `no Lean modules found under ${leanDir} — nothing could be built or verified`,
     };
   } else {
+    // the run barrel and the paper's modules only: a shared hold, beside other papers' builds
     const r = await withLakeBuildLock(repoRoot, () =>
-      exec("lake", ["build", barrelModule], { cwd }),
+      exec("lake", ["build", barrelModule], { cwd }), `lean evidence: lake build ${barrelModule}`, undefined, undefined, { papers: [barrelModule] },
     );
     build = { ok: r.code === 0, log_tail: tailOf(`${r.stdout}\n${r.stderr}`) };
   }
@@ -197,8 +198,10 @@ export const collectLeanEvidence: CollectLeanEvidence = async (args) => {
         `import ${barrelModule}\n\n` + declNames.map((d) => `#print axioms ${d}`).join("\n") + "\n",
         "utf8",
       );
+      // elaborates the probe (it imports the barrel) and writes nothing: shared
       const r = await withLakeBuildLock(repoRoot, () =>
-        exec("lake", ["env", "lean", probe.split(path.sep).join("/")], { cwd }),
+        exec("lake", ["env", "lean", probe.split(path.sep).join("/")], { cwd }), "lean evidence: lake env lean (axioms)",
+        undefined, undefined, { papers: [barrelModule], files: [probe] },
       );
       axioms = parseAxiomReport(
         `${r.stdout}\n${r.stderr}`,

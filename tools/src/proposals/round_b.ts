@@ -4,7 +4,7 @@
 // dry run uses a synthetic scan of the core), filtered mechanically (`candidate_scan.ts`:
 // axiom-clean, no sorry, statement over base + toolkit vocabulary, closure moves together, the
 // paper's theorems excluded; its lemmas / propositions admitted and flagged), and recorded in the
-// toolkit's statement store (`doc/statements.json`). Each candidate carries
+// toolkit's statement store (`doc/statements/<slug>.json`). Each candidate carries
 // its recurrence in the owner's other papers (identical, or the same pattern), entries deferred
 // before that it matches, the Foundations/Tricks signal, the hypotheses its proof never uses, and
 // where it attaches in the toolkit graph; the curator (Claude) names the MAIN results and writes each
@@ -12,7 +12,9 @@
 // entry (it moves with it); the checker (codex) re-judges each entry (a duplicate is declined
 // automatically). The result is `runs/<slug>/proposals/B.json` and the owner's checklist
 // `<toolkit>/doc/proposals/<slug>.B.md`; the toolkit's reuse history gains this paper's line, and
-// when its health has findings a gardening list is written beside it (`garden.ts`). Accepted entries
+// the checklist's graph is the toolkit's and this paper's only — the toolkit's health, its reuse
+// history and the gardening list need the whole library's graph and come from `paperformalizer
+// garden` (`garden.ts`; with an injected whole-library graph, as in tests, they are made here). Accepted entries
 // are moved by `paperformalizer propose <slug> --apply` (`apply_b.ts`).
 import { existsSync } from "node:fs";
 import { mkdir, readdir, readFile, rename } from "node:fs/promises";
@@ -34,7 +36,8 @@ import type { ClaudeRunInput } from "../workers/claude.js";
 import { obtainScan, paperObjects, paperShapedReasons, syntheticScan, writeCandidates, type CandidateScan, type CandidatesFile, type ScanDecl } from "./candidate_scan.js";
 import { recommendationKeys, renderChecklist, ROUND_IS_DELEGATED, ROUND_IS_THE_OWNERS } from "./checklist.js";
 import { runChecker } from "./checker.js";
-import { runCurator, type ProposalCandidate } from "./curator.js";
+import { mustJudge, runCurator, type ProposalCandidate } from "./curator.js";
+import { importedBy } from "./importers.js";
 import { appendReuseHistory, runGardenRound } from "./garden.js";
 import {
   batchPath,
@@ -50,6 +53,10 @@ import {
 } from "./schema.js";
 import { measureReuse } from "./reuse.js";
 import { findRecurrence, loadStatementStore, recordProposals, recordScan, recurrenceWorkDir, statementStoreLockPath, statementStorePath, type StatementStore } from "./statements.js";
+// compat 2026-11-11: remove after ≤2 days — only through this namespace are the store's newer
+// exports read: a long-running process may have loaded statements.ts before the store was sharded,
+// and a missing named import would fail this module's load.
+import * as statementsModule from "./statements.js";
 import { attachNote, healthSummary, refreshToolkitGraph, toolkitHealth, type ToolkitGraph } from "./toolkit_graph.js";
 
 /** The name a candidate is known by inside its paper: the declaration name without the paper's
@@ -118,6 +125,8 @@ export function roundBCandidates(
   extra: {
     unused?: ReadonlyMap<string, string[]>;
     deferred?: ReadonlyMap<string, Array<{ slug: string; proposal_id: string }>>;
+    /** Other papers whose Lean uses each candidate (`importedBy`). */
+    importedBy?: ReadonlyMap<string, string[]>;
   } = {},
 ): ProposalCandidate[] {
   const byName = new Map((scan?.declarations ?? []).map((d) => [d.name, d] as const));
@@ -131,6 +140,7 @@ export function roundBCandidates(
     const decl = byName.get(c.name);
     const unused = extra.unused?.get(c.name.split(".").pop()!) ?? [];
     const deferred = extra.deferred?.get(c.name) ?? [];
+    const otherPapers = extra.importedBy?.get(c.name) ?? [];
     return {
       candidate_id: c.name,
       source: {
@@ -147,11 +157,13 @@ export function roundBCandidates(
         ...(Object.keys(c.paper_objects).length ? { paper_objects_moving_with_it: [...new Set(Object.values(c.paper_objects))].sort() } : {}),
         ...(shaped.length ? { paper_shaped: shaped } : {}),
         ...(unused.length ? { hypotheses_the_proof_never_uses: unused } : {}),
+        ...(otherPapers.length ? { used_by_other_papers: otherPapers } : {}),
       },
       ...(shaped.length ? { paper_shaped: shaped } : {}),
       ...(decl ? { division_signal: divisionSignal(decl) } : {}),
       ...(unused.length ? { dropped_hypotheses: unused } : {}),
       ...(deferred.length ? { deferred_before: deferred } : {}),
+      ...(otherPapers.length ? { imported_by: otherPapers } : {}),
       ...(helperOf.length && !c.paper_result ? { helper_of: helperOf } : {}),
       search_words: `${local.split(".").pop() ?? local} ${firstParagraph(c.doc)}`.trim(),
       id_ref: local,
@@ -162,7 +174,8 @@ export function roundBCandidates(
   });
 }
 
-/** For each candidate: entries of other papers it recurs with that the owner deferred. */
+/** For each candidate: entries of other papers it recurs with that the owner deferred (over the
+ *  store's entries in memory; round B reads them from the store, `deferredMatchesIn`). */
 export function deferredMatches(
   store: Pick<StatementStore, "entries">,
   recurrence: ReadonlyMap<string, ProposalCandidate["recurrence"]>,
@@ -251,24 +264,44 @@ export async function runRoundB(args: RunRoundBArgs): Promise<ProposalRoundState
   const store = statementStorePath(cfg, qid, dryRun);
   const storeLock = statementStoreLockPath(cfg, qid, dryRun);
   await recordScan(store, qid, scan, file, created, storeLock);
-  const storeNow = await loadStatementStore(store);
-  const recurrence = await findRecurrence(storeNow, qid, file.candidates, recurrenceWorkDir(cfg, qid), cfg.papersLib);
+  // compat 2026-11-11: remove after ≤2 days — beside a statements.ts loaded before the shards (no
+  // `deferredMatchesIn`), the store is read whole, as that module reads it.
+  const sharded = typeof (statementsModule as Partial<typeof statementsModule>).deferredMatchesIn === "function";
+  const storeNow = sharded ? null : await loadStatementStore(store);
+  const recurrence = await findRecurrence(storeNow ?? store, qid, file.candidates, recurrenceWorkDir(cfg, qid), cfg.papersLib);
   const recurring = [...recurrence.values()].filter((r) => r.some((x) => x.kind === "identical")).length;
   const patterned = [...recurrence.values()].filter((r) => r.some((x) => x.kind === "pattern")).length;
   log(`promotion: statements recorded in ${store}; ${recurring} candidate(s) recur identically in another paper, ${patterned} by pattern`);
-  const deferred = deferredMatches(storeNow, recurrence);
+  const deferred = storeNow ? deferredMatches(storeNow, recurrence) : await statementsModule.deferredMatchesIn(store, recurrence);
   if (deferred.size) log(`promotion: ${deferred.size} candidate(s) match an entry deferred in another paper — they return with the new evidence`);
 
-  // The toolkit graph: where each candidate attaches, and the toolkit's health (both on the main view).
+  // The toolkit graph: where each candidate attaches (the checklist's notes). The graph of the
+  // toolkit and this paper only (an apply's scoped scan, reused while nothing changed): the whole
+  // library's — every paper built, exclusively, for half an hour and more — is not built here; the
+  // toolkit's health, its reuse history and the gardening list need it, and come from
+  // `paperformalizer garden` instead. (An injected graph is taken as the whole library's.)
   let graph: ToolkitGraph | null = null;
+  const wholeLibrary = Boolean(args.graph);
   try {
-    graph = args.graph ? await args.graph() : dryRun ? null : await refreshToolkitGraph({ toolkit: cfg, log });
+    graph = args.graph ? await args.graph() : dryRun ? null : await refreshToolkitGraph({ toolkit: cfg, log, scope: { qid, papers: [prefix] } });
   } catch (err) {
     log(`promotion: toolkit graph not built (${err instanceof Error ? err.message : String(err)}); the checklist goes without it`);
   }
+  // Papers may import each other: what another paper's Lean already uses is reuse shown.
+  let importedBy_ = new Map<string, string[]>();
+  if (!dryRun) {
+    try {
+      importedBy_ = await importedBy(cfg, prefix, file.candidates.map((c) => c.name));
+    } catch (err) {
+      log(`promotion: other papers' use of this one not read (${err instanceof Error ? err.message : String(err)}); the curator goes without it`);
+    }
+    if (importedBy_.size) log(`promotion: ${importedBy_.size} candidate(s) are used by another paper's Lean — the curator judges each`);
+  }
   const unused = await unusedHypothesesByLeaf(cfg, file.candidates.map((c) => c.file));
-  let candidates = roundBCandidates(file, recurrence, scan, { unused, deferred });
+  let candidates = roundBCandidates(file, recurrence, scan, { unused, deferred, importedBy: importedBy_ });
   if (args.only) candidates = candidates.filter((c) => args.only!.has(c.candidate_id));
+  const forced = candidates.filter(mustJudge).length;
+  if (forced) log(`promotion: ${forced} candidate(s) recur identically in another paper or are used by one — each judged, outside the cap of proposals`);
   const dropping = candidates.filter((c) => c.dropped_hypotheses?.length).length;
   if (dropping) log(`promotion: ${dropping} candidate(s) carry hypotheses their proof never uses — offered in general form without them`);
 
@@ -292,7 +325,8 @@ export async function runRoundB(args: RunRoundBArgs): Promise<ProposalRoundState
   const proposed = proposals.filter((p) => p.verdict === "propose");
   // The toolkit as it stands: its reuse history gains this paper's line, and when its health has
   // findings the gardener writes the owner a gardening list (one Claude call; none otherwise).
-  const healthNow = graph ? toolkitHealth(graph) : null;
+  const healthNow = graph && wholeLibrary ? toolkitHealth(graph) : null;
+  if (graph && !wholeLibrary && !dryRun) log("promotion: the toolkit's health, reuse history and gardening list are left to `paperformalizer garden` (they need the whole library's graph)");
   let garden: string | null = null;
   if (!dryRun && graph && healthNow && !args.only) {
     await appendReuseHistory(cfg, { slug: qid, at: created, reuse, health: healthNow });
@@ -325,27 +359,15 @@ export async function runRoundB(args: RunRoundBArgs): Promise<ProposalRoundState
  * proposals directory is not this batch's. Its batch, decisions, the list of the moves it made
  * (`B.moves.json`), move logs and statement snapshots, and the agent's recommendations on items
  * the new batch does not hold as they were recommended on, move under `proposals/voided/<stamp>/` (an applied round followed by
- * a rewind is not set aside by `voidRoundB`, which handles a round still pending). A move the
- * toolkit is still half-way through stays whole: `move_pending.json`, the journal of the bytes it
- * replaced (`move_journal.json`), and the statement snapshot and log it names — its gate runs again
- * on them at the next apply. Returns the names moved.
+ * a rewind is not set aside by `voidRoundB`, which handles a round still pending). Returns the names moved.
  */
 export async function archiveEarlierRound(cfg: ToolkitConfig, qid: string, batch: ProposalBatch): Promise<string[]> {
   const dir = proposalsRunDir(cfg, qid);
   if (!existsSync(dir)) return [];
   const round = batch.round;
-  // (unreadable: nothing of a move is archived — the next apply reports the file)
-  let pending: { proposal_id?: string; statements_before?: string | null } | null = null;
-  const pendingFile = path.join(dir, "move_pending.json");
-  if (existsSync(pendingFile)) {
-    try { pending = JSON.parse(await readFile(pendingFile, "utf8")) as typeof pending; } catch { pending = {}; }
-  }
-  const ofPending = (f: string): boolean =>
-    pending !== null && (!pending.proposal_id || f === `move_${pending.proposal_id}.log` || f === `statements_before_${pending.proposal_id}.json` ||
-      f === `statements_after_${pending.proposal_id}.json` || f === path.basename(pending.statements_before ?? ""));
   const left = (await readdir(dir)).filter((f) =>
     f === `${round}.json` || f === `${round}.decisions.json` ||
-    (round === "B" && (f === "B.moves.json" || ((/^move_.*\.log$/.test(f) || /^statements_(before|after)_.*\.json$/.test(f)) && !ofPending(f)))));
+    (round === "B" && (f === "B.moves.json" || /^move_.*\.log$/.test(f) || /^statements_(before|after)_.*\.json$/.test(f))));
   const recsFile = path.join(dir, `${round}.recommendations.json`);
   const recs = existsSync(recsFile) ? (JSON.parse(await readFile(recsFile, "utf8")) as Record<string, { of?: string }>) : {};
   // A recommendation stays only on the item it was written for (`recommendationKeys`): the same id

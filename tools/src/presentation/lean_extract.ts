@@ -192,7 +192,12 @@ export function extractDeclSnippet(source: string, decl: string, line: number): 
  */
 export function extractFullDeclSource(source: string, decl: string, line: number): string {
   const lines = source.split("\n");
-  const start = findDeclStart(lines, decl, line);
+  return declSourceFrom(lines, findDeclStart(lines, decl, line));
+}
+
+/** The source of the declaration starting on line index `start` of `lines` (already located: no
+ *  re-parse of the file), to the next top-level boundary, its trailing preamble dropped. */
+export function declSourceFrom(lines: readonly string[], start: number): string {
   const indent = lines[start].match(/^\s*/)?.[0].length ?? 0;
   const lex: LeanLexState = { blockDepth: 0, inString: false, escaped: false };
   visibleLeanCode(lines[start], lex); // initialize comments opened on the declaration line

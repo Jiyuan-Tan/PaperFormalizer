@@ -9,13 +9,15 @@
 
 import { laterStageEverRan } from "../shared/resume_mode.js";
 import { existsSync } from "node:fs";
-import { readFile } from "node:fs/promises";
+import { readFile, writeFile } from "node:fs/promises";
+import { createHash } from "node:crypto";
+import path from "node:path";
 import type { PipelineContext, StageResult, StateJson } from "../types.js";
 import type { ReviewResult } from "../judgment.js";
 import { type StageDeps, artifactPaths, readRequired } from "../pipeline_support.js";
 import { reviewWithCodex } from "./review_codex.js";
 import { runReviewBoundary } from "../shared/review_boundary.js";
-import { runStage1 } from "./stage1.js";
+import { runStage1, takePlanStood } from "./stage1.js";
 import { coreJsonPath, formalizationView, parseTypedCore } from "../core/core_io.js";
 import { logPlanGateNotes } from "../formalization/plan/plan_gate.js";
 import { planGateOnDisk } from "../formalization/plan/gate_run.js";
@@ -106,13 +108,24 @@ export async function runStage1_5(args: {
   // incremental revise (a rewind's nodes, a pin re-sync): a passing F1.5 review continues into F2
   // (`--stop-after F1.5` still stops for an audit).
   const approvedBefore = await laterStageEverRan(args.ctx, args.state, "1.5");
+  // Right after an F1 that left the plan standing (`runStage1`, NOTHING MOVED), a plan and a core
+  // exactly as the last passing review of a re-plan saw them are not reviewed by the model again — the
+  // deterministic gate still runs (what the plan reuses may have left the library since). An entry at
+  // F1.5 itself (`--from-stage F1.5`) is always reviewed.
+  const planStands = takePlanStood(args.ctx);
+  const stampFile = path.join(artifactPaths(args.ctx, args.state).formalizationDir, PLAN_REVIEW_STAMP);
+  const stamp = await planReviewStamp(args);
+  if (planStands && approvedBefore && stamp && existsSync(stampFile) && (await readFile(stampFile, "utf8")).trim() === stamp && (await planGatePrelint(args, artifactPaths(args.ctx, args.state).plan)) === null) {
+    console.warn("[F] F1.5: the plan and the core are as the last passing review saw them, and the plan gate passes — not reviewed again");
+    return { stage: "1.5", status: "completed", message: "F1.5: plan and core unchanged since the last passing review; plan gate clean (no review call)." };
+  }
   if (approvedBefore) console.warn("[F] F1.5: a re-plan of an approved plan — a passing review continues into F2 (no checkpoint)");
   // The F1↔F1.5 correction budget is per formalization attempt, not per entry (`loop_limits.ts`):
   // this entry gets what is left of it, and the bounce past the budget halts for the orchestrator.
   const spent = planReviewRounds(args.state);
   const left = Math.max(0, PLAN_REVIEW_ROUNDS_MAX - spent);
   if (spent > 0) console.warn(`[F] F1.5: ${Math.min(spent, PLAN_REVIEW_ROUNDS_MAX)} of ${PLAN_REVIEW_ROUNDS_MAX} F1↔F1.5 correction round(s) spent in this formalization attempt`);
-  return notReviewed(await runReviewBoundary({
+  const result = notReviewed(await runReviewBoundary({
     ctx: args.ctx,
     state: args.state,
     boundary: "stage_1.5_to_1",
@@ -142,6 +155,24 @@ export async function runStage1_5(args: {
       return halted === review ? spendPlanReviewRound(args.state, review) : halted;
     },
   }));
+  if (result.stage === "1.5" && result.status === "completed") {
+    const passed = await planReviewStamp(args);
+    if (passed) await writeFile(stampFile, `${passed}\n`, "utf8");
+  }
+  return result;
+}
+
+/** The record of the plan and core a passing F1.5 review of a re-plan saw (`formalization/`). */
+const PLAN_REVIEW_STAMP = "plan_review_passed.sha256";
+
+/** One hash over the plan and the core on disk — the core without where its nodes are printed (a
+ * revision moves those, and neither the plan nor its review reads them); null when either is missing. */
+async function planReviewStamp(args: { ctx: PipelineContext; state: StateJson }): Promise<string | null> {
+  const plan = artifactPaths(args.ctx, args.state).plan;
+  const core = coreJsonPath(args.ctx);
+  if (!existsSync(plan) || !existsSync(core)) return null;
+  const placeless = JSON.stringify(JSON.parse(await readFile(core, "utf8")), (k, v) => (k === "tex_locator" ? undefined : v));
+  return createHash("sha256").update(await readFile(plan)).update("\n").update(placeless).digest("hex");
 }
 
 /** A result that leaves the F1.5 slot records F1.5 complete only when it is the review's own (a

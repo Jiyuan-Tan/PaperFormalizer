@@ -648,6 +648,8 @@ const ANNOTATION_BLOCKS: Record<string, { cls: string; tag: string; stmt?: true 
   vsCorrected: { cls: "rv ins", tag: "Revised", stmt: true },
   vsClarified: { cls: "rv ins", tag: "Clarified statement", stmt: true },
   vsCorrectedStep: { cls: "rv ins", tag: "Revised step" },
+  vsTypoStep: { cls: "rv ins", tag: "Corrected typo" },
+  vsLeanStep: { cls: "rv ins", tag: "Corrected (Lean proof)" },
   vsProof: { cls: "rv ins", tag: "Revised proof (confirmed)" },
   vsProposed: { cls: "rv ins pending", tag: "Proposed revision — awaiting a ruling", stmt: true },
   vsProposedProof: { cls: "rv ins pending", tag: "Proof of the proposed statement" },
@@ -1758,27 +1760,36 @@ function renderBib(ctx: Ctx, body: string): string {
 
 /** Put `\tcAnchor{node}` before the first occurrence of each anchor's source line (at the end of that
  * line for an anchor marked `after`). Pure. */
+/** Where `needle` (a source line, trimmed) stands in `text`; one shorter than 8 characters (a display's `\[`)
+ *  only where it opens a line, so never inside a longer command (`\\[2pt]`). Pure. */
+export function anchorOccurrences(text: string, needle: string): number[] {
+  const out: number[] = [];
+  const opensLine = (i: number) => /^[ \t]*$/.test(text.slice(text.lastIndexOf("\n", i - 1) + 1, i));
+  for (let i = text.indexOf(needle); i >= 0; i = text.indexOf(needle, i + 1)) if (needle.length >= 8 || opensLine(i)) out.push(i);
+  return out;
+}
 function placeAnchors(files: Record<string, string>, anchors: PaperInput["anchors"]): Record<string, string> {
   if (!anchors?.length) return files;
   const out = { ...files };
   for (const a of anchors) {
     const text = out[a.file];
     const needle = a.line.trim();
-    if (!text || needle.length < 8) continue;
+    // A short delimiter is safe only when its source position or occurrence is known.
+    if (!text || !needle || (needle.length < 8 && a.at === undefined && a.nth === undefined)) continue;
     const t = text.replace(/\r\n?/g, "\n");
     // the annotated copy may have marked the line up after its first words ("\textbf{Theorem 2.}
     // \vsOriginal{…"): then the longest start of it found once in the file
     const unique = (n: string) => { const i = t.indexOf(n); return i >= 0 && i === t.lastIndexOf(n) ? i : -1; };
-    let at = t.indexOf(needle);
     // a line the file holds several times (a bare `\\begin{proof}`): its k-th occurrence when the file holds
     // it as often as the source (`nth`: [k, count] there — the annotated copy's lines have shifted), else the
-    // occurrence nearest its line number
-    const all: number[] = [];
-    for (let i = at; i >= 0; i = t.indexOf(needle, i + 1)) all.push(i);
+    // occurrence nearest its line number. A short delimiter counts only where it opens a line, as in the
+    // source's count (`anchorOccurrences`): `\[` also stands in every `\\[2pt]`
+    const all = anchorOccurrences(t, needle);
+    let at = all[0] ?? -1;
     if (a.nth && all.length > 1 && all.length === a.nth[1]) at = all[a.nth[0]]!;
-    else if (a.at && at >= 0 && at !== t.lastIndexOf(needle)) {
+    else if (a.at && all.length > 1) {
       const lineOf = (i: number) => t.slice(0, i).split("\n").length;
-      for (let i = at; i >= 0; i = t.indexOf(needle, i + 1)) if (Math.abs(lineOf(i) - a.at) < Math.abs(lineOf(at) - a.at)) at = i;
+      for (const i of all) if (Math.abs(lineOf(i) - a.at) < Math.abs(lineOf(at) - a.at)) at = i;
     }
     const found = at;
     for (let len = Math.min(needle.length, 80); at < 0 && len >= 12; len -= 4) at = unique(needle.slice(0, len));
@@ -1855,12 +1866,15 @@ export function frontMatter(text: string): { title: string; authors: string; spa
   const start = Math.max(0, text.indexOf("\\begin{document}"));
   const stopAt = text.slice(start).search(/\\begin\{abstract\}|\\section\*?\s*\{|\bABSTRACT\b|\\abstract(?![A-Za-z])/);
   const region = text.slice(start, start + Math.min(stopAt < 0 ? 4000 : stopAt, 4000));
-  const m = /\{\s*\\(?:LARGE|Large|huge|Huge)(?![A-Za-z])|\\(?:LARGE|Large|huge|Huge)\s*(?=\{)/.exec(region);
+  // (a large size first; else `\large` — the old journals' scans set the title so, 2026-11-10: six
+  // journal papers of the 1970s–90s, their title the slug before)
+  const sized = (sizes: string) => new RegExp(String.raw`\{\s*\\(?:${sizes})(?![A-Za-z])|\\(?:${sizes})\s*(?=\{)`).exec(region);
+  const m = sized("LARGE|Large|huge|Huge") ?? sized("large");
   if (!m) return { title: "", authors, span: null };
   const open = region.indexOf("{", m.index);
   const g = group(region, open);
   if (!g) return { title: "", authors, span: null };
-  const handTitle = g.body.replace(/^\s*\\(?:LARGE|Large|huge|Huge)(?![A-Za-z])/, "").trim();
+  const handTitle = g.body.replace(/^\s*\\(?:LARGE|Large|large|huge|Huge)(?![A-Za-z])/, "").trim();
   const center = region.lastIndexOf("\\begin{center}", m.index);
   const cend = center >= 0 ? region.indexOf("\\end{center}", g.end) : -1;
   return {

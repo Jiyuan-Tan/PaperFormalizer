@@ -1,14 +1,18 @@
 // Gardening: findings from the toolkit graph, what the gardener reads, the owner's list, and the
 // verification of the items the orchestrator carried out by hand.
 import { spawnSync } from "node:child_process";
-import { mkdir, mkdtemp, readFile, rm, writeFile } from "node:fs/promises";
+import { chmod, copyFile, mkdir, mkdtemp, readFile, rm, writeFile } from "node:fs/promises";
 import os from "node:os";
 import path from "node:path";
 import { afterEach, describe, expect, it } from "vitest";
-import { appendReuseHistory, gardenerSources, gardenerViolations, gardenFindings, gardenPaths, parseGardenChecklist, readReuseHistory, renderGardenChecklist, runGardenRound, settledFindings, type GardenBatch, type GardenFinding } from "../../src/proposals/garden.js";
-import { realVerifyDeps, verifyGarden } from "../../src/proposals/garden_verify.js";
+import { appendReuseHistory, paperOfSlug, gardenerSources, gardenerViolations, gardenFindings, gardenPaths, parseGardenChecklist, readReuseHistory, renderGardenChecklist, runGardenRound, settledFindings, type GardenBatch, type GardenFinding } from "../../src/proposals/garden.js";
+import { baselineDiffers, papersReached, realBaselineWorkspace, realVerifyDeps, verifyGarden } from "../../src/proposals/garden_verify.js";
+import { LAKE_SHIM_DIR, LEAN_WS_ENV, leanWorkspaceFor, leanWsChildEnv } from "../../src/shared/build_mutex.js";
 import { sha256 } from "../../src/proposals/gate.js";
-import type { ToolkitGraph, ToolkitHealth } from "../../src/proposals/toolkit_graph.js";
+import { buildToolkitGraph, type ToolkitGraph, type ToolkitHealth } from "../../src/proposals/toolkit_graph.js";
+import type { GraphScan } from "../../src/proposals/candidate_scan.js";
+import { shq } from "../../src/proposals/gate.js";
+import { toolkitTemplateDir } from "../../src/toolkit/lakefile.js";
 import { effectiveTaxonomy } from "../../src/toolkit/taxonomy.js";
 import type { ClaudeRunInput } from "../../src/workers/claude.js";
 import { BARREL, leanModule, tk, writeSkeleton } from "../toolkit/helpers.js";
@@ -185,6 +189,62 @@ describe("gardening", () => {
     expect(logs.join("\n")).toContain(`gardening: ${n - fresh.length} finding(s) judged fine on the last list and unchanged since are not sent again`);
   });
 
+  it("a result the ledger records as used by a paper left out of the graph is not reported unused; the list names the papers left out", async () => {
+    const root = await mkdtemp(path.join(os.tmpdir(), "garden-excluded-"));
+    tmp.push(root);
+    const cfg = await writeSkeleton(root);
+    const mod = "Toolkit.Foundations.Probability.Conditioning";
+    const tkNode = (id: string, extra: Record<string, unknown> = {}) => ({ id, layer: "toolkit" as const, kind: "theorem", module: mod, division: "Foundations", topic: "Probability", tier: "main" as const, ...extra });
+    // Toolkit.fourth: no ledger record, but the last graph that had Papers.GammaPaper saw it use it
+    const g: ToolkitGraph = { ...graph(), excluded_papers: ["Papers.BetaPaper", "Papers.GammaPaper"], excluded_paper_uses: { "Papers.GammaPaper": ["Toolkit.fourth", "Toolkit.oldname"] }, generation: 7 };
+    g.nodes.push(tkNode("Toolkit.alone"), tkNode("Toolkit.lonely"), tkNode("Toolkit.third"), tkNode("Toolkit.fourth"), tkNode("Toolkit.fifth"), tkNode("Toolkit.owner"), tkNode("Toolkit.helper", { tier: "aux", owners: ["Toolkit.owner"] }));
+    g.edges.push(["Toolkit.owner", "Toolkit.helper"]);
+    const rec = (name: string, used_by: string[]) => ({ name, module: mod, division: "Foundations", origin: { kind: "proposal", slug: "seed" }, date: "2026-10-01", decision: "accepted", used_by });
+    await writeFile(cfg.ledgerPath, JSON.stringify({ version: 1, declarations: [
+      rec("Toolkit.alone", ["alpha_paper"]), // its paper is in the graph: unused stands
+      rec("Toolkit.lonely", ["beta_paper"]), // runs/beta_paper/state.json lean_subdir
+      rec("Toolkit.third", ["gamma_paper"]), // no state.json: the canonical Papers/<Pascal>
+      rec("Toolkit.helper", ["beta_paper"]), // a helper: its owner's use
+      { ...rec("Toolkit.fifth", []), renamed_from: "Toolkit.oldname" }, // the last graph saw its old name used
+    ], decisions: [] }));
+    await mkdir(path.join(cfg.runsDir, "beta_paper"), { recursive: true });
+    await writeFile(path.join(cfg.runsDir, "beta_paper", "state.json"), JSON.stringify({ qid: "beta_paper", lean_subdir: "Papers/BetaPaper" }));
+    expect(await paperOfSlug(cfg, "beta_paper")).toBe("Papers.BetaPaper");
+    expect(await paperOfSlug(cfg, "gamma_paper")).toBe("Papers.GammaPaper");
+    const prompts: string[] = [];
+    const gardener = async (o: ClaudeRunInput): Promise<string> => {
+      prompts.push(o.prompt);
+      const text = o.prompt.slice(o.prompt.indexOf("=== FINDINGS ===\n") + "=== FINDINGS ===\n".length, o.prompt.indexOf("\n=== END FINDINGS ==="));
+      const findings = JSON.parse(text) as GardenFinding[];
+      return JSON.stringify({
+        items: findings.map((f) => ({ finding_id: f.id, title: `Item ${f.id}`, finding: f.detail, reason: "r", recommendation: f.kind === "unused" ? "accept" : "decline",
+          action: f.kind === "unused" ? "remove" : "keep", target_module: null, modules: [], parts: [], replacement: null, new_topic: null })),
+        extra: [],
+      });
+    };
+    const logs: string[] = [];
+    const out = await runGardenRound({ toolkit: cfg, graph: g, log: (m) => logs.push(m), now: () => new Date("2026-10-05T00:00:00.000Z"), runClaude: gardener, scan: null, moduleTexts: new Map() });
+    expect(out).not.toBeNull();
+    const batch = JSON.parse(await readFile(gardenPaths(cfg, "2026-10-05T00:00:00.000Z").json, "utf8")) as GardenBatch;
+    const unused = batch.findings.filter((f) => f.kind === "unused").flatMap((f) => f.decls);
+    expect(unused).toContain("Toolkit.alone");
+    expect(unused).not.toContain("Toolkit.lonely");
+    expect(unused).not.toContain("Toolkit.third");
+    expect(unused).not.toContain("Toolkit.owner");
+    expect(unused).not.toContain("Toolkit.fourth");
+    expect(unused).not.toContain("Toolkit.fifth");
+    expect(batch.excluded_papers).toEqual(["Papers.BetaPaper", "Papers.GammaPaper"]);
+    expect(batch.generation).toBe(7);
+    expect(prompts[0]).toContain("PAPERS NOT IN THE GRAPH");
+    expect(logs.join("\n")).toContain("2 paper(s) left out of the graph (they do not build): Papers.BetaPaper, Papers.GammaPaper; 5 toolkit declaration(s)");
+    const md = await readFile(out!.path, "utf8");
+    expect(md.indexOf("**Papers left out of the graph**")).toBeGreaterThan(0);
+    expect(md.indexOf("**Papers left out of the graph**")).toBeLessThan(md.indexOf("## g-"));
+    expect(md).toContain("Papers.BetaPaper, Papers.GammaPaper");
+    // the list lands in the toolkit's own doc/proposals (where the orchestrator reads it)
+    expect(path.dirname(out!.path)).toBe(path.join(root, "doc", "proposals"));
+  });
+
   it("the reuse history keeps one line per paper: a round B run again replaces the paper's line", async () => {
     const root = await mkdtemp(path.join(os.tmpdir(), "reuse-history-"));
     tmp.push(root);
@@ -261,5 +321,214 @@ describe("gardening", () => {
     expect(bad.ok).toBe(false);
     expect(bad.problems.join("\n")).toMatch(/the statement of Papers\.P\.thm changed/);
     expect(bad.problems.join("\n")).toMatch(/lakefile\.toml changed .* not part of the toolkit's Lean/);
+  });
+
+  it("verify runs in the shared tree even in a workspace; the papers the edits reach must build, the others are reported", async () => {
+    const root = await mkdtemp(path.join(os.tmpdir(), "garden-verify-reach-"));
+    tmp.push(root);
+    const ws = await mkdtemp(path.join(os.tmpdir(), "garden-verify-ws-"));
+    tmp.push(ws);
+    const cfg = await writeSkeleton(root);
+    const mod = "Toolkit.Foundations.Probability.Conditioning";
+    const modPath = path.join(root, "Toolkit/Foundations/Probability/Conditioning.lean");
+    await mkdir(path.dirname(modPath), { recursive: true });
+    const tkText = (ns: string) => leanModule({ doc: mod, body: `namespace ${ns}\n\n/-- Survives. -/\ntheorem cond_preimage (n : Nat) : n = n := rfl\n\nend ${ns}` });
+    await writeFile(modPath, tkText("IndepFun"));
+    await writeFile(path.join(root, "Toolkit/Foundations.lean"), BARREL("Toolkit.Foundations", [mod]));
+    await writeFile(path.join(root, "Toolkit.lean"), BARREL("Toolkit", ["Toolkit.Foundations"]));
+    // P uses the module through the toolkit's barrel; Q uses nothing of it; R is a run in progress importing it
+    const paperText = (name: string, imports: string[], ref: string | null) =>
+      leanModule({ imports, body: `namespace Papers.${name}\n\ntheorem thm (n : Nat) : n = n := ${ref ? `${ref} n` : "rfl"}\n\nend Papers.${name}` });
+    // S: in progress (a barrel, not in the papers' barrel), still naming the old name after the edit
+    for (const [name, imports, ref] of [["P", ["Toolkit"], null], ["Q", [], null], ["R", [mod], "IndepFun.cond_preimage"], ["S", [mod], "IndepFun.cond_preimage"]] as const) {
+      await mkdir(path.join(root, "Papers", name), { recursive: true });
+      await writeFile(path.join(root, "Papers", name, "Main.lean"), paperText(name, [...imports], ref));
+      await writeFile(path.join(root, "Papers", `${name}.lean`), BARREL(`Papers.${name}`, [`Papers.${name}.Main`]));
+    }
+    await writeFile(path.join(root, "Papers.lean"), BARREL("Papers", ["Papers.P", "Papers.Q"]));
+    expect([...(await papersReached(cfg, [mod], []))].sort()).toEqual(["Papers.P", "Papers.R", "Papers.S"]);
+    // the toolkit graph after the edits: a scan of the toolkit alone, by a fake lake on PATH
+    await writeFile(path.join(root, "lakefile.toml"), 'name = "t"\n\n[[lean_lib]]\nname = "Toolkit"\n\n[[lean_exe]]\nname = "candidate_scan"\nroot = "CandidateScan"\n');
+    await copyFile(path.join(toolkitTemplateDir(), "CandidateScan.lean"), path.join(root, "CandidateScan.lean"));
+    const fixture = path.join(__dirname, "../fixtures/toolkit_graph/graph_scan.json");
+    const fixtureScan = JSON.parse(await readFile(fixture, "utf8")) as GraphScan;
+    await mkdir(path.join(root, "doc"), { recursive: true });
+    await writeFile(path.join(root, "doc", "toolkit_graph.json"), JSON.stringify(buildToolkitGraph({ scan: fixtureScan, now: () => new Date("2026-10-01") })));
+    const bin = path.join(ws, "bin");
+    await mkdir(bin, { recursive: true });
+    const lakeLog = path.join(ws, "lake.log");
+    await writeFile(path.join(bin, "lake"), `#!/bin/sh\necho "$*" >> ${shq(lakeLog)}\nout=""; prev=""\nfor a in "$@"; do [ "$prev" = "--out" ] && out="$a"; prev="$a"; done\n[ -n "$out" ] && mkdir -p "$(dirname "$out")" && cp ${shq(fixture)} "$out"\nexit 0\n`);
+    await chmod(path.join(bin, "lake"), 0o755);
+    expect([...(await papersReached(cfg, [], ["Papers.Q.Main"]))]).toEqual(["Papers.Q"]);
+    await writeFile(cfg.ledgerPath, JSON.stringify({ version: 1, declarations: [], decisions: [] }));
+    const batch: GardenBatch = {
+      created: "2026-10-02T00:00:00.000Z",
+      findings: [{ id: "g-1", kind: "namespace", modules: ["Toolkit/Foundations/Probability/Conditioning.lean"], decls: ["IndepFun.cond_preimage"], detail: "outside" }],
+      items: [{ finding_id: "g-1", title: "Name it in its topic", finding: "outside", reason: "consistent", recommendation: "accept", action: "rename",
+        target_module: null, modules: [], parts: [], replacement: null, new_topic: null }],
+    };
+    const p = gardenPaths(cfg, batch.created);
+    await mkdir(path.dirname(p.md), { recursive: true });
+    const writeBatch = async (b: GardenBatch) => {
+      await writeFile(p.json, JSON.stringify(b));
+      await writeFile(p.md, renderGardenChecklist(b, { toolkitRoot: root }).replace("decision: pending", "decision: accept"));
+    };
+    await writeBatch(batch);
+    git(root, "init", "-q");
+    git(root, "-c", "user.email=t@t", "-c", "user.name=t", "add", "-A");
+    git(root, "-c", "user.email=t@t", "-c", "user.name=t", "commit", "-qm", "toolkit");
+    // the edit: the declaration into its topic namespace, R's reference with it
+    await writeFile(modPath, tkText("Toolkit.Foundations.Probability"));
+    await writeFile(path.join(root, "Papers", "R", "Main.lean"), paperText("R", [mod], "Toolkit.Foundations.Probability.cond_preimage"));
+
+    // a workspace set: never used by verify
+    await writeFile(path.join(ws, ".pf-toolkit"), `${root}\n`);
+    const prior = process.env[LEAN_WS_ENV];
+    process.env[LEAN_WS_ENV] = ws;
+    try {
+      expect(leanWorkspaceFor(root)).toBe(ws);
+      let fail: string[] = [];
+      const cmds: string[] = [];
+      const probes: string[] = [];
+      // the baseline workspace (the toolkit before the edits) and what a build there gives
+      const bws = path.join(ws, "baseline");
+      let baselineFails = true;
+      let heldOff = false;
+      let baselineWhy: string | null = null;
+      let baselineAsked = 0;
+      let removed = 0;
+      const slugs: string[] = [];
+      // the baseline workspace's pin: the toolkit and generation 4
+      await mkdir(bws, { recursive: true });
+      await writeFile(path.join(bws, ".pf-toolkit"), `${root}\n`);
+      const pinGen = (gen: number) => writeFile(path.join(bws, ".pf-gen"), JSON.stringify({ gen }));
+      await pinGen(4);
+      const deps = {
+        ...realVerifyDeps,
+        baselineWorkspace: async (_c: unknown, _rev: string, slug: string) => {
+          baselineAsked += 1;
+          slugs.push(slug);
+          return baselineWhy ? { why: baselineWhy } : { path: bws, gen: 4, remove: async () => { removed += 1; } };
+        },
+        run: async (cmd: string) => {
+          // in the shared tree: no workspace for this chain, and cleared for every child
+          expect(leanWorkspaceFor(root)).toBeNull();
+          expect(leanWsChildEnv()[LEAN_WS_ENV]).toBe("");
+          cmds.push(cmd);
+          if (cmd.includes(`${LEAN_WS_ENV}=`)) return heldOff ? { code: 1, log: "PF_LAKE_SHIM_HELD_OFF" } : { code: baselineFails ? 1 : 0, log: "baseline" };
+          if (fail.some((x) => cmd.split(" ").includes(x))) return { code: 1, log: "error" };
+          if (!cmd.startsWith("lake env lean")) return { code: 0, log: "ok" };
+          const probe = await readFile(cmd.slice("lake env lean ".length).replace(/^'|'$/g, ""), "utf8");
+          probes.push(probe);
+          const names = [...probe.matchAll(/^#print axioms (\S+)$/gm)].map((m) => m[1]!);
+          return { code: 0, log: names.map((n) => `'${n}' depends on axioms: [propext, Classical.choice, Quot.sound]`).join("\n") };
+        },
+      };
+      const run = () => verifyGarden({ toolkit: cfg, md: p.md, log: () => {}, deps, indexStep: null, toolsDir: "/tools", graphAfter: async () => null });
+
+      const ok = await run();
+      expect(ok.problems).toEqual([]);
+      expect(cmds.filter((c) => c.startsWith("lake build"))).toEqual(["lake build Toolkit", "lake build Papers.P Papers.R Papers.S", "lake build Papers.Q"]);
+      expect(ok.reported).toEqual([]);
+
+      // a paper the edits do not reach fails: reported, not fatal
+      fail = ["Papers.Q"];
+      const q = await run();
+      expect(q.ok).toBe(true);
+      expect(q.reported.join("\n")).toMatch(/papers the edits do not reach .* do not all build/);
+
+      // a paper the edits CHANGED that does not build: fatal outright, no baseline asked
+      fail = ["Papers.R"];
+      baselineAsked = 0;
+      const r = await run();
+      expect(r.ok).toBe(false);
+      expect(r.problems.join("\n")).toMatch(/lake build papers the edits reach failed \(Papers\.R: changed by the edits and does not build\)/);
+      expect(baselineAsked).toBe(0);
+
+      // an unchanged paper the edits reach fails after them: built against the toolkit as it was
+      fail = ["Papers.S"];
+      baselineFails = true;
+      const pre = await run();
+      expect(pre.problems).toEqual([]);
+      expect(pre.ok).toBe(true);
+      expect(pre.reported.join("\n")).toMatch(/Papers\.S does not build, before the edits too \(generation 4\)/);
+      // its own baseline workspace, removed when it ends
+      expect(slugs.at(-1)).toMatch(new RegExp(`^garden-baseline-\\w+-${process.pid}$`));
+      expect(removed).toBe(1);
+      const baselineCmd = cmds.find((c) => c.includes(`${LEAN_WS_ENV}=`))!;
+      expect(baselineCmd).toContain(`${LEAN_WS_ENV}=${shq(bws)}`);
+      expect(baselineCmd).toContain(`${shq(path.join(LAKE_SHIM_DIR, "lake"))} build Papers.S;`);
+      // it built before the edits: they broke it
+      baselineFails = false;
+      const broke = await run();
+      expect(broke.ok).toBe(false);
+      expect(broke.problems.join("\n")).toMatch(/Papers\.S: builds against the toolkit before the edits \(generation 4\) but not after/);
+      // the shim would not build there (the toolkit in flux): cannot be told, fatal
+      baselineFails = true;
+      heldOff = true;
+      expect((await run()).problems.join("\n")).toMatch(/Papers\.S: does not build, and its baseline build did not run to an end/);
+      heldOff = false;
+      // the workspace is not pinned to that generation (the shim could build elsewhere): cannot be told, fatal
+      await pinGen(3);
+      const unpinned = await run();
+      expect(unpinned.ok).toBe(false);
+      expect(unpinned.problems.join("\n")).toMatch(/Papers\.S: does not build, and whether it did before the edits cannot be told — .*\.pf-gen is not generation 4 \(generation 3\)/);
+      await pinGen(4);
+      await writeFile(path.join(bws, ".pf-toolkit"), "/elsewhere\n");
+      expect((await run()).problems.join("\n")).toMatch(/\.pf-toolkit does not name/);
+      await writeFile(path.join(bws, ".pf-toolkit"), `${root}\n`);
+      // no generation is the toolkit at HEAD: cannot be told, fatal
+      baselineWhy = "no published generation is the toolkit at HEAD";
+      expect((await run()).problems.join("\n")).toMatch(/Papers\.S: does not build, and whether it did before the edits cannot be told — no published generation/);
+      baselineWhy = null;
+
+      // a reached paper directory without a barrel: its modules built like any paper's
+      fail = [];
+      await mkdir(path.join(root, "Papers", "T"), { recursive: true });
+      await writeFile(path.join(root, "Papers", "T", "Main.lean"), paperText("T", [mod], "IndepFun.cond_preimage"));
+      cmds.length = 0;
+      expect((await run()).ok).toBe(true);
+      expect(cmds).toContain("lake build Papers.P Papers.R Papers.S Papers.T.Main");
+      await rm(path.join(root, "Papers", "T"), { recursive: true, force: true });
+
+      // the health comparison without a given graph: a scan of the toolkit alone, nothing else built
+      const PATH = process.env.PATH;
+      process.env.PATH = `${bin}:${PATH}`;
+      try {
+        const logs: string[] = [];
+        const h = await verifyGarden({ toolkit: cfg, md: p.md, log: (m) => logs.push(m), deps, indexStep: null, toolsDir: "/tools" });
+        expect(h.ok).toBe(true);
+        const lakeCalls = (await readFile(lakeLog, "utf8")).trim().split("\n");
+        expect(lakeCalls.some((c) => /\bPapers\b/.test(c.replace(/--papers-prefix Papers/, "")))).toBe(false);
+        expect(lakeCalls.at(-1)).toMatch(/exe candidate_scan .*--modules Toolkit --out /);
+        expect(logs.join("\n")).not.toMatch(/health comparison is skipped/);
+      } finally {
+        process.env.PATH = PATH;
+      }
+    } finally {
+      if (prior === undefined) delete process.env[LEAN_WS_ENV];
+      else process.env[LEAN_WS_ENV] = prior;
+    }
+  });
+
+  it("a baseline workspace must hold the toolkit's files exactly as at the commit checked against", async () => {
+    const ws = await mkdtemp(path.join(os.tmpdir(), "garden-baseline-"));
+    tmp.push(ws);
+    await mkdir(path.join(ws, "Toolkit", "Foundations"), { recursive: true });
+    await mkdir(path.join(ws, "Toolkit", "Staging"), { recursive: true });
+    await writeFile(path.join(ws, "Toolkit", "Foundations", "A.lean"), "a");
+    await writeFile(path.join(ws, "Toolkit", "Staging", "S.lean"), "staging is not compared");
+    await writeFile(path.join(ws, "Toolkit.lean"), "barrel");
+    const want = new Map([["Toolkit/Foundations/A.lean", "a"], ["Toolkit.lean", "barrel"]]);
+    expect(await baselineDiffers(ws, "Toolkit", want)).toBeNull();
+    expect(await baselineDiffers(ws, "Toolkit", new Map([...want, ["Toolkit.lean", "edited"]]))).toBe("Toolkit.lean differs");
+    expect(await baselineDiffers(ws, "Toolkit", new Map([...want, ["lean-toolchain", "x"]]))).toBe("lean-toolchain is missing");
+    await writeFile(path.join(ws, "Toolkit", "Foundations", "B.lean"), "b");
+    expect(await baselineDiffers(ws, "Toolkit", want)).toBe("Toolkit/Foundations/B.lean is not in the toolkit at the baseline");
+    // no generation published: cannot be told
+    const root = await mkdtemp(path.join(os.tmpdir(), "garden-baseline-tk-"));
+    tmp.push(root);
+    const cfg = await writeSkeleton(root);
+    expect(await realBaselineWorkspace(cfg, "HEAD", realVerifyDeps.git, "garden-baseline-x", () => {})).toEqual({ why: "no toolkit generation is published" });
   });
 });

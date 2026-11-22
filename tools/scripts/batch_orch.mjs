@@ -21,8 +21,8 @@
 // reminded once per job to clear one whose answers it acted on), every message of theirs is acted on, and a short
 // watch after the agent's last turn finds nothing more (the blocking items of its bundle's TODO.md are told again
 // to the agent of a job that attaches to it finished); until then it waits for the owner like a halted run, and is
-// put back at the job's end. A run another live job holds is left to it (after 35 min, the time a dead job's
-// record takes to lapse). When --hours is
+// put back at the job's end; once left, its Lean workspaces are released (`release`). A run another live job holds
+// is left to it (after 35 min, the time a dead job's record takes to lapse). When --hours is
 // nearly spent (--grace-min before it, default 20), or the job is signalled, the driver stops its agents and
 // the runners it reaches on this machine (SIGTERM: each stops its own workers), puts the unfinished runs
 // back at the head of the queue, detaches and exits 75 — a job script may submit the next job on it;
@@ -32,11 +32,12 @@
 // job's environment: CODEX_HOME is the account the job bills. --brief: a file of the owner's standing
 // instructions, given to every agent. Logs: runs/<slug>/logs/batch_*, and this driver's own output.
 import { spawn } from "node:child_process";
-import { appendFileSync, closeSync, existsSync, mkdirSync, mkdtempSync, openSync, readFileSync, renameSync, rmSync, statSync, utimesSync, writeFileSync } from "node:fs";
+import { appendFileSync, closeSync, existsSync, mkdirSync, mkdtempSync, openSync, readdirSync, readFileSync, renameSync, rmSync, statSync, utimesSync, writeFileSync } from "node:fs";
 import os from "node:os";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
 import { readMessages } from "./messages_store.mjs";
+import { runSlug } from "./run_slug.mjs";
 
 const args = process.argv.slice(2);
 const opt = (name, dflt) => { const i = args.indexOf(name); return i >= 0 ? args.splice(i, 2)[1] : dflt; };
@@ -53,6 +54,9 @@ const batchMode = args.includes("--batch") ? (args.splice(args.indexOf("--batch"
 // --full-auto: the runs this job starts are started in full auto (`verify --full-auto`): the owner's
 // decisions take the agents' recommendations (a run started before keeps its own mode)
 const fullAuto = args.includes("--full-auto") ? (args.splice(args.indexOf("--full-auto"), 1), true) : false;
+// --persist: the runs this job starts are started with `verify --persist` (the owner's: the run may not end
+// before its Lean is complete; missing theory is built). It is kept across resumes; a run started before keeps its own.
+const persist = args.includes("--persist") ? (args.splice(args.indexOf("--persist"), 1), true) : false;
 const TOOLS = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..");
 const REPO = path.dirname(TOOLS);
 const localSandbox = (() => { try { return JSON.parse(readFileSync(path.join(TOOLS, "config", "local.json"), "utf8")).codexSandbox; } catch { return undefined; } })();
@@ -61,7 +65,7 @@ const sandbox = opt("--sandbox", localSandbox ?? "workspace-write");
 const model = opt("--model", process.env.PAPERFORMALIZER_MODEL_CODEX_VERIFY || "gpt-6.1-sol");
 const effort = opt("--effort", "high");
 if (!toolkitArg || (args.length === 0 && !queueFile) || args.some((a) => a.startsWith("--"))) {
-  console.error("usage: batch_orch.mjs --toolkit <path> [--queue <file>] [--runs <n>] [--batch] [--full-auto] [--hours <h>] [--grace-min <m>] [--brief <file>] [--sandbox <mode>] [--model <m>] [--effort <e>] [--max-agents <n>] [<slug>[=<source>[::<main>]] …]");
+  console.error("usage: batch_orch.mjs --toolkit <path> [--queue <file>] [--runs <n>] [--batch] [--full-auto] [--persist] [--hours <h>] [--grace-min <m>] [--brief <file>] [--sandbox <mode>] [--model <m>] [--effort <e>] [--max-agents <n>] [<slug>[=<source>[::<main>]] …]");
   process.exit(64);
 }
 const toolkit = path.resolve(toolkitArg);
@@ -70,7 +74,10 @@ const log = (line) => console.log(`[batch ${new Date().toISOString().slice(11, 1
 const entryOf = (line) => {
   const [slug, rest] = line.trim().split(/=(.*)/s);
   const [source, main] = (rest ?? "").split("::");
-  return /^[A-Za-z0-9][A-Za-z0-9_.-]{0,120}$/.test(slug) ? { slug, source: source || null, main: main || null } : null;
+  if (!/^[A-Za-z0-9][A-Za-z0-9_.-]{0,120}$/.test(slug)) return null;
+  // (an existing run — its state.json — by its own name, a study's say; a start's stub runs/<slug>/logs is not one; else the slug `verify` makes the run under)
+  const run = existsSync(path.join(toolkit, "runs", slug, "state.json")) ? slug : runSlug(slug);
+  return run ? { slug: run, source: source || null, main: main || null } : null;
 };
 const lineOf = (e) => (e.source ? `${e.slug}=${e.source}${e.main ? `::${e.main}` : ""}` : e.slug);
 const given = args.map((a) => entryOf(a) ?? (console.error(`not a run: ${a}`), process.exit(64)));
@@ -126,6 +133,9 @@ const held = new Set();
 const pending = [...given];
 // every watch names this driver as the session (`orch.mjs` `session`); the agents and the runs get this job's
 // own environment (CODEX_HOME, the account the job bills): a watch an agent arms anyway is another session's
+// every child of this driver (its runs, its agents and what they start) is a batch job's: a run done for good
+// leaves its release to the driver (`settled`), which waits for the owner's requests first (`verify/cli.ts`)
+process.env.PAPERFORMALIZER_BATCH_JOB = process.env.SLURM_JOB_ID ?? String(process.pid);
 const sessionEnv = { ...process.env, PAPERFORMALIZER_ORCH_SESSION_PID: String(process.pid), PAPERFORMALIZER_ORCH_AGENT: `batch job ${process.env.SLURM_JOB_ID ?? os.hostname()}`, PAPERFORMALIZER_ORCH_PARENT: String(process.pid) };
 let stopReason = null;
 
@@ -140,6 +150,27 @@ function startCli(slug, argv, what) {
     child.unref();
     log(`${slug}: started ${what} (pid ${child.pid}) — log ${file}`);
   } finally { closeSync(fd); }
+}
+
+/** A settled run's workspaces released (2026-11-10: nothing removed them, several GB each): the marker written
+ *  (`logs/workspace_released.json`: a run on another machine sweeps them there) and those on this machine removed
+ *  (`toolkit-gen release`, which keeps them while anything uses them; its paper's tmp/ too, 2026-11-11). */
+async function release(slug) {
+  try {
+    mkdirSync(path.join(runDir(slug), "logs"), { recursive: true });
+    writeFileSync(path.join(runDir(slug), "logs", "workspace_released.json"), `${JSON.stringify({ at: new Date().toISOString(), host: os.hostname(), phase: phaseOf(slug) })}\n`);
+  } catch (e) { log(`${slug}: workspaces not released (the marker not written: ${e.message})`); return; }
+  const { code, out } = await new Promise((resolve) => {
+    let out = "";
+    const c = spawn(path.join(TOOLS, "node_modules", ".bin", "tsx"), [CLI, "toolkit-gen", "release", slug, "--toolkit", toolkit], { cwd: TOOLS, stdio: ["ignore", "pipe", "pipe"], env: process.env });
+    const t = setTimeout(() => { try { c.kill("SIGTERM"); } catch { /* gone */ } }, 10 * 60_000);
+    c.stdout.on("data", (d) => { out += d; });
+    c.stderr.on("data", (d) => { out += d; });
+    c.on("error", (e) => { clearTimeout(t); resolve({ code: -1, out: e.message }); });
+    c.on("close", (code) => { clearTimeout(t); resolve({ code, out }); });
+  });
+  for (const line of out.trim().split("\n").filter((l) => l.trim())) log(`${slug}: ${line}`);
+  if (code !== 0) log(`${slug}: toolkit-gen release exited ${code}`);
 }
 
 // ─── what the owner asked the page to start ──────────────────────────────────────
@@ -284,7 +315,7 @@ setInterval(() => {
 async function follow({ slug, source, main }) {
   if (!existsSync(path.join(runDir(slug), "state.json"))) {
     if (!source) { log(`${slug}: no run and no source given — left`); return "held"; }
-    startCli(slug, ["verify", source, "--toolkit", toolkit, "--slug", slug, ...(main ? ["--main", main] : []), ...(fullAuto ? ["--full-auto"] : [])], "start");
+    startCli(slug, ["verify", source, "--toolkit", toolkit, "--slug", slug, ...(main ? ["--main", main] : []), ...(fullAuto ? ["--full-auto"] : []), ...(persist ? ["--persist"] : [])], "start");
   } else {
     enqueue(slug, "The driver attached this job to the run (session start): act on the run as it stands — a halt already waiting is yours now; a run at rest that waits for nobody, resume it.");
   }
@@ -300,7 +331,7 @@ async function follow({ slug, source, main }) {
   let heldSince = 0;
   while (Date.now() < deadline && !stopReason) {
     if (settled(slug)) {
-      if (!busy(slug)) { log(`${slug}: finished, and nothing is left to act on — left`); break; }
+      if (!busy(slug)) { log(`${slug}: finished, and nothing is left to act on — left`); await release(slug); break; }
       // its agent is still at it (the session start): what that turn does is looked at once it ends
       quiet.delete(slug);
       while (!stopReason && Date.now() < deadline && busy(slug)) await sleep(2_000);
@@ -365,14 +396,26 @@ async function follow({ slug, source, main }) {
 }
 
 // ─── the shared queue (several jobs take from one file) ─────────────────────────
-const LOCK_STALE_MS = 5 * 60_000;
+// (2026-11-11: 90 s, was 5 min — longer than the 120 s a taker waits, so a dead holder's lock ended every job
+// that met it. A holder keeps the lock for one read and one write of a small file.)
+const LOCK_STALE_MS = 90_000;
 /** Run `fn` on the queue's lines under its lock: a directory beside it, with its holder's clock time in
- *  `owner`. A lock older than 5 min is a dead holder's: it is moved aside (one renamer wins), then taken. */
+ *  `owner`. A lock older than 90 s is a dead holder's: it is moved aside (one renamer wins), then taken. */
 function withQueue(fn) {
   const lock = `${queueFile}.lock`;
   const t0 = Date.now();
+  // (leftovers of earlier releases and stale takeovers, older than 10 min: removed best-effort)
+  try {
+    const dir = path.dirname(lock), base = path.basename(lock);
+    for (const n of readdirSync(dir)) {
+      if (!n.startsWith(`${base}.released.`) && !n.startsWith(`${base}.stale.`)) continue;
+      const p = path.join(dir, n);
+      try { if (Date.now() - statSync(p).mtimeMs > 10 * 60_000) rmSync(p, { recursive: true, force: true }); } catch { /* in use or gone */ }
+    }
+  } catch { /* the sweep is best-effort */ }
+  let mine = "";
   for (;;) {
-    try { mkdirSync(lock); writeFileSync(path.join(lock, "owner"), `${os.hostname()} ${process.pid} ${Date.now()}`); break; } catch (e) {
+    try { mkdirSync(lock); mine = `${os.hostname()} ${process.pid} ${Date.now()}`; writeFileSync(path.join(lock, "owner"), mine); break; } catch (e) {
       if (e.code !== "EEXIST") throw e;
       let at = 0;
       try { at = Number(readFileSync(path.join(lock, "owner"), "utf8").split(" ")[2]) || 0; } catch { /* being written, or just released */ }
@@ -390,7 +433,18 @@ function withQueue(fn) {
     writeFileSync(tmp, out.lines.join("\n").replace(/\n*$/, "\n"));
     renameSync(tmp, queueFile);
     return out.value;
-  } finally { rmSync(lock, { recursive: true, force: true }); }
+  } finally {
+    // (2026-11-11) Released by a rename first: it frees the lock's name at once even when the directory is not
+    // empty — on NFS a reader that has `owner` open leaves a `.nfs…` file behind its unlink, and the `rmSync`
+    // alone then failed (ENOTEMPTY) and ended the job with "queue not read", the empty lock left for 5 min.
+    // The renamed directory is removed best-effort; what cannot be is swept by a later holder.
+    // Only our own lock is released: one taken over as stale meanwhile is another holder's now.
+    let ours = false;
+    try { ours = readFileSync(path.join(lock, "owner"), "utf8") === mine; } catch { /* gone */ }
+    const gone = `${lock}.released.${process.pid}.${Date.now()}`;
+    if (ours) { try { renameSync(lock, gone); } catch { /* already gone */ } }
+    try { rmSync(gone, { recursive: true, force: true }); } catch { /* an NFS silly-rename file: swept later */ }
+  }
 }
 const isEntry = (l) => l.trim() !== "" && !l.trim().startsWith("#");
 /** The next entry of the queue, taken off it (a line that names no run is dropped, and said). */
@@ -436,14 +490,29 @@ const detachAll = () => Promise.all(followed.map(({ slug }) => new Promise((r) =
   const c = spawn(process.execPath, [ORCH, "detach", slug, "--toolkit", toolkit], { stdio: "ignore", env: sessionEnv });
   c.on("error", r); c.on("exit", r);
 })));
+/** The runs this job leaves unfinished: the next job's. */
+const unsettled = () => [...followed.filter((e) => !settled(e.slug) && !held.has(e.slug)), ...pending].filter((e, i, a) => a.findIndex((x) => x.slug === e.slug) === i);
 let ending = false;
-async function finish(why) {
+async function finish(why, signalled = false) {
   if (ending) return; ending = true;
+  // Signalled (scancel, a requeue, a preemption), the job has Slurm's KillWait (often 30 s) before its
+  // SIGKILL, less than the wait for the agents below: the unfinished runs go back to the queue first, or a job
+  // killed in that wait leaves them followed by no job and in no queue
+  const early = signalled && queueFile ? unsettled() : [];
+  if (early.length) { giveBack(early); log(`signalled: ${early.map((e) => e.slug).join(", ")} put back in the queue first`); }
   halt();
   for (let k = 0; k < 40 && agentsLive > 0; k++) await new Promise((r) => setTimeout(r, 1_000));
   if (why) { log(why); stopRunners(); }
-  const back = [...followed.filter((e) => !settled(e.slug) && !held.has(e.slug)), ...pending].filter((e, i, a) => a.findIndex((x) => x.slug === e.slug) === i);
-  if (queueFile) giveBack(back);
+  const back = unsettled();
+  if (queueFile) {
+    giveBack(back);
+    // put back early but settled since (its agent's last turn finished it): off the queue again
+    const gone = early.filter((e) => !back.some((b) => b.slug === e.slug)).map((e) => e.slug);
+    if (gone.length) {
+      try { withQueue((lines) => ({ lines: lines.filter((l) => !isEntry(l) || !gone.includes(entryOf(l)?.slug)), value: null })); }
+      catch (e) { log(`queue not written (${e.message}): ${gone.join(", ")} settled but left in it`); }
+    }
+  }
   for (const c of watches) c.kill();
   await detachAll();
   rmSync(scratch, { recursive: true, force: true });
@@ -453,7 +522,7 @@ async function finish(why) {
   // the next job); 0: none
   process.exit(stopReason ? 76 : back.length || (queueFile && !queueEmpty()) ? 75 : 0);
 }
-for (const sig of ["SIGTERM", "SIGINT", "SIGHUP"]) process.on(sig, () => finish(`signalled (${sig}): stopping the runners`));
+for (const sig of ["SIGTERM", "SIGINT", "SIGHUP"]) process.on(sig, () => finish(`signalled (${sig}): stopping the runners`, true));
 
 // ─── main ────────────────────────────────────────────────────────────────────────
 const atWork = () => [...active.keys()].filter((s) => !waitingOwner.has(s)).length;

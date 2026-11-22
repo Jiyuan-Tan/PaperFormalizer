@@ -27,7 +27,7 @@ import { writeJsonAtomic } from "../shared/json_atomic.js";
 import { loadToolkitConfig } from "../toolkit/config.js";
 import { BUNDLE_DIR, isBlockingTodo, PAPER_DIR, type TodoItem } from "./bundle.js";
 import { checkF4Seal, F4_REVIEWS_FILE, F4_SEAL_FILE, sealedPaths, sha256 } from "./f4_seal.js";
-import { isFinal, readShare, SHARE_FILE, STATUSES, type ShareRecord, type ShareStatus } from "./share_record.js";
+import { isFinal, SHARE_FILE, STATUSES, type ShareRecord, type ShareStatus } from "./share_record.js";
 export { isFinal, readShare, SHARE_FILE, shareRecordView, type ShareRecord, type ShareStatus, type ShareView } from "./share_record.js";
 
 /** The share service, unless `PAPERFORMALIZER_SHARE_URL` names another. The Worker keeps the name it

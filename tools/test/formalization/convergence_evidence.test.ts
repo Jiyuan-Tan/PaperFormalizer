@@ -6,7 +6,9 @@ import { createEmptyGraph } from "../../src/graph/store.js";
 import { addNode, addEdge, setLean, setNodeReview } from "../../src/graph/mutate.js";
 import { type ConvergenceLedger, type FormalizationGraph } from "../../src/graph/types.js";
 import type { Core } from "../../src/core/schema.js";
-import { TOOLKIT_JSON } from "../toolkit/helpers.js";
+import { recordGreenBuild, sourceSignature } from "../../src/shared/build_inputs.js";
+import { cleanSharedToolkit, tk, TOOLKIT_JSON } from "../toolkit/helpers.js";
+import { lakeHoldMode } from "../../src/shared/build_mutex.js";
 import {
   auditConvergenceReview,
   clearedTargets,
@@ -102,6 +104,43 @@ describe("statement fingerprints", () => {
     expect(parseStatementFingerprints("{ not json", "Papers/Toy")).toBeNull();
   });
 
+  it("runs under a shared hold of the paper when shared mode is on, the toolkit clean and the exe up to date; else exclusive", async () => {
+    const root = await mkdtemp(join(tmpdir(), "conv-fp-shared-"));
+    try {
+      const leanDir = join(root, "Papers", "Toy");
+      await mkdir(leanDir, { recursive: true });
+      await writeFile(join(leanDir, "Main.lean"), LEAN);
+      await writeFile(join(root, "Toolkit.lean"), "module\n");
+      await writeFile(join(root, "paperformalizer.json"), JSON.stringify(TOOLKIT_JSON));
+      await writeFile(join(root, "lakefile.toml"), 'name = "t"\n\n[[lean_lib]]\nname = "Toolkit"\n\n[[lean_lib]]\nname = "Papers"\n\n[[lean_exe]]\nname = "candidate_scan"\nroot = "CandidateScan"\n');
+      const undo = await cleanSharedToolkit(root);
+      try {
+        const calls: string[] = [];
+        let fresh = 0;
+        const exec = async (args: string[]) => {
+          calls.push(`${args.slice(0, 3).join(" ")} [${lakeHoldMode(root)}]`);
+          if (args[0] === "build" && args[1] === "--no-build") return { code: fresh, output: "" };
+          if (args.includes("exe")) await writeFile(args[args.indexOf("--out") + 1], JSON.stringify({ declarations: [{ name: "Toy.mainThm", file: "Papers/Toy/Main.lean", closure_hash: "c" }] }));
+          return { code: 0, output: "" };
+        };
+        let edits = 0;
+        const run = async () => {
+          await writeFile(join(leanDir, "Main.lean"), `${LEAN}${"-- edit\n".repeat(++edits)}`);
+          calls.length = 0;
+          expect((await takeStatementFingerprints(root, leanDir, exec))?.byShort.get("mainThm")?.[0].hash).toBe("c");
+          return [...calls];
+        };
+        expect(await run()).toEqual(["build --no-build candidate_scan [null]", "build Papers.Toy.Main [shared]", "--no-build exe candidate_scan [shared]"]);
+        fresh = 1;
+        expect(await run()).toEqual(["build --no-build candidate_scan [null]", "build Papers.Toy.Main candidate_scan [exclusive]", "exe candidate_scan -- [exclusive]"]);
+      } finally {
+        await undo();
+      }
+    } finally {
+      await rm(root, { recursive: true, force: true });
+    }
+  });
+
   it("is one build and one scan of the run's modules; any failure is null, never a throw", async () => {
     const root = await mkdtemp(join(tmpdir(), "conv-fp-"));
     try {
@@ -127,6 +166,14 @@ describe("statement fingerprints", () => {
       expect(fp?.modules).toEqual(["Papers.Toy.Helpers.Aux", "Papers.Toy.Main"]);
       expect(calls[0]).toEqual(["build", "Papers.Toy.Helpers.Aux", "Papers.Toy.Main", "candidate_scan"]);
       expect(calls[1].slice(0, 11)).toEqual(["exe", "candidate_scan", "--", "--graph", "--fingerprints", "--toolkit-prefix", "Toolkit", "--papers-prefix", "Papers", "--modules", "Papers.Toy.Helpers.Aux,Papers.Toy.Main"]);
+      // every input unchanged: the scan stands, nothing is run
+      calls.length = 0;
+      expect((await takeStatementFingerprints(root, leanDir, exec(1)))?.byShort.get("mainThm")?.[0].hash).toBe("c");
+      expect(calls).toEqual([]);
+      // a source written (even with the same text): built and scanned again
+      let edits = 0;
+      const edit = () => writeFile(join(leanDir, "Helpers", "Aux.lean"), `def aux : Nat := 0\n${"-- edit\n".repeat(++edits)}`);
+      await edit();
       // a red build: no scan, no fingerprints
       calls.length = 0;
       expect(await takeStatementFingerprints(root, leanDir, exec(1))).toBeNull();
@@ -141,10 +188,25 @@ describe("statement fingerprints", () => {
       expect((await takeStatementFingerprints(root, leanDir, stalling))?.byShort.get("mainThm")?.[0].hash).toBe("c");
       expect(calls.map((c) => c[0])).toEqual(["build", "build", "exe"]);
       // one that stalls twice is reported as a timeout and yields nothing
+      await edit();
       calls.length = 0;
       stalls = 2;
       expect(await takeStatementFingerprints(root, leanDir, stalling)).toBeNull();
       expect(calls.map((c) => c[0])).toEqual(["build", "build"]);
+      // right after a green build of the same modules from the same sources (the compile gate's):
+      // the scan alone; a scan that fails on that tree builds it after all
+      await edit();
+      await recordGreenBuild(root, leanDir, ["Papers.Toy.Helpers.Aux", "Papers.Toy.Main"], await sourceSignature(tk(root), leanDir));
+      calls.length = 0;
+      expect((await takeStatementFingerprints(root, leanDir, exec(0)))?.byShort.get("mainThm")?.[0].hash).toBe("c");
+      expect(calls.map((c) => c[0])).toEqual(["exe"]);
+      await edit();
+      await recordGreenBuild(root, leanDir, ["Papers.Toy.Helpers.Aux", "Papers.Toy.Main"], await sourceSignature(tk(root), leanDir));
+      calls.length = 0;
+      let scans = 0;
+      const firstScanFails = async (args: string[]) => (args[0] === "exe" && scans++ === 0 ? (calls.push(args), { code: 1, output: "bad olean" }) : exec(0)(args));
+      expect((await takeStatementFingerprints(root, leanDir, firstScanFails))?.byShort.get("mainThm")?.[0].hash).toBe("c");
+      expect(calls.map((c) => c[0])).toEqual(["exe", "build", "exe"]);
     } finally {
       await rm(root, { recursive: true, force: true });
     }

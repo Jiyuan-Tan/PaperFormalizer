@@ -53,6 +53,7 @@ import fs from "node:fs";
 import os from "node:os";
 import path from "node:path";
 import { localConfig, type LocalConfig } from "./local_config.js";
+import { LAKE_LOCK_WORKER_ENV, lakeShimEnv } from "./shared/build_mutex.js";
 
 export type AuthMode = "subscription" | "api";
 export type Provider = "anthropic" | "openai";
@@ -337,7 +338,9 @@ export function workerEnv(inputs: AuthInputs = {}): NodeJS.ProcessEnv {
     out.OPENAI_API_KEY = auth.openai.apiKey;
     out.CODEX_HOME = codexHome({ env, config });
   }
-  return out;
+  // the workers' own `lake build`s take the toolkit's Lake lock (the shim first on their PATH), and
+  // a worker's own script may not take it (`LAKE_LOCK_WORKER_ENV`)
+  return { ...out, ...lakeShimEnv(env), [LAKE_LOCK_WORKER_ENV]: "1" };
 }
 
 /**

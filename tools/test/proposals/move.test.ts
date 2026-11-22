@@ -1,11 +1,11 @@
 // Round-B MOVE without lake: declaration spans, scope-aware reference rewriting, the move plan
-// (target module, paper rewrite, imports), and applyMoveItem's gate / rollback with mocked commands.
+// (target module, paper rewrite, imports), and gateMoveBatch's writes, gate and undo with mocked commands.
 import { existsSync } from "node:fs";
 import { mkdir, mkdtemp, readFile, rm, writeFile } from "node:fs/promises";
 import os from "node:os";
 import path from "node:path";
 import { afterEach, describe, expect, it } from "vitest";
-import { applyMoveItem, verifyKeptMove, lineScopes, moveAxiomsFailure, neededContext, planMove, rewriteReferences, type MovePlanInput, rootedOpens } from "../../src/proposals/move.js";
+import { brokenBefore, failingModules, gateMoveBatch, killedModules, gatedOthers, otherPaperModules, readBatchRecord, lineScopes, moveAxiomsFailure, neededContext, planMove, rewriteReferences, type MovePlan, type MovePlanInput, rootedOpens } from "../../src/proposals/move.js";
 import { realApplyDeps, type ApplyDeps } from "../../src/proposals/gate.js";
 import { declarationSpans } from "../../src/toolkit/lean_source.js";
 import { loadLedger } from "../../src/toolkit/ledger.js";
@@ -168,7 +168,7 @@ describe("planMove", () => {
   });
 });
 
-// ─── applyMoveItem ─────────────────────────────────────────────────────────
+// ─── gateMoveBatch: a move's writes and its gate ────────────────────────────
 
 async function moveFixture(runLog: string[], failAt: string | null) {
   const root = await mkdtemp(path.join(os.tmpdir(), "move-"));
@@ -193,72 +193,56 @@ async function moveFixture(runLog: string[], failAt: string | null) {
     },
   };
   const args = {
-    cfg, toolsDir: "/tools", slug: "fix", proposalId: "b-twice-eq-two-mul", paperModule: "Papers.Fix", plan,
+    cfg, proposalId: "b-twice-eq-two-mul", plan,
     target: input(root).target, decls: input(root).decls, headlineBaseline: new Map([["Papers.Fix.main_result", ["propext"]]]),
     ledgerEntries: input(root).decls.map((x) => ({
       name: x.to, module: "Toolkit.Tricks.Arith.Doubling", division: "Tricks",
       origin: { kind: "proposal" as const, slug: "fix", round: "B", proposal_id: "b-twice-eq-two-mul" }, date: "2026-09-23", decision: "accepted", used_by: ["fix"],
     })),
-    journalFile: path.join(root, "runs", "fix", "proposals", "move_journal.json"),
+    journalFile: path.join(root, "runs", "fix", "proposals", "move_batch_journal.json"),
     probeFile: path.join(root, "runs", "fix", "proposals", "move_axioms.lean"),
     indexStep: { label: "toolkit index", cmd: "lake exe toolkit_index", cwd: root },
   };
   await mkdir(path.dirname(args.journalFile), { recursive: true });
   return { root, cfg, main, d, args };
 }
+type MoveArgs = Awaited<ReturnType<typeof moveFixture>>["args"];
 
-describe("applyMoveItem", () => {
-  it("writes target, barrel, paper and ledger, then runs the gate in order", async () => {
+/** The fixture's move as a batch of its own (`gateMoveBatch`), planned as `plan`. */
+const batchOf = (args: MoveArgs, plan: MovePlan = args.plan) => ({
+  cfg: args.cfg, toolsDir: "/tools", journalFile: args.journalFile, probeFile: args.probeFile, indexStep: args.indexStep,
+  headlineBaseline: args.headlineBaseline, invariance: [],
+  moves: [{ slug: "fix", proposalId: args.proposalId, paperModule: "Papers.Fix", decls: args.decls, ledgerEntries: args.ledgerEntries, plan: async () => ({ plan, target: args.target }) }],
+});
+
+describe("gateMoveBatch", () => {
+  it("writes target, barrel, paper and ledger, then runs the gate in order; passed, its journal says so", async () => {
     const runLog: string[] = [];
     const { root, cfg, main, d, args } = await moveFixture(runLog, null);
-    const r = await applyMoveItem(args, d);
+    const r = await gateMoveBatch(batchOf(args), d);
     expect(r.ok).toBe(true);
     expect(runLog.map((c) => c.split(" ").slice(0, 3).join(" "))).toEqual([
       "lake build Toolkit", "lake build Papers.Fix", "lake env lean", "npx tsx bin/lint_module_headers.ts", "npx tsx bin/lint_toolkit_layout.ts", "lake exe toolkit_index",
     ]);
-    expect(runLog[1]).toBe("lake build Papers.Fix Papers");
+    // the moving paper only: the other papers are built by the daily library check
+    expect(runLog[1]).toBe("lake build Papers.Fix");
     expect(await readFile(path.join(root, "Toolkit", "Tricks", "Arith", "Doubling.lean"), "utf8")).toContain("def twice");
     expect(await readFile(path.join(root, "Toolkit", "Tricks.lean"), "utf8")).toContain("public import Toolkit.Tricks.Arith.Doubling");
     expect(await readFile(main, "utf8")).toContain("public import Toolkit.Tricks.Arith.Doubling");
     expect((await loadLedger(cfg.ledgerPath)).declarations.map((e) => e.name)).toEqual(["Toolkit.Tricks.Arith.twice", "Toolkit.Tricks.Arith.twice_eq_two_mul'"]);
-    expect(existsSync(args.journalFile)).toBe(false);
+    expect((await readBatchRecord(args.journalFile, d))).toMatchObject({ passed: true, moves: [{ proposal_id: "b-twice-eq-two-mul", module: "Toolkit.Tricks.Arith.Doubling" }] });
   });
 
-  it("a failing gate restores nothing: the files stay as written, with the originals on record, for the orchestrator", async () => {
+  it("a failing gate undoes the batch: every file as it was, the ledger's declarations removed, the journal dropped", async () => {
     const runLog: string[] = [];
     const { root, cfg, main, d, args } = await moveFixture(runLog, "lake build Papers.Fix");
-    const before = { main: await readFile(main, "utf8"), ledger: await readFile(cfg.ledgerPath, "utf8") };
-    const r = await applyMoveItem(args, d);
-    expect(r).toMatchObject({ ok: false, kept: true });
-    expect(r.log).toMatch(/gate step 'lake build paper' failed; the files are left as written/);
-    expect(await readFile(main, "utf8")).toContain("public import Toolkit.Tricks.Arith.Doubling");
-    expect(existsSync(path.join(root, "Toolkit", "Tricks", "Arith", "Doubling.lean"))).toBe(true);
-    // the journal holds what each file was, should the move be undone by hand
-    const journal = JSON.parse(await readFile(args.journalFile, "utf8")) as { entries: Array<{ path: string; orig: string | null }> };
-    expect(journal.entries.find((e) => e.path === main)!.orig).toBe(before.main);
-    expect(journal.entries.find((e) => e.path === cfg.ledgerPath)!.orig).toBe(before.ledger);
-    expect(journal.entries.find((e) => e.path.endsWith("Doubling.lean"))!.orig).toBeNull();
-
-    // the orchestrator repairs the Lean; the gate alone, on the files as they stand, settles the move
-    const ok: typeof d = { ...d, run: async (cmd, cwd) => d.run(cmd.replace("lake build Papers.Fix", "lake  build Papers.Fix"), cwd) };
-    const v = await verifyKeptMove(args, ok);
-    expect(v.ok).toBe(true);
+    const r = await gateMoveBatch(batchOf(args), d);
+    expect(r).toMatchObject({ ok: false, restored: true });
+    expect(r.log).toMatch(/gate step 'lake build paper' failed/);
+    expect(await readFile(main, "utf8")).toBe(PAPER_MAIN);
+    expect(existsSync(path.join(root, "Toolkit", "Tricks", "Arith", "Doubling.lean"))).toBe(false);
+    expect((await loadLedger(cfg.ledgerPath)).declarations).toEqual([]);
     expect(existsSync(args.journalFile)).toBe(false);
-    // … and while it still fails, nothing is touched
-    const { d: d2, args: args2 } = await moveFixture([], "lake build Papers.Fix");
-    await applyMoveItem(args2, d2);
-    expect((await verifyKeptMove(args2, d2)).ok).toBe(false);
-    expect(existsSync(args2.journalFile)).toBe(true);
-  });
-
-  it("a second attempt at the same move writes over the first and keeps the first originals", async () => {
-    const { main, d, args } = await moveFixture([], "lake build Papers.Fix");
-    const before = await readFile(main, "utf8");
-    await applyMoveItem(args, d);
-    const again = await applyMoveItem(args, d);
-    expect(again).toMatchObject({ ok: false, kept: true });
-    const journal = JSON.parse(await readFile(args.journalFile, "utf8")) as { entries: Array<{ path: string; orig: string | null }> };
-    expect(journal.entries.find((e) => e.path === main)!.orig).toBe(before);
   });
 
   it("changed headline axioms fail the gate", () => {
@@ -273,11 +257,128 @@ describe("applyMoveItem", () => {
     const { main, d, args } = await moveFixture(runLog, null);
     const bad = new Map(args.plan.writes);
     bad.set(args.plan.targetAbs, `${bad.get(args.plan.targetAbs)!}\ntheorem h : False := sorry\n`);
-    const before = await readFile(main, "utf8");
-    const r = await applyMoveItem({ ...args, plan: { ...args.plan, writes: bad } }, d);
+    const r = await gateMoveBatch(batchOf(args, { ...args.plan, writes: bad }), d);
     expect(r.ok).toBe(false);
     expect(r.log).toMatch(/contains `sorry`/);
     expect(runLog).toEqual([]);
-    expect(await readFile(main, "utf8")).toBe(before);
+    expect(await readFile(main, "utf8")).toBe(PAPER_MAIN);
+  });
+});
+
+// ─── another paper that imports the moving one ─────────────────────────────
+
+const OTHER_USE = `module
+
+public import Papers.Fix.Main
+
+namespace Papers.Other
+
+open Papers.Fix
+
+theorem four_eq : Papers.Fix.twice_eq_two_mul 2 = Papers.Fix.twice_eq_two_mul 2 := rfl
+
+theorem also : twice 3 = 2 * 3 := twice_eq_two_mul 3
+
+end Papers.Other
+`;
+
+describe("a move of declarations another paper uses (papers may import each other)", () => {
+  it("rewrites that paper's references as in its own, and its gate builds the module it rewrote", async () => {
+    const runLog: string[] = [];
+    const { root, cfg, main, d, args } = await moveFixture(runLog, null);
+    const use = path.join(root, "Papers", "Other", "Use.lean");
+    await mkdir(path.dirname(use), { recursive: true });
+    await writeFile(use, OTHER_USE);
+    const plan = planMove(input(root, { paperFiles: new Map([[main, PAPER_MAIN], [use, OTHER_USE]]) }));
+    const text = plan.writes.get(use)!;
+    expect(text).toContain("public import Toolkit.Tricks.Arith.Doubling");
+    expect(text).toContain("theorem four_eq : Toolkit.Tricks.Arith.twice_eq_two_mul' 2 = Toolkit.Tricks.Arith.twice_eq_two_mul' 2 := rfl");
+    expect(text).toContain("theorem also : Toolkit.Tricks.Arith.twice 3 = 2 * 3 := Toolkit.Tricks.Arith.twice_eq_two_mul' 3");
+    expect(otherPaperModules(cfg, plan.writes.keys(), "Papers.Fix")).toEqual(["Papers.Other.Use"]);
+    const r = await gateMoveBatch(batchOf(args, plan), d);
+    expect(r.ok).toBe(true);
+    // (built once before the move: it builds, so the gate builds it again)
+    expect(runLog[0]).toBe("lake build Papers.Other.Use");
+    expect(runLog[2]).toBe("lake build Papers.Fix Papers.Other.Use");
+    expect(await readFile(use, "utf8")).toBe(text);
+  });
+
+  it("failingModules, killedModules and gatedOthers read Lake's log", () => {
+    expect(gatedOthers(["Papers.A.X", "Papers.B.Y"], new Set(["Papers.B.Y"]))).toEqual(["Papers.A.X"]);
+    expect(failingModules("✖ [12/40] Building Papers.Other.Use\nerror: ./Papers/Other/Two.lean:3:1: unknown\nerror: ././././Papers/Other/Three.lean:1:1: x\n")).toEqual(["Papers.Other.Three", "Papers.Other.Two", "Papers.Other.Use"]);
+    // (2026-11-11) a job whose Lean was killed (137: the OOM killer), not one with an error of its own, nor a crash (139)
+    expect(killedModules("✖ [1/9] Building Papers.A.Big (237s)\ntrace: .> LEAN_PATH=…\nerror: Lean exited with code 137\n⚠ [2/9] Built Papers.A.Ok\n✖ [3/9] Building Papers.B.Bad\nerror: Papers/B/Bad.lean:3:1: unknown\nerror: Lean exited with code 1\n✖ [4/9] Building Papers.C.Deep\nerror: Lean exited with code 139\n")).toEqual(["Papers.A.Big"]);
+  });
+
+  it("brokenBefore: one build per paper; a failure counts every module asked of that paper (a third paper's breakage included)", async () => {
+    const cmds: string[] = [];
+    const d = { run: async (cmd: string) => { cmds.push(cmd); return cmd.includes("Papers.Y.") ? { code: 1, log: "✖ [3/9] Building Papers.X.Base" } : { code: 0, log: "ok" }; } };
+    expect(await brokenBefore({ toolkitRoot: "/tk" }, d, ["Papers.Y.A", "Papers.Z.C", "Papers.Y.B"])).toEqual(new Set(["Papers.Y.A", "Papers.Y.B"]));
+    expect(cmds).toEqual(["lake build Papers.Y.A Papers.Y.B", "lake build Papers.Z.C"]);
+    expect(await brokenBefore({ toolkitRoot: "/tk" }, d, [])).toEqual(new Set());
+  });
+
+  it("a batch reads what other papers' modules build just before writing, and its gate does not wait on the broken ones", async () => {
+    const runLog: string[] = [];
+    const { root, main, d, args } = await moveFixture(runLog, null);
+    const use = path.join(root, "Papers", "Other", "Use.lean");
+    await mkdir(path.dirname(use), { recursive: true });
+    await writeFile(use, OTHER_USE);
+    const plan = planMove(input(root, { paperFiles: new Map([[main, PAPER_MAIN], [use, OTHER_USE]]) }));
+    const broken: typeof d = { ...d, run: async (cmd, cwd) => (cmd === "lake build Papers.Other.Use" && !existsSync(path.join(root, "Toolkit", "Tricks", "Arith", "Doubling.lean")) ? (runLog.push(cmd), { code: 1, log: "error" }) : d.run(cmd, cwd)) };
+    const res = await gateMoveBatch({
+      cfg: args.cfg, toolsDir: "/tools", journalFile: path.join(root, "runs", "fix", "proposals", "move_batch_journal.json"), probeFile: args.probeFile,
+      indexStep: args.indexStep, headlineBaseline: args.headlineBaseline, invariance: [],
+      moves: [{ slug: "fix", proposalId: args.proposalId, paperModule: "Papers.Fix", decls: args.decls, ledgerEntries: args.ledgerEntries, plan: async () => ({ plan, target: args.target }) }],
+    }, broken);
+    expect(res.ok).toBe(true);
+    expect(runLog[0]).toBe("lake build Papers.Other.Use");
+    expect(runLog).toContain("lake build Papers.Fix");
+    expect(runLog.filter((c) => c.includes("Papers.Other.Use"))).toHaveLength(1);
+    expect(res.log).toContain("rewritten, not gated: Papers.Other.Use");
+  });
+
+  it("a paper file changed since the plan read it (a live run's edit) is never written over: nothing of the move is written", async () => {
+    const runLog: string[] = [];
+    const { root, main, d, args } = await moveFixture(runLog, null);
+    const use = path.join(root, "Papers", "Other", "Use.lean");
+    await mkdir(path.dirname(use), { recursive: true });
+    await writeFile(use, OTHER_USE);
+    const plan = planMove(input(root, { paperFiles: new Map([[main, PAPER_MAIN], [use, OTHER_USE]]) }));
+    const edited = `${OTHER_USE}\ntheorem saved_meanwhile : True := trivial\n`;
+    await writeFile(use, edited);
+    const r = await gateMoveBatch(batchOf(args, plan), d);
+    expect(r.ok).toBe(false);
+    expect(r.log).toMatch(/Papers\/Other\/Use\.lean changed since the move was planned/);
+    expect(await readFile(use, "utf8")).toBe(edited);
+    expect(await readFile(main, "utf8")).toBe(PAPER_MAIN);
+    expect(existsSync(path.join(root, "Toolkit", "Tricks", "Arith", "Doubling.lean"))).toBe(false);
+    // (what the other paper's module builds was read; no gate ran)
+    expect(runLog).toEqual(["lake build Papers.Other.Use"]);
+  });
+
+  it("a batch plans each move again after building other papers' modules: an edit saved during that build is kept and rewritten", async () => {
+    const { root, main, d, args } = await moveFixture([], null);
+    const use = path.join(root, "Papers", "Other", "Use.lean");
+    await mkdir(path.dirname(use), { recursive: true });
+    await writeFile(use, OTHER_USE);
+    const edited = OTHER_USE.replace("end Papers.Other", "theorem saved_meanwhile : twice 1 = 2 := by decide\n\nend Papers.Other");
+    const editing: typeof d = { ...d, run: async (cmd, cwd) => { if (cmd === "lake build Papers.Other.Use" && (await readFile(use, "utf8")) === OTHER_USE) await writeFile(use, edited); return d.run(cmd, cwd); } };
+    const plan = async () => ({ plan: planMove(input(root, { paperFiles: new Map([[main, await readFile(main, "utf8")], [use, await readFile(use, "utf8")]]) })), target: args.target });
+    const res = await gateMoveBatch({
+      cfg: args.cfg, toolsDir: "/tools", journalFile: path.join(root, "runs", "fix", "proposals", "move_batch_journal.json"), probeFile: args.probeFile,
+      indexStep: args.indexStep, headlineBaseline: args.headlineBaseline, invariance: [],
+      moves: [{ slug: "fix", proposalId: args.proposalId, paperModule: "Papers.Fix", decls: args.decls, ledgerEntries: args.ledgerEntries, plan }],
+    }, editing);
+    expect(res.ok).toBe(true);
+    const now = await readFile(use, "utf8");
+    expect(now).toContain("theorem saved_meanwhile : Toolkit.Tricks.Arith.twice 1 = 2");
+    expect(now).toContain("Toolkit.Tricks.Arith.twice_eq_two_mul' 3");
+  });
+
+  it("otherPaperModules: only modules of other papers, never the moving paper's own files or the toolkit", () => {
+    const cfg = { toolkitRoot: "/tk", papersLib: "Papers" };
+    expect(otherPaperModules(cfg, ["/tk/Papers/Fix/Main.lean", "/tk/Papers/Fix.lean", "/tk/Toolkit/Tricks/A.lean", "/tk/Papers/Other/Sub/Use.lean", "/tk/Papers/Other/Sub/Use.lean", "/tk/Papers/Fixed/X.lean"], "Papers.Fix"))
+      .toEqual(["Papers.Fixed.X", "Papers.Other.Sub.Use"]);
   });
 });

@@ -6,6 +6,7 @@ import path from "node:path";
 import { describe, expect, it } from "vitest";
 import { startUiServer } from "../../src/ui/server.js";
 import type { ToolkitConfig } from "../../src/toolkit/config.js";
+import { TOOLKIT_JSON } from "../toolkit/helpers.js";
 
 const SCRIPTS = path.join(__dirname, "..", "..", "scripts");
 const run1 = (root: string, slug: string, phase: string) => {
@@ -85,17 +86,29 @@ process.exit(${code});
   // one run at work: a paper behind it in the queue is not taken (it would start a real run)
   const driver = (root: string, queue: string, codexDir: string, ...extra: string[]) =>
     exited(spawn(process.execPath, [path.join(SCRIPTS, "batch_orch.mjs"), "--toolkit", root, "--queue", queue, "--runs", "1", "--sandbox", "read-only", ...extra], {
-      env: { ...process.env, PAPERFORMALIZER_TEST_CODEX_MOCK: path.join(codexDir, "codex.cjs"), PAPERFORMALIZER_ORCH_TICK_MS: "200" },
+      env: { ...process.env, PAPERFORMALIZER_TEST_CODEX_MOCK: path.join(codexDir, "codex.cjs"), PAPERFORMALIZER_ORCH_TICK_MS: "200", PAPERFORMALIZER_LEAN_LOCAL_ROOT: path.join(root, "local") },
     }));
+  /** The run's workspaces on this machine (`<root>/local/ws/`: its own, its promotion's, a study's), and the toolkit's config. */
+  const workspaces = (root: string, slug: string) => {
+    writeFileSync(path.join(root, "paperformalizer.json"), JSON.stringify(TOOLKIT_JSON));
+    const names = [slug, `${slug}.promo`, `study_${slug}__b-x.promo`];
+    for (const n of names) mkdirSync(path.join(root, "local", "ws", n, "TC", "tk"), { recursive: true });
+    return () => names.filter((n) => existsSync(path.join(root, "local", "ws", n)));
+  };
 
   it("takes a run off the queue and gives its agent the guide and the event; words in a transcript are not the account's", async () => {
     const root = mkdtempSync(path.join(tmpdir(), "tc-batch-"));
-    run1(root, "d1", "done");
+    const run = run1(root, "d1", "done");
+    const left = workspaces(root, "d1");
     const queue = path.join(root, "queue.txt");
     writeFileSync(queue, "# papers\nd1\n");
     const codex = fakeCodex([{ type: "item.completed", item: { type: "agent_message", text: "the paper's usage limit and rate limit are fine" } }]);
     const r = await driver(root, queue, codex);
     expect(r.code).toBe(0);
+    // settled: its workspaces released (the marker, then those on this machine removed)
+    expect(JSON.parse(readFileSync(path.join(run, "logs", "workspace_released.json"), "utf8"))).toMatchObject({ phase: "done" });
+    expect(left()).toEqual([]);
+    expect(r.out).toContain("d1: [workspace] d1: released ws/d1, ws/d1.promo, ws/study_d1__b-x.promo");
     expect(readFileSync(queue, "utf8")).toBe("# papers\n");
     const prompt = readFileSync(path.join(codex, "prompt"), "utf8");
     expect(prompt).toContain("orchestrating agent of the PaperFormalizer run `d1`");
@@ -194,6 +207,7 @@ process.exit(${code});
   it("resumes the run's conversation at its next event, refuses a start request the page did not make, and hands the run on at the deadline", async () => {
     const root = mkdtempSync(path.join(tmpdir(), "tc-batch-"));
     const run = run1(root, "r1", "v1_5");
+    const left = workspaces(root, "r1");
     writeFileSync(path.join(run, "start_request.json"), JSON.stringify({ kind: "resume", argv: ["verify", "/elsewhere", "--toolkit", root, "--slug", "r1", "--resume", "--from-stage", "V1"], command: "x" }));
     writeFileSync(path.join(run, "orch_messages.json"), JSON.stringify([{ id: "m1", from: "user", text: "please look", at: "2026-10-15T00:00:00Z" }]));
     const queue = path.join(root, "queue.txt");
@@ -209,6 +223,40 @@ process.exit(${code});
     expect(c[1]).toContain(UUID);
     expect(readFileSync(path.join(codex, "prompt"), "utf8")).toContain("the owner writes to you on the page (m1)");
     expect(readFileSync(queue, "utf8")).toBe("r1\n");
+    // not settled: its workspaces stay
+    expect(existsSync(path.join(run, "logs", "workspace_released.json"))).toBe(false);
+    expect(left()).toEqual(["r1", "r1.promo", "study_r1__b-x.promo"]);
+  }, 60_000);
+
+  it("signalled, puts its unfinished runs back in the queue before waiting for its agents (a requeue's SIGKILL comes 30 s on)", async () => {
+    const root = mkdtempSync(path.join(tmpdir(), "tc-batch-"));
+    run1(root, "k1", "v1_5");
+    const queue = path.join(root, "queue.txt");
+    writeFileSync(queue, "k1\n");
+    // an agent still at work when the signal comes: it ignores SIGTERM, so the driver's wait for it runs its full 40 s
+    const codex = mkdtempSync(path.join(tmpdir(), "tc-batch-codex-"));
+    writeFileSync(path.join(codex, "codex.cjs"), `
+require("node:fs").writeFileSync(require("node:path").join(__dirname, "called"), "");
+process.on("SIGTERM", () => {});
+setTimeout(() => process.exit(0), 120_000);
+`);
+    const c = spawn(process.execPath, [path.join(SCRIPTS, "batch_orch.mjs"), "--toolkit", root, "--queue", queue, "--runs", "1", "--sandbox", "read-only"], {
+      env: { ...process.env, PAPERFORMALIZER_TEST_CODEX_MOCK: path.join(codex, "codex.cjs"), PAPERFORMALIZER_ORCH_TICK_MS: "200", PAPERFORMALIZER_LEAN_LOCAL_ROOT: path.join(root, "local") },
+    });
+    const job = exited(c);
+    try {
+      for (let k = 0; k < 150 && !existsSync(path.join(codex, "called")); k++) await new Promise((r) => setTimeout(r, 200));
+      expect(existsSync(path.join(codex, "called"))).toBe(true);
+      expect(readFileSync(queue, "utf8").trim()).toBe("");
+      c.kill("SIGTERM");
+      // well inside Slurm's KillWait, while the driver still waits for its agent
+      await new Promise((r) => setTimeout(r, 3_000));
+      expect(readFileSync(queue, "utf8")).toBe("k1\n");
+    } finally {
+      c.kill("SIGKILL");
+    }
+    const r = await job;
+    expect(r.out).toContain("signalled: k1 put back in the queue first");
   }, 60_000);
 
   it("stops at a spent account: the run goes back to the queue, the reason is kept, and no successor is asked for", async () => {

@@ -10,6 +10,7 @@
 import { maskLeanCommentsAndStrings } from "../shared/lean_mask.js";
 import { LEAN_DECL_HEADER_RE, LEAN_MODULE_LINE_RE, parseLeanImport } from "../shared/lean_syntax.js";
 import { declarationSpans, leanImports } from "./lean_source.js";
+import type { GraphScanDecl } from "../proposals/candidate_scan.js";
 
 /** The topic namespace of a dotted toolkit module (`<lib>.<Division>.<topic…>.<File>`): the module
  *  without its file segment; null for a module that is not under a topic. */
@@ -45,21 +46,25 @@ export function umbrellaImports(text: string): string[] {
   return leanImports(text).map((i) => i.module).filter((m) => UMBRELLA_IMPORTS.has(m));
 }
 
-/** The modules the declarations of `module` use (scan constants of their types and bodies), less
+/** The modules the declarations of `module` use in a compact graph scan: base references carry
+ *  their modules, while toolkit/paper `uses` resolve through the scan's declaration table. Excludes
  *  `Init`, the module itself, paper modules and toolkit staging. */
 export function usedModules(
-  decls: ReadonlyArray<{ module: string; type_constants: ReadonlyArray<{ module: string }>; body_constants: ReadonlyArray<{ module: string }> }>,
+  decls: ReadonlyArray<Pick<GraphScanDecl, "name" | "module" | "uses" | "base">>,
   module: string,
   opts: { papersLib: string; lib: string; stagingSegment?: string },
 ): string[] {
   const out = new Set<string>();
+  const owners = new Map(decls.map((d) => [d.name, d.module]));
   for (const d of decls) {
     if (d.module !== module) continue;
-    for (const c of [...d.type_constants, ...d.body_constants]) {
-      const parts = c.module.split(".");
-      if (!c.module || c.module === module || parts[0] === "Init" || parts[0] === opts.papersLib) continue;
+    const refs = [...(d.base ?? []).map((c) => c.module), ...d.uses.map((n) => owners.get(n))];
+    for (const owner of refs) {
+      if (!owner) continue;
+      const parts = owner.split(".");
+      if (owner === module || parts[0] === "Init" || parts[0] === opts.papersLib) continue;
       if (parts[0] === opts.lib && parts[1] === (opts.stagingSegment ?? "Staging")) continue;
-      out.add(c.module);
+      out.add(owner);
     }
   }
   return [...out].sort();

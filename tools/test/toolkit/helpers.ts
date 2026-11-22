@@ -1,5 +1,6 @@
 // Shared toolkit fixtures for tests (not a test file itself).
-import { mkdir, writeFile } from "node:fs/promises";
+import { chmod, mkdir, mkdtemp, rm, writeFile } from "node:fs/promises";
+import os from "node:os";
 import path from "node:path";
 import { toolkitConfigFromJson, type ToolkitConfig } from "../../src/toolkit/config.js";
 
@@ -56,3 +57,36 @@ export function leanModule(opts: { imports?: string[]; doc?: string; body: strin
     opts.body, "",
   ].join("\n");
 }
+
+/**
+ * Shared mode on for the toolkit at `root`, and the toolkit stamped clean — by a stand-in clean
+ * build, with a `lean` on PATH that answers `--version` (the signature names the toolchain): what
+ * a build or a scan of a paper needs to run under a shared hold. Returns the undo of what it
+ * changed in this process (PATH, the clean build).
+ */
+export async function cleanSharedToolkit(root: string): Promise<() => Promise<void>> {
+  const { LAKE_LOCK_CLEAN_BUILD, stampToolkitClean, withLakeBuildLock } = await import("../../src/shared/build_mutex.js");
+  const bin = await mkdtemp(path.join(os.tmpdir(), "fake-lean-"));
+  await writeFile(path.join(bin, "lean"), "#!/bin/sh\necho 'Lean (version 4.0.0, test)'\n");
+  await chmod(path.join(bin, "lean"), 0o755);
+  const PATH = process.env.PATH;
+  process.env.PATH = `${bin}:${PATH}`;
+  const run = LAKE_LOCK_CLEAN_BUILD.run;
+  LAKE_LOCK_CLEAN_BUILD.run = async () => ({ ok: true, log: "" });
+  const undo = async () => {
+    process.env.PATH = PATH;
+    LAKE_LOCK_CLEAN_BUILD.run = run;
+    await rm(bin, { recursive: true, force: true });
+  };
+  try {
+    await mkdir(path.join(root, ".lake", "paperformalizer"), { recursive: true });
+    await writeFile(path.join(root, ".lake", "paperformalizer", "lake-shared-mode"), "");
+    const r = await withLakeBuildLock(root, () => stampToolkitClean(root, () => {}), "test: stamp clean", () => {});
+    if (!r.clean) throw new Error(`the test toolkit was not stamped clean: ${r.why}`);
+  } catch (err) {
+    await undo();
+    throw err;
+  }
+  return undo;
+}
+

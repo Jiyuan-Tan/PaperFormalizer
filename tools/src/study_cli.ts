@@ -10,6 +10,7 @@ import { claudeRoles } from "./claude_roles.js";
 import { loadToolkitConfig } from "./toolkit/config.js";
 import { assertToolkitLakefile } from "./toolkit/lakefile.js";
 import { warmUpLeanOrThrow } from "./shared/lean_warmup.js";
+import { RUN_SLUG_ENV } from "./shared/lock_holds.js";
 import { clearSharedLeanLspUrl, setSharedLeanLspUrl, sharedLeanLspUrl } from "./shared/shared_lean_lsp_env.js";
 
 interface StudyArgs {
@@ -72,6 +73,7 @@ export async function runStudyCli(argv: string[]): Promise<void> {
   applyWorkerEnv();
   applyAuthEnv();
   const parsed = parseStudyArgs(argv);
+  process.env[RUN_SLUG_ENV] = `study_${parsed.slug}`;
   const toolkit = loadToolkitConfig({ explicit: parsed.toolkit });
   const repoRoot = toolkit.toolkitRoot;
   // The toolkit IS the Lean project; a differing machine-level override is refused.
@@ -82,6 +84,19 @@ export async function runStudyCli(argv: string[]): Promise<void> {
   // Which CLI runs the claude roles (the coordinator): decided and logged once, ahead of the first
   // model call. A study run keeps no record of it: each process decides from the setting or the machine.
   if (!parsed.dryRun) claudeRoles();
+  // The verify runner's heartbeat (`runs/study_<slug>/logs/.run.active`), 2026-11-10: a study on its
+  // own is seen running — a release of its paper's workspaces keeps its promotion's (`releaseBusy`).
+  const { withRunHeartbeat } = await import("./shared/run_heartbeat.js");
+  const { studyRunId } = await import("./substrate/paths.js");
+  await withRunHeartbeat(repoRoot, studyRunId(parsed.slug), async () => {
+    // (it knows shared holds: another run's start may turn them on beside it)
+    await (await import("./shared/workspace.js")).markKnowsShared(repoRoot, studyRunId(parsed.slug));
+    return runStudyLocked(parsed, toolkit);
+  });
+}
+
+async function runStudyLocked(parsed: StudyArgs, toolkit: ReturnType<typeof loadToolkitConfig>): Promise<void> {
+  const repoRoot = toolkit.toolkitRoot;
   const { runSubstratePipeline } = await import("./substrate/pipeline.js");
   const { studyExit } = await import("./substrate/state.js");
   const { startSharedLeanLsp } = await import("./shared/lean_lsp_server.js");

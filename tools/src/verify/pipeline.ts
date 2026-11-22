@@ -81,7 +81,9 @@ import { withTokenLedger } from "../token_usage.js";
 import type { Stage, StateJson } from "../types.js";
 import { FIXER_HISTORY_FILE } from "./fixer_history.js";
 import { prepareSource as realPrepareSource } from "./source_bundle.js";
-import { runStageV1, v1EntryMode } from "./stage_v1.js";
+import { inPlaceRevisionRefusal, reanchorBase, runStageV1, setAsideForColdTranscription, v1EntryMode } from "./stage_v1.js";
+import { completeSourceSwap, freezeVersion, prepareRevision, revisionLine, revisionOpen, startInPlaceFix, startRevision, type PreparedRevision } from "./revision.js";
+
 import { applyPendingRewind, presentPendingRewind, recordProofReviewRewind, rejectPendingRewind } from "./cross_stage_rewind.js";
 import { acceptCapLosses, acceptV1_5AtCap, runStageV1_5 } from "./stage_v1_5.js";
 import { capMessage, capScope, clearCap, countRound } from "./caps.js";
@@ -99,6 +101,7 @@ import { FragmentRouter, type RenderSite } from "./fragment_routing.js";
 import { isWithdrawn, readPatchFile, readTranscribedCore, rebuildPatchedCore } from "./patches.js";
 import type { CompileTex } from "./annotated_paper.js";
 import { dryRunRefusal } from "./dry_run.js";
+import { refreshRunWorkspace } from "../shared/workspace.js";
 import { failsRun } from "./findings.js";
 import {
   MAX_REFINEMENT_ROUNDS,
@@ -148,6 +151,9 @@ export interface VerifyPipelineArgs {
   toolkit: ToolkitConfig;
   /** The run id (the slug). */
   qid: string;
+  /** The slug was given (`--slug`), not derived from the input's name: a plain entry on an existing
+   *  run then reads a different paper as its revision. */
+  explicitSlug?: boolean;
   /** The `.tex` / dir / archive as typed on the command line (cold start only). */
   input: string;
   mainHint: string | null;
@@ -187,6 +193,10 @@ export interface VerifyPipelineArgs {
    *  design — `core.json` is the finished transcription again, everything derived from it is
    *  archived and cleared, and the next step is a fresh V1.5 (`from_transcript.ts`). */
   fromTranscript?: boolean;
+  /** `--revise`: `input` is an author's revision of the run's paper — the version that stands is
+   *  frozen under `versions/v<n>/`, the revised source takes its place, and the run re-enters V1
+   *  (`--from-stage V1`), which re-points the transcription at it (`revision.ts`, `reanchor.ts`). */
+  revise?: boolean;
   /** `--reject-rewind "<reason>"` (with `--resume`): reject the F-stage rewind the run halted to
    *  propose; the F stages continue. */
   rejectRewind?: string | null;
@@ -319,7 +329,20 @@ export async function runVerifyPipeline(given: VerifyPipelineArgs): Promise<Veri
   // Resolved here, once: the F runner takes the stage it is passed and reads no variable. An invalid
   // value is refused even under the flag — it would be the next invocation's stop.
   const env = envStopAfter();
-  const args: VerifyPipelineArgs = given.stopAfter || !env ? given : { ...given, stopAfter: env };
+  // A run's paper given again as a plain entry (no --resume, --from-stage or --revise) is read as its
+  // revision when it differs from the run's source (owner, 2026-11-21: reuse whenever possible); the
+  // same paper is refused as before.
+  // (only under a slug given: a slug taken from a file name may name another paper's run)
+  const asRevision = given.explicitSlug === true && !given.revise && !given.resume && !given.fromStage && !given.fromTranscript && !given.freshReview &&
+    haltAnswerFlags(given).length === 0 && existsSync(statePath(given.toolkit.toolkitRoot, given.qid));
+  if (asRevision) given = { ...given, revise: true };
+  if (given.revise) {
+    if (given.resume || given.fromStage || given.fromTranscript) throw new Error("--revise starts the paper's next version at V1: it does not combine with --resume, --from-stage or --from-transcript.");
+    if (haltAnswerFlags(given).length > 0) throw new Error("--revise does not answer a halt: answer it with --resume first.");
+  }
+  // `--revise` re-enters V1 on the revised source.
+  const entered: VerifyPipelineArgs = given.revise ? { ...given, fromStage: "V1" } : given;
+  const args: VerifyPipelineArgs = given.stopAfter || !env ? entered : { ...entered, stopAfter: env };
   const { toolkit, qid, dryRun } = args;
   const repoRoot = toolkit.toolkitRoot;
   const runDir = verifyRunDir(repoRoot, qid);
@@ -398,8 +421,37 @@ export async function runVerifyPipeline(given: VerifyPipelineArgs): Promise<Veri
    * runner would refuse (no accepted core, a core edited since, a dry-run state) — it refused it
    * after the phase was set and round B set aside, under a cursor still at V6, and the page read
    * the run as done. */
+  /** `--revise`: the revised source, prepared and checked before anything of the run changes. */
+  let revised: PreparedRevision | null = null;
   const checkEntry = async (): Promise<void> => {
     await readPatchFile(runDir);
+    if (args.revise) {
+      try {
+        revised = await prepareRevision({ runDir, state, input: args.input, mainHint: args.mainHint, prepareSource });
+      } catch (e) {
+        // (the run's own paper again: what a plain entry on an existing run always said)
+        if (asRevision && String((e as Error)?.message).includes("as it stands")) {
+          throw new Error(`A verify run already exists at ${runDir}, and ${args.input} is its paper as it stands. Continue it with --resume, re-enter a stage with --from-stage <${FROM_STAGE_USAGE}>, or remove the run directory to start over.`);
+        }
+        throw e;
+      }
+      // (… nor is an earlier version's paper given again: that is a revision only when asked for)
+      const earlier = asRevision ? state.verify?.versions?.find((v) => v.source_sha256 === revised?.sha256) : undefined;
+      if (earlier) {
+        await rm(path.join(runDir, ".revise_source"), { recursive: true, force: true });
+        throw new Error(`${args.input} is the paper of version ${earlier.version} of ${qid}, not a revision of it: continue the run with --resume, or give --revise to read it as the next version.`);
+      }
+      if (asRevision && revised && state.verify?.source.fixed_from?.includes(revised.sha256)) {
+        await rm(path.join(runDir, ".revise_source"), { recursive: true, force: true });
+        throw new Error(`${args.input} is the paper of ${qid} as it was before a fix in place of its source, not a revision of it: continue the run with --resume, or give --revise to read it as the next version.`);
+      }
+      if (asRevision) log(`${args.input} differs from the paper of ${qid}: read as its revision (as --revise)`);
+    }
+    // An open revision (not yet read by V1) is entered at V1 only: a later stage would grade a core V1
+    // never accepted.
+    if (!args.revise && args.fromStage && args.fromStage !== "V1" && revisionOpen(state.verify)) {
+      throw new Error(`--from-stage ${args.fromStage} is refused, nothing changed: ${state.verify!.revision!.in_place ? "the fix in place of the source" : `the revision of version ${state.verify!.revision!.from_version}`} has not been read by V1 yet — continue it with --resume (or --from-stage V1).`);
+    }
     if (args.fromStage === "V6" && !args.noPersist && (args.persist || state.persist === true) && !LEAN_COMPLETE_STAGES.has(state.stage_completed)) {
       throw new Error(
         `--from-stage V6 is refused, nothing changed: this run is on --persist (the owner wants its theorems established, however long that takes) and its Lean is unfinished (last stage completed: ${formatStageLabel(state.stage_completed)}). ` +
@@ -430,6 +482,13 @@ export async function runVerifyPipeline(given: VerifyPipelineArgs): Promise<Veri
       await assertFStageEntryCoherence({ repoRoot, toolkit, qid, dryRun, resume: true, auto: args.auto }, state, fEntry);
     }
   };
+  /** A revision cut short between recording itself and taking the revised source: finish it first. */
+  const finishSourceSwap = async (): Promise<void> => {
+    if (await completeSourceSwap(runDir, state.verify)) {
+      await saveState(repoRoot, qid, state);
+      log("--revise: the revised source took the run's source in place (the swap a previous entry left unfinished)");
+    }
+  };
   const stateExists = existsSync(stateFile);
   if (args.resume) {
     if (!stateExists) {
@@ -438,6 +497,7 @@ export async function runVerifyPipeline(given: VerifyPipelineArgs): Promise<Veri
       );
     }
     state = await loadVerifyState(repoRoot, qid);
+    await finishSourceSwap();
     const refusal = dryRunRefusal(state, dryRun, { fromStage: args.fromStage });
     if (refusal) throw new Error(refusal);
     log(`resuming ${qid} in phase ${verifyBlock(state, stateFile).phase}`);
@@ -452,11 +512,13 @@ export async function runVerifyPipeline(given: VerifyPipelineArgs): Promise<Veri
       );
     }
     state = await loadVerifyState(repoRoot, qid);
+    await finishSourceSwap();
     const refusal = dryRunRefusal(state, dryRun, { fromStage: args.fromStage });
     if (refusal) throw new Error(refusal);
     await checkEntry();
     log(`re-entering ${qid} at ${args.fromStage}`);
   } else {
+    if (args.revise) throw new Error(`--revise: no run of ${qid} to revise at ${runDir}. Start it without --revise.`);
     for (const sub of ["discovery", "formalization", "logs"]) {
       await mkdir(path.join(runDir, sub), { recursive: true });
     }
@@ -554,9 +616,10 @@ export async function runVerifyPipeline(given: VerifyPipelineArgs): Promise<Veri
       const r = await removePapersBarrelImport(toolkit, leanModulePrefix(state.lean_subdir));
       if (r.changed) log(`removed ${leanModulePrefix(state.lean_subdir)} from ${r.path} until its F5 completes again`);
     }
-    await voidPromotion("the paper's core is being revised", "B", { keepDecided: args.fromStage !== "V1" });
+    // (a revision keeps its node ids: the owner's decided items stand, only the new ones are proposed)
+    await voidPromotion("the paper's core is being revised", "B", { keepDecided: args.fromStage !== "V1" || args.revise === true });
     // a new transcription (`--from-stage V1`) may cite other results: only then is it held again
-    await voidPromotion("the paper's core is being revised", "A", { keepDecided: args.fromStage !== "V1" });
+    await voidPromotion("the paper's core is being revised", "A", { keepDecided: args.fromStage !== "V1" || args.revise === true });
   };
 
   /**
@@ -824,6 +887,15 @@ export async function runVerifyPipeline(given: VerifyPipelineArgs): Promise<Veri
   const MAX_PLAN_REPLANS = 2;
   if (args.fromStage) {
     const verify = verifyBlock(state, stateFile);
+    // `--revise`: the version that stands is frozen FIRST — before the re-entry below voids its
+    // receipts or its promotion rounds — so the frozen copy is the version as delivered.
+    // A source EDITED IN PLACE, re-entered at V1, is a fix: its transcription is re-pointed at it, with
+    // no new version (owner, 2026-11-21), when that transcription is on file and reads.
+    const standing = args.fromStage === "V1" && !args.revise && !dryRun ? await v1EntryMode(runDir, verify.source.sha256, dryRun, reanchorBase(runDir, verify)) : null;
+    const inPlaceRefusal = standing?.editedInPlace ? await inPlaceRevisionRefusal(runDir, verify) : null;
+    const inPlace = standing?.editedInPlace === true && inPlaceRefusal === null;
+    if (standing?.editedInPlace && !inPlace) log(`--from-stage V1: the source was edited in place; its transcription cannot be re-pointed (${inPlaceRefusal}): read afresh`);
+    const frozenVersion = args.revise && revised ? await freezeVersion({ runDir, state }) : null;
     // A V1/V1.5 re-entry is the operator ACTING on the revise cap (they read the review and
     // fixed the core or the source), so it clears the round counter; every other entry leaves
     // it, and V1.5's cap (`MAX_REVISE_ROUNDS_PER_NODE`) then still holds on a plain `--resume`.
@@ -864,18 +936,14 @@ export async function runVerifyPipeline(given: VerifyPipelineArgs): Promise<Veri
       // so it is set aside (kept as patches.json.prev), never re-applied to a new one.
       // A re-entry while the source is unchanged REVISES: the transcription, its ledger, the patch
       // file and the carried verdicts all stand (`v1EntryMode`).
-      const entry = args.fromStage === "V1" ? await v1EntryMode(runDir, verify.source.sha256, dryRun) : null;
-      if (entry) log(`--from-stage V1: ${entry.mode === "revise" ? "revise" : "cold re-extraction"} — ${entry.why}`);
+      // (a revision — `--revise`, or a source edited in place — is re-pointed by V1, never read cold here:
+      // the source this reads is the version's own until the revision takes its place)
+      const entry = args.fromStage === "V1" && !args.revise && !inPlace ? await v1EntryMode(runDir, verify.source.sha256, dryRun, reanchorBase(runDir, verify)) : null;
+      if (entry) log(`--from-stage V1: ${entry.mode === "revise" ? "revise" : entry.mode === "reanchor" ? "re-point the transcription at the revised source" : "cold re-extraction"} — ${entry.why}`);
       if (entry?.mode === "cold") {
-        verify.paper_errors = {};
-        verify.confirmed = {};
-        verify.confirmed_symbols = {};
-        const patchesFile = path.join(runDir, VERIFY_FILES.patches);
-        if (existsSync(patchesFile)) await rename(patchesFile, `${patchesFile}.prev`);
         // … and so do the rulings awaiting the owner's review and the issues they reported
         // (`orch.mjs`, the page): they name nodes and comments of the old transcription.
-        for (const f of ["orch_decisions.json", "owner_objections.json"].map((n) => path.join(runDir, n))) if (existsSync(f)) await rename(f, `${f}.prev`);
-        await rm(path.join(runDir, FIXER_HISTORY_FILE), { force: true });
+        await setAsideForColdTranscription(runDir, verify);
       } else {
         // A ledger error no entry of the patch file addresses — its repair was sent back to the
         // fixer and the run stopped (a cap) before the fixer answered — is dropped: the re-review
@@ -891,7 +959,7 @@ export async function runVerifyPipeline(given: VerifyPipelineArgs): Promise<Veri
       // the old transcription. Its V1.5 errors are in the ledger; its F-stage findings, like every
       // earlier finding, are superseded by the re-entry.
       const directiveFile = path.join(runDir, VERIFY_FILES.v1ReviseDirective);
-      if (entry && existsSync(directiveFile) && JSON.parse(await readFile(directiveFile, "utf8"))?.mode === "patch") {
+      if (args.fromStage === "V1" && existsSync(directiveFile) && JSON.parse(await readFile(directiveFile, "utf8"))?.mode === "patch") {
         await rm(directiveFile, { force: true });
         log("--from-stage V1: the pending patch directive is set aside; the transcription is revised first.");
       }
@@ -906,6 +974,9 @@ export async function runVerifyPipeline(given: VerifyPipelineArgs): Promise<Veri
     }
     // A re-entry at any stage is a ruling past a blocked F1: its record would only misname a later halt.
     state.flags.f1_blocked = null;
+    // An explicit `--from-stage F1` is a ruling on the plan: F1 plans, whatever moved — kept until a
+    // planner pass completes; any other re-entry drops an earlier one whose F1 never completed.
+    state.flags.f1_replan_asked = args.fromStage === "F1" ? true : null;
     // A live re-extraction replaces everything a dry run wrote (`dryRunRefusal` admits exactly
     // this entry), so the state stops being a dry-run state.
     if (args.fromStage === "V1" && !dryRun && verify.dry_run) {
@@ -916,6 +987,12 @@ export async function runVerifyPipeline(given: VerifyPipelineArgs): Promise<Veri
     else if (args.fromStage === "V1.5") verify.phase = "v1";
     else if (args.fromStage === "V6") {
       verify.phase = "v6";
+      // Closing the run at V6 is a ruling on a rewind still awaiting one (as `--accept-cap` is):
+      // its finding is reported, not repaired — left pending, the page asks the owner forever.
+      if (verify.cross_stage_rewind?.status === "pending") {
+        verify.cross_stage_rewind = { ...verify.cross_stage_rewind, status: "refused", why: "the run was closed with --from-stage V6: the finding is reported, not repaired" };
+        log("--from-stage V6: the pending F-stage rewind is closed (refused); its finding is reported, not repaired.");
+      }
       // The report is being written again: the run is not complete past F5 until it is (V6 closes
       // the cursor again). A V6 that threw left the cursor at V6, and the page read the run as done.
       if (state.stage_completed === "V6") state.stage_completed = "5";
@@ -930,6 +1007,15 @@ export async function runVerifyPipeline(given: VerifyPipelineArgs): Promise<Veri
       verify.phase = "formalization";
       fStartOverride = internal;
     }
+    // `--revise`: the version that stands is frozen and the revised source takes its place, saved
+    // with the V1 re-entry above — a kill after it resumes at V1, which re-points the transcription.
+    if (args.revise && revised) {
+      const summary = await startRevision({ runDir, state, prepared: revised, frozen: frozenVersion, save });
+      log(revisionLine(summary));
+    } else if (inPlace) {
+      // a fix in place, not a revision: re-pointed with no new version (owner, 2026-11-21)
+      if (await startInPlaceFix({ runDir, state, save })) log("--from-stage V1: the source was edited in place: its transcription is re-pointed at it, as a fix (no new version)");
+    }
     await save();
   }
 
@@ -942,6 +1028,8 @@ export async function runVerifyPipeline(given: VerifyPipelineArgs): Promise<Veri
   });
   const runStage = async (label: string, stage: VerifyStage): Promise<VerifyStageResult> => {
     log(`${label}: start`);
+    // a stage's start is a safe point of a run with a workspace: re-pinned to the current toolkit
+    await refreshRunWorkspace(log);
     const confirming = state.verify?.weakening_repair?.status === "pending" && state.verify.weakening_repair.unconfirmed === true;
     const result = await stage({
       repoRoot,

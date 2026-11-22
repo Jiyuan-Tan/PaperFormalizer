@@ -374,6 +374,15 @@ export function materializeRepair(ops: readonly PatchOp[], scope: RepairScope, w
   return { corrected_statement: statement, proof: amended, problems: [] };
 }
 
+/** The typo ops of a node (`patches.ts` `typo_fixes`) that apply beside its repair's `repair` ops: those
+ * that resolve on the node's proof and replace no printed text the repair replaces (there the repair's
+ * text stands). Pure. */
+export function typoOpsKept(typo: readonly PatchOp[], repair: readonly PatchOp[], scope: RepairScope): PatchOp[] {
+  const own = resolveOps(typo, scope, "").changes;
+  const taken = repair.length > 0 ? resolveOps(repair, scope, "").changes.filter((c) => c.part === "proof") : [];
+  return typo.filter((_, k) => ((c) => !!c && c.part === "proof" && !taken.some((x) => c.start < x.end && x.start < c.end))(own.find((c) => c.k === k)));
+}
+
 /** A unit as the fixer's prompt lists it: `[id] (kind) text` (a step of an algorithm with its command). */
 function unitLine(units: PaperUnits, u: Unit): string {
   return `[${u.id}]${u.kind === "sentence" ? "" : ` (${u.kind})`} ${units.textOf(u).replace(/\s+/gu, " ").trim()}`;

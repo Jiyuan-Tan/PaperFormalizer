@@ -342,15 +342,26 @@ export async function writeRunBarrel(
  * NB `sorry` is a WARNING: lake still exits 0 on a tree with sorries. That is fine here only
  * because the done-gate runs the textual `anyRealSorry` scan BEFORE this. The two are
  * complementary, not redundant — do not drop either.
+ *
+ * The verdict of a build is the verdict of its sources: when every input is provably unchanged
+ * since a green build of these modules (`shared/build_inputs.ts`), it is green without building
+ * again (and without queuing for the lock) — a resume's gate on the tree it left.
  */
 export async function buildRunModules(repoRoot: string, leanDir: string): Promise<{ ok: boolean; errors: string }> {
   const { spawnWithInactivityTimeout } = await import("../workers/spawn.js");
   const { withLakeBuildLock } = await import("../shared/build_mutex.js");
+  const { greenBuildCurrent, paperBuildSignature, recordGreenBuild } = await import("../shared/build_inputs.js");
   const targets = await leanModuleTargets(repoRoot, leanDir);
   // No targets = we cannot verify anything. Do NOT fail open (that silently restores the hole the
   // gate exists to close); block and say so.
   if (targets.length === 0) {
     return { ok: false, errors: `compile gate: no Lean modules found under ${leanDir} — nothing could be verified` };
+  }
+  // Taken before the build: a source written meanwhile changes it, and the record no longer matches.
+  const sig = await paperBuildSignature(repoRoot, leanDir);
+  if (await greenBuildCurrent(repoRoot, leanDir, targets, sig)) {
+    console.warn(`[compile gate] ${path.relative(repoRoot, leanDir)}: every input unchanged since its last green build — not built again`);
+    return { ok: true, errors: "" };
   }
   return withLakeBuildLock(repoRoot, async () => {
     const r = await spawnWithInactivityTimeout("lake", ["build", ...targets], {
@@ -359,14 +370,19 @@ export async function buildRunModules(repoRoot: string, leanDir: string): Promis
       inactivityTimeoutMs: 30 * 60_000,
       maxTotalMs: 60 * 60_000,
     });
-    if (r.exitCode === 0) return { ok: true, errors: "" };
+    if (r.exitCode === 0) {
+      await recordGreenBuild(repoRoot, leanDir, targets, sig);
+      return { ok: true, errors: "" };
+    }
     const errs = `${r.stdout}\n${r.stderr}`
       .split("\n")
       .filter((l) => /error/i.test(l))
       .slice(0, 25)
       .join("\n");
     return { ok: false, errors: errs.trim() || `lake build exited ${r.exitCode}` };
-  });
+  }, `compile gate: lake build ${targets.length} module(s) of ${path.relative(repoRoot, leanDir)}`, undefined, undefined,
+  // only this paper's modules: a shared hold, beside other papers' builds
+  { papers: [path.relative(repoRoot, leanDir).split(path.sep).join(".")] });
 }
 
 async function anyRealSorry(leanDir: string): Promise<boolean> {

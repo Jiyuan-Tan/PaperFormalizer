@@ -14,7 +14,7 @@ import { crosswalkFullJsonPath, leanTheoremDir, PAPER_TMP_DIR, paperBarrelPath }
 import { writeJsonAtomic } from "../shared/json_atomic.js";
 import type { ToolkitConfig } from "../toolkit/config.js";
 import { leanImports } from "../toolkit/lean_source.js";
-import { loadLedger, saveLedger } from "../toolkit/ledger.js";
+import { updateLedger } from "../toolkit/ledger.js";
 import type { LeanExec } from "../verify/lean_evidence.js";
 import { obtainScan, type CandidateScan, type ScanDecl } from "./candidate_scan.js";
 
@@ -131,16 +131,16 @@ export async function measureReuse(args: {
     const crosswalk = existsSync(cw) ? (JSON.parse(await readFile(cw, "utf8")) as CrosswalkLike[]) : [];
     const report: ReuseReport = { slug: qid, measured_at: measuredAt, ...computeReuse(scan, crosswalk, await paperToolkitImports(cfg, args.leanSubdir)) };
     await writeJsonAtomic(out, report);
-    const ledger = await loadLedger(cfg.ledgerPath);
     const used = new Set(report.toolkit_decls_used);
-    let changed = 0;
-    for (const d of ledger.declarations) {
-      if (used.has(d.name) && !d.used_by.includes(qid)) {
-        d.used_by = [...d.used_by, qid];
-        changed += 1;
-      }
-    }
-    if (changed > 0) await saveLedger(cfg.ledgerPath, ledger);
+    const changed = await updateLedger(cfg.ledgerPath, (ledger) => {
+      let n = 0;
+      const declarations = ledger.declarations.map((d) => {
+        if (!used.has(d.name) || d.used_by.includes(qid)) return d;
+        n += 1;
+        return { ...d, used_by: [...d.used_by, qid] };
+      });
+      return { ledger: n > 0 ? { ...ledger, declarations } : null, result: n };
+    });
     log(`toolkit reuse: ${reuseSummaryLine(report)} → ${out}${changed ? `; ledger used_by updated for ${changed} declaration(s)` : ""}`);
     return report;
   } catch (err) {

@@ -35,6 +35,45 @@ describe("statement invariance of a promotion", () => {
     expect(parseFingerprints("not json")).toBeNull();
   });
 
+  it("a companion under a match matcher (its splitter, its equations) is never compared, like the matcher", () => {
+    const parse = (declarations: Array<{ name: string; module: string; stmt_hash: string }>) => parseFingerprints(JSON.stringify({ declarations }))!;
+    const f = { name: "Papers.Foo.f", module: "Papers.Foo.A", stmt_hash: "1" };
+    const before = parse([f, { name: "Papers.Foo.f.match_1.splitter", module: "Papers.Foo.A", stmt_hash: "2" }]);
+    // the splitter changed, or is gone: f states what it stated
+    expect(statementInvarianceFailure(before, parse([f, { name: "Papers.Foo.f.match_1.splitter", module: "Papers.Foo.A", stmt_hash: "9" }]))).toBeNull();
+    expect(statementInvarianceFailure(before, parse([f]))).toBeNull();
+    expect(statementInvarianceFailure(parse([f]), parse([f, { name: "Papers.Foo.f.match_2.eq_1", module: "Papers.Foo.A", stmt_hash: "3" }]))).toBeNull();
+    // f itself changed: caught
+    expect(statementInvarianceFailure(before, parse([{ ...f, stmt_hash: "5" }]))).toContain("Papers.Foo.f");
+    // the live shape: the same splitter name in two modules (grouped rows), changed in one
+    const two = (h: string) => parse([f, { name: "Papers.Foo.f.match_1.splitter", module: "Papers.Foo.A", stmt_hash: "2" }, { name: "Papers.Foo.f.match_1.splitter", module: "Papers.Foo.B", stmt_hash: h }]);
+    expect(statementInvarianceFailure(two("3"), two("8"))).toBeNull();
+    // a hand-named declaration under a matcher-like segment is compared
+    const h = { name: "Papers.Foo.f.match_1.foo", module: "Papers.Foo.A", stmt_hash: "1" };
+    expect(statementInvarianceFailure(parse([h]), parse([{ ...h, stmt_hash: "2" }]))).toContain("match_1.foo");
+    // a user name that merely contains "match" is compared
+    const g = { name: "Papers.Foo.matching_1.g", module: "Papers.Foo.A", stmt_hash: "1" };
+    expect(statementInvarianceFailure(parse([g]), parse([{ ...g, stmt_hash: "2" }]))).toContain("matching_1.g");
+  });
+
+  it("compares same-name local declarations in every module independently of scan order", () => {
+    const rows = [
+      { name: "Local.parser", module: "Papers.Foo.A", stmt_hash: "11" },
+      { name: "Local.parser", module: "Papers.Foo.B", stmt_hash: "22" },
+    ];
+    const parse = (declarations: typeof rows) => parseFingerprints(JSON.stringify({ declarations }))!;
+    const before = parse(rows);
+    expect(statementInvarianceFailure(before, parse([...rows].reverse()))).toBeNull();
+    // The last row is unchanged: a name-only map used to lose the changed first row.
+    expect(statementInvarianceFailure(before, parse([{ ...rows[0], stmt_hash: "99" }, rows[1]])))
+      .toContain("Local.parser");
+    expect(statementInvarianceFailure(before, parse([rows[1]]))).toContain("Local.parser");
+    expect(statementInvarianceFailure(before, parse([
+      { ...rows[0], stmt_hash: rows[1].stmt_hash },
+      { ...rows[1], stmt_hash: rows[0].stmt_hash },
+    ]))).toContain("Local.parser");
+  });
+
   it("scans the toolkit and the one paper, under the move's names", () => {
     const cmd = fingerprintScanCmd({ lib: "Toolkit", papersLib: "Papers" }, "Papers.Foo", "/run/out.json", moved);
     expect(cmd).toBe("lake exe candidate_scan -- --graph --fingerprints --toolkit-prefix Toolkit --papers-prefix Papers --modules 'Toolkit,Papers.Foo' --rename Papers.Foo.bound_le=Toolkit.Foundations.Analysis.Bounds.sum_le --out /run/out.json");

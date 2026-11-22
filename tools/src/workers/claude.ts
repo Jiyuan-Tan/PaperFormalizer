@@ -53,6 +53,29 @@ export interface ClaudeRunInput {
    * `mcpConfigPath` still wins (the caller fully controls the MCP set).
    */
   leanLsp?: boolean;
+  /**
+   * Confine the call's file writes to this directory (absolute, or resolved against `cwd`): the
+   * writing tools stay advertised (`--tools`), but `--allowedTools` grants them only under it
+   * (`Edit(//<dir>/**)`, which covers Write / Edit / MultiEdit / NotebookEdit) — a write anywhere
+   * else is refused, as a headless call cannot ask. The claude CLI only: a role run on codex has no
+   * such rule (`runClaudeRoleOnCodex` ignores it; a caller that relies on it checks the runner).
+   */
+  writeScope?: string;
+}
+
+/** The file-writing tools a `writeScope` confines (an `Edit(…)` rule governs every one of them). */
+const CLAUDE_FILE_WRITE_TOOLS = new Set(["Write", "Edit", "MultiEdit", "NotebookEdit"]);
+
+/**
+ * The `--allowedTools` grant for a call advertising `tools`: the same list, or — with a
+ * `writeScope` — the file-writing tools replaced by one `Edit(//<abs dir>/**)` rule (an absolute
+ * path rule: `//` + the path), so writes are permitted only under that directory.
+ */
+export function claudeAllowedTools(tools: readonly string[], writeScope: string | undefined, cwd: string): string[] {
+  if (writeScope === undefined) return [...tools];
+  const dir = path.resolve(cwd, writeScope).split(path.sep).join("/").replace(/\/+$/, "");
+  const writes = tools.some((t) => CLAUDE_FILE_WRITE_TOOLS.has(t));
+  return [...tools.filter((t) => !CLAUDE_FILE_WRITE_TOOLS.has(t)), ...(writes ? [`Edit(/${dir}/**)`] : [])];
 }
 
 /**
@@ -355,7 +378,7 @@ async function runClaudeCli(input: ClaudeRunInput): Promise<string> {
     // of read-only reviewers while making their declared Read/Grep/Glob and
     // lean-lsp queries usable.
     "--allowedTools",
-    allowedTools.join(","),
+    claudeAllowedTools(allowedTools, input.writeScope, input.cwd).join(","),
     "--append-system-prompt",
     buildClaudePreamble(allowedTools),
   ];

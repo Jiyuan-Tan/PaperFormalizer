@@ -70,7 +70,7 @@ if (SNAP) {
   SNAP.strict = (html) => { strictOn = true; try { return purify.sanitize(String(html ?? ""), { ADD_ATTR: ["target"], FORBID_TAGS: ["form", "style"] }); } finally { strictOn = false; } };
 }
 /** What only a result's drawer shows (`DRAWER_KEYS` of run_model.ts): the snapshot holds it on the result. */
-const SNAP_DRAWER = ["review", "paperError", "axioms", "conditions", "rows", "leanView", "linksStale", "linksUnanswered", "leanMissing", "segments", "uncovered", "citedSource"];
+const SNAP_DRAWER = ["review", "paperError", "axioms", "conditions", "rows", "leanView", "linksStale", "linksUnanswered", "leanMissing", "segments", "uncovered", "citedSource", "leanProof"];
 /** A paper drawn by an earlier version names its blocks as it did then: each tag in today's words. Pure. */
 const RETAG = { "Corrected": "Revised", "Corrected step": "Revised step", "Corrected proof (confirmed)": "Revised proof (confirmed)", "Corrected (for the proposed statement)": "Revised (for the proposed statement)", "Proposed repair — awaiting a ruling": "Proposed revision — awaiting a ruling", "Repair not settled — awaiting a ruling": "Revision not settled — awaiting a ruling", "Stated apart by the repair": "Stated apart by the revision", "Added by the repair": "Added by the revision" };
 const retag = (html) => String(html ?? "").replace(/(<span class="rv-tag">)([^<]*)(<\/span>)/g, (m, a, t, b) => (RETAG[t] ? `${a}${RETAG[t]}${b}` : m));
@@ -137,6 +137,7 @@ async function api(url) {
 }
 async function post(url, body) {
   if (SNAP) throw new Error("This page of a shared paper is read-only.");
+  if (frozen()) throw new Error("An earlier version is read only: open the current version to act on the paper.");
   const r = await fetch(url, { method: "POST", headers: { "Content-Type": "application/json", "X-TC": "1" }, body: JSON.stringify(body), credentials: "same-origin" });
   const data = await r.json().catch(() => ({}));
   if (!r.ok) throw Object.assign(new Error(data.error || `${r.status} ${r.statusText}`), { status: r.status });
@@ -207,31 +208,41 @@ function texText(t) {
 }
 
 /* ── router + live updates ────────────────────────────────────────────── */
-const S = { view: "", slug: null, toolkit: null };
+const S = { view: "", slug: null, toolkit: null, with: null };
+/** An earlier version of a paper (`<slug>@v<n>`, frozen when the authors' revision was run): its page is read only. */
+const versionOf = (slug) => { const m = /^(.+)@v(\d+)$/.exec(String(slug ?? "")); return m ? { base: m[1], n: Number(m[2]) } : null; };
+const frozen = () => S.view === "paper" && versionOf(S.slug) !== null;
 function parseRoute() {
   if (SNAP) return { view: "paper", slug: SNAP.slug };
   const h =location.hash.replace(/^#/, "") || "/";
   const m = /^\/paper\/([^/?#]+)/.exec(h);
   if (m) return { view: "paper", slug: decodeURIComponent(m[1]) };
+  const c = /^\/compare\/([^/?#]+)\/(\d+)/.exec(h);
+  if (c) return { view: "compare", slug: decodeURIComponent(c[1]), with: Number(c[2]) };
   if (h.startsWith("/library")) return { view: "library", slug: null };
   return { view: "toolkit", slug: null };
 }
 async function route() {
   const r = parseRoute();
-  const switching = r.view !== S.view || r.slug !== S.slug;
-  S.view = r.view; S.slug = r.slug;
+  const switching = r.view !== S.view || r.slug !== S.slug || (r.with ?? null) !== S.with;
+  S.view = r.view; S.slug = r.slug; S.with = r.with ?? null;
   $$(".nav a").forEach((a) => a.removeAttribute("aria-current"));
-  const cur = $(`.nav a[data-nav="${r.view}"]`); if (cur) cur.setAttribute("aria-current", "page");
+  const cur = $(`.nav a[data-nav="${r.view === "compare" ? "paper" : r.view}"]`); if (cur) cur.setAttribute("aria-current", "page");
   if (switching) { closeDrawer(); keepBody(); window.scrollTo(0, 0); app.innerHTML = `<p class="loading">Loading…</p>`; P.built = null; }
   try {
     if (r.view === "toolkit") await showToolkit(switching);
     else if (r.view === "library") await showLibrary(switching);
+    else if (r.view === "compare") await showCompare(r.slug, r.with);
     else await showPaper(r.slug, switching);
   } catch (err) { app.innerHTML = `<div class="page"><p class="empty-note">Could not load this view: ${esc(err.message)}</p></div>`; }
 }
 window.addEventListener("hashchange", route);
 
 let pending = new Set(), flushT = null;
+/** The agent's rulings the owner reviewed in this tab, as `slug|id` (an id is a run's own: every run has a d1):
+ *  off the page at the click, before the run is read again. */
+const REVIEWED = new Set();
+const reviewKey = (slug, id) => `${slug}|${id}`;
 function onChange(scope) {
   pending.add(scope);
   clearTimeout(flushT);
@@ -239,10 +250,14 @@ function onChange(scope) {
     const scopes = pending; pending = new Set();
     try {
       if (scopes.has("demo")) await refreshTour();
-      if ([...scopes].some((s) => s === "toolkit" || s.startsWith("run:"))) await refreshInbox();
-      if (S.view === "toolkit" && [...scopes].some((s) => s === "toolkit" || s.startsWith("run:"))) await showToolkit(false);
-      if (S.view === "library" && scopes.has("library")) await showLibrary(false);
-      if (S.view === "paper" && scopes.has(`run:${S.slug}`)) await showPaper(S.slug, false);
+      // the inbox (the toolkit's whole list of runs, seconds to read again on a loaded mount) and the view shown
+      // are read side by side: a paper's page waited for the inbox before it was asked for its own run
+      const tk = [...scopes].some((s) => s === "toolkit" || s.startsWith("run:"));
+      await Promise.all([
+        tk ? refreshInbox().then(() => (S.view === "toolkit" ? showToolkit(false) : null)) : null,
+        S.view === "library" && scopes.has("library") ? showLibrary(false) : null,
+        S.view === "paper" && scopes.has(`run:${S.slug}`) ? showPaper(S.slug, false) : null,
+      ]);
       C.failed = false; drawConn();
     } catch (err) {
       console.warn(err);
@@ -445,7 +460,11 @@ function drawRuns() {
       <td><div class="stages" title="${esc(r.stage)}">${dots}</div></td><td class="st">${pill}<small title="${esc(r.headline)}">${tex(r.headline)}</small></td><td class="mono" style="white-space:nowrap;color:var(--ink-faint)">${ago(r.updatedAt)}${r.tokens ? `<small title="${esc(tokenLine(r.tokens))}">${esc(tokens(r.tokens.input))} in · ${esc(tokens(r.tokens.output))} out</small>` : ""}</td><td class="sh">${shareCellHTML(r)}</td></tr>`;
   }).join("") : `<tr><td colspan="5" class="none" style="text-align:center;padding:1.2rem">No paper matches.</td></tr>`;
   const from = rows.length ? T.page * T.size + 1 : 0;
-  $("#runs-pager").innerHTML = `<span class="info">${from}–${T.page * T.size + shown.length} of ${rows.length}</span><button type="button" data-pg="${T.page - 1}" ${T.page === 0 ? "disabled" : ""} aria-label="Previous page">‹</button>${Array.from({ length: pages }, (_, i) => `<button type="button" data-pg="${i}" ${i === T.page ? 'aria-current="page"' : ""}>${i + 1}</button>`).join("")}<button type="button" data-pg="${T.page + 1}" ${T.page >= pages - 1 ? "disabled" : ""} aria-label="Next page">›</button>`;
+  // many pages: the first, the last and two on each side of the current one, with … for the gaps
+  const near = pages <= 9 ? Array.from({ length: pages }, (_, i) => i)
+    : [...new Set([0, pages - 1, ...Array.from({ length: 5 }, (_, k) => Math.min(Math.max(T.page, 3), pages - 4) + k - 2)])].sort((a, b) => a - b);
+  const nums = near.map((i, k) => `${k && i - near[k - 1] > 1 ? '<span class="gap">…</span>' : ""}<button type="button" data-pg="${i}" ${i === T.page ? 'aria-current="page"' : ""}>${i + 1}</button>`).join("");
+  $("#runs-pager").innerHTML = `<span class="info">${from}–${T.page * T.size + shown.length} of ${rows.length}</span><button type="button" data-pg="${T.page - 1}" ${T.page === 0 ? "disabled" : ""} aria-label="Previous page">‹</button>${nums}<button type="button" data-pg="${T.page + 1}" ${T.page >= pages - 1 ? "disabled" : ""} aria-label="Next page">›</button>`;
 }
 
 /* ═════════════ LIBRARY VIEW ═════════════ */
@@ -838,7 +857,7 @@ async function showPaper(slug, first) {
         <div class="side-h">Proof map</div><svg class="pm-svg" id="pm-svg" role="group" aria-label="Dependency map"><defs><marker id="pm-a" viewBox="0 0 8 8" refX="7" refY="4" markerWidth="5" markerHeight="5" orient="auto-start-reverse"><path class="pm-arr" d="M0,0.6 L7.4,4 L0,7.4 Z"></path></marker></defs><g id="pm-marks"></g></svg>
         <div class="pm-legend"><span class="pm-key"><i class="pm-sw err"></i>needs revision</span><span class="pm-key"><i class="pm-sw minor"></i>clarification</span><span class="pm-key"><i class="pm-sw top"></i>key result</span><span class="pm-key"><i class="pm-dotk"></i>needs you</span><span class="pm-key"><i class="pm-dotk lean"></i>Lean proved</span></div>
         <p class="pm-note">An arrow reads “used by”: main results sit on top. Click a result for its links; double-click to jump to it.</p><div class="pm-card" id="pm-card" hidden></div></aside>
-      <article class="paper" id="article"><div class="byline" id="byline"></div><h1 class="ptitle" id="ptitle"></h1><div class="authors" id="pauthors"></div><div id="status"></div>
+      <article class="paper" id="article"><div class="byline" id="byline"></div><h1 class="ptitle" id="ptitle"></h1><div class="authors" id="pauthors"></div><div id="versions"></div><div id="status"></div>
         <div class="rtool" role="toolbar" aria-label="Review"><span class="lbl">Markup</span><span class="seg" id="markup" role="group"><button type="button" data-m="all" aria-pressed="true" title="Red: the printed text. Blue: the revision.">All markup</button><button type="button" data-m="simple" aria-pressed="false" title="The revised text; a bar in the margin marks each change.">Revised</button><button type="button" data-m="original" aria-pressed="false">Original</button><button type="button" data-m="report" aria-pressed="false" hidden title="The run's report: what was wrong, what was done about it, and what was proved in Lean.">Report</button></span><span class="chips" id="chips"></span><span class="nav-changes"><button type="button" id="prev-c" aria-label="Previous">↑</button><span id="c-pos">—</span><button type="button" id="next-c" aria-label="Next">↓</button></span></div>
         <div class="render-check" id="render-check"></div><div id="paper-body"><p class="loading">Loading…</p></div><div id="report-body"></div><div id="promo"></div></article>
       <aside class="pv-rail" aria-label="PaperFormalizer comments"><div class="rail-head">PaperFormalizer <span id="rail-count"></span></div><p class="rail-off">Comments are hidden in this view.</p><div class="rail-cards" id="rail-cards"></div></aside></div>`;
@@ -893,7 +912,7 @@ async function showPaper(slug, first) {
 function resultById(id) { return P.detail?.results.find((r) => r.id === id) ?? null; }
 function resultByLabel(label) { return P.detail.results.find((r) => r.label === label) ?? null; }
 /** The run is at rest: nothing is at work on it, so the owner's change (a reading reworded) can resume it. */
-const atRest = (s) => !s.live && s.status !== "running" && s.status !== "superseded";
+const atRest = (s) => !frozen() && !s.live && s.status !== "running" && s.status !== "superseded";
 /* The element a result stands at on the page: its environment; the block of a corollary a repair
    split off; else — a result stated in prose — the anchor at its first line. */
 function resEl(id) {
@@ -956,6 +975,94 @@ function drawHeader() {
   }
   $("#ptitle").innerHTML = P.paper?.title ? P.paper.title : esc(s.title);
   $("#pauthors").innerHTML = P.paper?.authors || esc(s.authors);
+  drawVersions();
+}
+/** The day an ISO time falls on, as the page writes dates. */
+const dayOf = (iso) => (/^\d{4}-\d{2}-\d{2}/.test(iso ?? "") ? new Date(`${iso.slice(0, 10)}T12:00:00Z`).toLocaleDateString(undefined, { year: "numeric", month: "short", day: "numeric" }) : "");
+/** A version as the picker names it. */
+const versionName = (v) => v.current ? `${v.n} (current)` : `${v.n} — frozen ${dayOf(v.frozenAt) || "earlier"}${v.report ? "" : ", no report"}`;
+/* The paper's versions, when the authors' revisions were run under its slug: a picker in the page's
+   header, each version opening its own page (an earlier one read only). */
+function drawVersions() {
+  const host = $("#versions"); if (!host) return;
+  const vs = P.detail?.versions;
+  if (!vs || SNAP) { host.innerHTML = ""; return; }
+  const key = JSON.stringify(vs);
+  if (host.dataset.key === key) return;
+  host.dataset.key = key;
+  // one line: the version shown, and (on the current one) the comparison with the version before it;
+  // the compare view picks among the earlier ones
+  const previous = vs.list.find((v) => !v.current);
+  host.innerHTML = `<div class="vpick"><label>Version <select id="version-pick" aria-label="Version of the paper">${vs.list.map((v) => `<option value="${esc(v.current ? vs.base : `${vs.base}@v${v.n}`)}"${v.n === vs.viewing ? " selected" : ""}>${esc(versionName(v))}</option>`).join("")}</select></label>${vs.viewing === vs.current && previous ? `<a href="#/compare/${encodeURIComponent(vs.base)}/${previous.n}">Compare with an earlier version</a>` : ""}</div>`;
+  $("#version-pick").addEventListener("change", (e) => { location.hash = `#/paper/${encodeURIComponent(e.target.value)}`; });
+}
+/* An earlier version of a paper beside its current one (`#/compare/<slug>/<n>`): one row per result of
+   either, its statement in each (typeset by the server, as the page's statements are) and what each
+   version's check concluded of it; and how the run read the authors' revision, when it did. */
+const CMP = { only: false };
+const ROW_CLASS = { added: "cmp-added", removed: "cmp-removed", unchanged: "cmp-unchanged", changed: "cmp-changed" };
+async function showCompare(slug, n) {
+  const { data: c } = await api(`/api/runs/${encodeURIComponent(slug)}/compare?with=${n}`);
+  if (S.view !== "compare" || S.slug !== slug || S.with !== n) return;
+  drawCompare(slug, c);
+}
+/** The compare view of `c` (the server's answer): drawn again from it when the reader filters the rows. */
+function drawCompare(slug, c) {
+  const navP = $("#nav-paper"); navP.hidden = false; navP.textContent = `Paper · ${slug}`; navP.href = `#/paper/${encodeURIComponent(slug)}`;
+  const B = c.before, N = c.now;
+  // each column's statements as typeset under its own version's macros
+  const stmt = (t, side) => `<div class="cmp-stmt">${c.texHtml?.[side]?.[t] ?? esc(t)}</div>`;
+  const grades = { error_free: "error-free", minor: "minor revisions", major: "major revisions" };
+  const overall = (v) => (v.report ? `${esc(bucketWord(v.verdict ?? "report written"))}${v.grade ? ` · paper: ${esc(grades[v.grade] ?? v.grade)}` : ""}` : v === B ? "no report yet (frozen before the run finished)" : "no report yet (the run has not finished)");
+  const outcome = (v, side) => {
+    if (!v.report) return `<p class="cmp-none">${v === B ? "No report yet (frozen before the run finished)." : "No report yet (the run has not finished)."}</p>`;
+    if (!side.outcome) return `<p class="cmp-none">Not in this version's report.</p>`;
+    return `<p class="cmp-out">${bucketPill(side.outcome.bucket)}${side.outcome.grade ? ` <span class="cmp-grade">counted among the ${side.outcome.grade} revisions of the paper</span>` : ""}</p>`;
+  };
+  const moved = (r) => r.change !== "unchanged" || r.proofChanged || (B.report && N.report && (r.before?.outcome?.bucket ?? null) !== (r.now?.outcome?.bucket ?? null));
+  const word = { added: `new in version ${N.n}`, removed: `only in version ${B.n}`, unchanged: "statement unchanged", changed: "statement changed" };
+  const nameOf = (r) => r.heading ?? proseHeading(r);
+  const byId = new Map(c.rows.map((r) => [r.id, r]));
+  const names = (ids) => ids.map((id) => esc(byId.has(id) ? nameOf(byId.get(id)) : id)).join(", ");
+  const cell = (v, side, r) => {
+    const which = v === B ? "before" : "now";
+    if (!side) return `<td class="cmp-gone">${r.change === "added" ? `Not in version ${B.n}.` : `Not in version ${N.n}.`}</td>`;
+    // an unchanged statement is shown once, folded, in each column
+    const body = r.change === "unchanged" ? `<details><summary>the statement</summary>${stmt(side.statement, which)}</details>` : stmt(side.statement, which);
+    return `<td>${body}${outcome(v, side)}</td>`;
+  };
+  const rows = c.rows.filter((r) => !CMP.only || moved(r));
+  const rv = c.revision;
+  const revision = !rv ? "" : `<section class="cmp-rev"><h3>How the run read the authors' revision of version ${esc(rv.from)}</h3>${!rv.transcribed ? `<p>The revision has not been read yet.</p>` : rv.cold ? `<p>The revision was read afresh${rv.coldReason ? `: ${esc(rv.coldReason)}` : ""}.</p>` : `<ul>
+    <li>${esc(rv.same)} results, hypotheses and definitions the revision left as they were (their checks carried over)</li>
+    ${rv.changed.length ? `<li>changed by the revision, checked again: ${names(rv.changed)}</li>` : ""}
+    ${rv.relocated.length ? `<li>moved or rewritten, so that they had to be found again: ${names(rv.relocated)}</li>` : ""}</ul>`}
+    ${rv.kept.length + rv.adopted.length + rv.setAside.length ? `<p>Corrections made to version ${esc(rv.from)}: ${esc(rv.kept.length)} kept, ${esc(rv.adopted.length)} adopted by the authors${rv.adopted.length ? ` (${names(rv.adopted)})` : ""}, ${esc(rv.setAside.length)} set aside because the authors changed the result otherwise${rv.setAside.length ? ` (${names(rv.setAside)})` : ""}.</p>` : `<p>No correction of version ${esc(rv.from)} was carried over or set aside.</p>`}</section>`;
+  const count = (k) => c.rows.filter((r) => r.change === k).length;
+  app.innerHTML = `<div class="page cmp"><p class="kicker"><a href="#/paper/${encodeURIComponent(slug)}">${esc(slug)}</a></p>
+    <h1 class="cmp-title">${c.title || esc(slug)}</h1>
+    <p class="cmp-sub"><label>Compare version <select id="cmp-with" aria-label="Earlier version to compare">${(c.earlier?.length ? c.earlier : [B]).map((v) => `<option value="${esc(v.n)}"${v.n === B.n ? " selected" : ""}>${esc(versionName({ ...v, current: false }))}</option>`).join("")}</select></label> with version ${esc(N.n)} (current). Results are matched across the versions as the run carried them over.</p>
+    <div class="cmp-heads"><div><b>Version ${esc(B.n)}</b>: ${overall(B)} <a href="#/paper/${encodeURIComponent(`${slug}@v${B.n}`)}">open it</a></div><div><b>Version ${esc(N.n)} (current)</b>: ${overall(N)} <a href="#/paper/${encodeURIComponent(slug)}">open it</a></div></div>
+    ${revision}
+    ${c.unread ? `<p class="empty-note">The revision has not been read yet: the comparison is shown once V1 has read it.</p>` : `<p class="cmp-count">${esc(c.rows.length)} results: ${esc(count("unchanged"))} with the statement unchanged, ${esc(count("changed"))} changed, ${esc(count("added"))} new, ${esc(count("removed"))} no longer in the paper${c.rows.some((r) => r.proofChanged) ? `; the proof changed for ${esc(c.rows.filter((r) => r.proofChanged).length)}` : ""}. <label><input type="checkbox" id="cmp-only"${CMP.only ? " checked" : ""}> only results whose statement, proof or outcome changed</label></p>
+    <table class="cmp-table"><thead><tr><th>Result</th><th>Version ${esc(B.n)}</th><th>Version ${esc(N.n)} (current)</th></tr></thead><tbody>
+    ${rows.map((r) => `<tr class="${ROW_CLASS[r.change === "unchanged" && r.proofChanged ? "changed" : r.change] ?? ""}"><th scope="row"><span class="cmp-name">${esc(nameOf(r))}</span>${r.headingBefore && r.now && r.headingBefore !== nameOf(r) ? `<span class="cmp-kind">${esc(r.headingBefore)} in version ${esc(B.n)}</span>` : ""}<span class="cmp-kind">${esc(r.kind)}</span><span class="cmp-change">${esc(word[r.change])}${r.proofChanged ? `; proof changed` : ""}</span></th>${cell(B, r.before, r)}${cell(N, r.now, r)}</tr>`).join("") || `<tr><td colspan="3" class="cmp-none">Nothing changed between the two versions.</td></tr>`}
+    </tbody></table>`}</div>`;
+  $("#cmp-only")?.addEventListener("change", (e) => { CMP.only = e.target.checked; drawCompare(slug, c); });
+  $("#cmp-with")?.addEventListener("change", (e) => { location.hash = `#/compare/${encodeURIComponent(slug)}/${e.target.value}`; });
+}
+/* The status of an earlier version: what it is, what its report concluded (when it has one), the way
+   back to the current version, and the comparison with it. Nothing on its page acts on the run. */
+function drawVersionStatus() {
+  const s = P.detail.summary, v = versionOf(S.slug), vs = P.detail.versions;
+  const me = vs?.list.find((x) => x.n === v.n), on = dayOf(me?.frozenAt);
+  const b = s.buckets ? Object.entries(s.buckets).map(([k, n]) => `${n} ${bucketWord(k)}`).join(" · ") : "";
+  const report = s.verdict != null;
+  $("#pv")?.classList.remove("redoing", "checking");
+  $("#status").innerHTML = `<div class="status version-frozen"><div class="line"><span class="pill b-superseded">read only</span><h2>Version ${esc(v.n)} of this paper${on ? `, frozen ${esc(on)}` : ""} — read only.</h2></div>
+    <p>${report ? `What the check of this version concluded: ${esc(s.headline)}${b ? ` (${esc(b)})` : ""}.` : "No report yet (frozen before the run finished): this version shows what the check had read and found when the authors' revision replaced it."}</p>
+    <p>The authors revised the paper after this version; the run went on with the revision. Nothing on this page can be changed.</p>
+    <div class="actions"><a class="btn btn-primary" href="#/paper/${encodeURIComponent(v.base)}" style="border:none">Open the current version</a><a class="btn" href="#/compare/${encodeURIComponent(v.base)}/${v.n}">Compare with the current version</a>${report ? `<button class="btn" type="button" data-open-report>Read this version's report</button>` : ""}</div></div>`;
 }
 function drawStages() {
   $("#vstages").innerHTML = P.detail.stages.map((st) => `<li class="${st.state}"><span class="ic"></span><code>${esc(st.id.replace(/^(\d)/, "F$1"))}</code><span>${esc(st.label.replace(/^F[\d.]+ /, ""))}</span></li>`).join("");
@@ -1083,6 +1190,7 @@ async function openReport() {
 }
 function drawStatus() {
   if (SNAP) { drawSnapStatus(); return; }
+  if (frozen()) { drawVersionStatus(); return; }
   const host = $("#status");
   // a live run redraws this every few seconds: an open rejection keeps what the owner typed, and the caret
   const drafts = new Map($$(".review", host).filter((b) => !b.querySelector(".ask").hidden).map((b) => [b.dataset.rid, b.querySelector("textarea").value]));
@@ -1117,7 +1225,7 @@ function drawStatus() {
   const who = (s.orch ? `<span class="orch on">● ${esc(s.orch.agent)} attached — it acts at each halt</span>` : `<span class="orch">○ No agent attached <button class="linkbtn" type="button" id="orch-how">start one</button></span>`) +
     (s.fullAuto ? `<span class="orch on" title="Started with --full-auto: the revisions that would weaken a main result and the promotion rounds take the agent's recommendations; each appears under “Review the agent's decisions”. You may still decide an item first.">full auto — your decisions take the agent's recommendations, for your review after</span>` : "");
   // rulings the agent made at halts, for the owner's review: approve, or reject with guidance (the agent acts on it)
-  const reviews = (s.reviews ?? []).map((r) => `<div class="review" data-rid="${esc(r.id)}"><div><b>The agent decided</b> on ${esc(envOf(r.node)?.heading ?? r.node)} <span class="meta">${esc(ago(Date.parse(r.at)))}</span></div><div class="review-b">${tex(r.text, P.paper?.macros)}</div><div class="actions"><button class="btn btn-primary" type="button" data-review="approve">Approve</button><button class="btn" type="button" data-review="reject">Reject</button></div><div class="ask" hidden><label class="mono" style="font-size:var(--fs-2xs);color:var(--ink-faint)">What should the agent do instead?</label><textarea></textarea><div class="row" style="justify-content:flex-end"><button class="btn btn-ghost" type="button" data-review="cancel">Cancel</button><button class="btn btn-primary" type="button" data-review="send">Send to the agent</button></div></div></div>`).join("");
+  const reviews = (s.reviews ?? []).filter((r) => !REVIEWED.has(reviewKey(S.slug, r.id))).map((r) => `<div class="review" data-rid="${esc(r.id)}"><div><b>The agent decided</b> on ${esc(envOf(r.node)?.heading ?? r.node)} <span class="meta">${esc(ago(Date.parse(r.at)))}</span></div><div class="review-b">${tex(r.text, P.paper?.macros)}</div><div class="actions"><button class="btn btn-primary" type="button" data-review="approve">Approve</button><button class="btn" type="button" data-review="reject">Reject</button></div><div class="ask" hidden><label class="mono" style="font-size:var(--fs-2xs);color:var(--ink-faint)">What should the agent do instead?</label><textarea></textarea><div class="row" style="justify-content:flex-end"><button class="btn btn-ghost" type="button" data-review="cancel">Cancel</button><button class="btn btn-primary" type="button" data-review="send">Send to the agent</button></div></div></div>`).join("");
   host.insertAdjacentHTML("afterbegin", asks + (reviews ? `<section class="reviews"><h3>Review the agent's decisions</h3>${reviews}</section>` : ""));
   // beside Stop, and whenever there is a run: a word to the agent
   const box = host.querySelector(".status");
@@ -1342,9 +1450,11 @@ function drawProofOnlyNotes() {
     if (note) el.insertAdjacentHTML("beforeend", `<div class="rv-proofonly${note.unrepaired ? " unrepaired" : ""}">${note.text}</div>`);
   }
 }
+/** A report's bucket as the page's badge draws it. */
+const bucketPill = (b) => `<span class="pill ${({ verified: "b-verified", verified_with_bookkeeping: "b-vwb", conditional: "b-conditional", repaired: "b-repaired", refuted: "b-refuted" })[b] ?? "b-neutral"}">${esc(bucketWord(b))}</span>`;
 function badge(r) {
   if (r.needs) return `<span class="pill b-error">needs you</span>`;
-  if (r.bucket) return `<span class="pill ${({ verified: "b-verified", verified_with_bookkeeping: "b-vwb", conditional: "b-conditional", repaired: "b-repaired", refuted: "b-refuted" })[r.bucket] ?? "b-neutral"}">${esc(bucketWord(r.bucket))}</span>`;
+  if (r.bucket) return bucketPill(r.bucket);
   if (r.state === "error") return r.paperError?.kind === "undetermined" ? `<span class="pill b-pending">not determined</span>` : `<span class="pill b-error">needs revision</span>`;
   if (r.state === "minor") return `<span class="pill b-pending">clarification</span>`;
   if (r.review?.correctness) return `<span class="pill b-vwb">${esc(r.review.correctness)}</span>`;
@@ -1440,14 +1550,14 @@ function cardHTML(c, r, o = { own: [], atRest: false, draft: null }) {
    for the checker, not a request to the author, and the card says so. */
 const noAction = (kind) => {
   const what = kind === "reading-symbol" ? "the notation" : "the passage";
-  return SNAP ? `<p class="cfine cnoact">Not an error: this records how the formalization reads ${what}.</p>`
+  return SNAP || frozen() ? `<p class="cfine cnoact">Not an error: this records how the formalization reads ${what}.</p>`
     : `<p class="cfine cnoact">No action needed: this records how the formalization reads ${what}. Report an issue only if it is not what you meant.</p>`;
 };
 const CHIP_HINT = { Clarifications: "How the formalization reads passages open to more than one reading: not errors; no action needed." };
 /* The foot of a comment that asks no decision: the owner may report an issue with it (optional — a
    note awaiting a ruling is decided instead). `issue`: the one reported on it; `flag`: the open text. */
 function issueHTML({ issue = null, flag = null }) {
-  if (SNAP) return ""; // (a shared paper's page reports nothing)
+  if (SNAP || frozen()) return ""; // (a shared paper's page reports nothing, nor an earlier version's)
   if (flag !== null) return `<div class="cflag"><textarea data-flag-text rows="3" aria-label="Describe the issue" placeholder="Describe the issue">${esc(flag)}</textarea>
     <div class="cacts"><button class="btn btn-primary" type="button" data-flag="send">Send</button><button class="btn" type="button" data-flag="cancel">Cancel</button></div></div>`;
   const open = `<button class="linkbtn" type="button" data-flag="open">Report an issue</button>`;
@@ -1458,7 +1568,7 @@ function issueHTML({ issue = null, flag = null }) {
 /* A reading entered for the paper's owner (often by the agent, on the owner's behalf): what it is,
    and — when the run's record holds it and the run is at rest — its Edit / Remove, or the open editor. */
 function ownerReadingHTML({ own, atRest, draft }) {
-  if (SNAP) return `<div class="cown"><p class="cfine">A binding reading entered for the paper's author: the formalization follows it.</p></div>`;
+  if (SNAP || frozen()) return `<div class="cown"><p class="cfine">A binding reading entered for the paper's author: the formalization follows it.</p></div>`;
   const several = own.length > 1 ? ` It is pinned on ${own.length} results; a change here applies to each.` : "";
   if (draft !== null && own.length) return `<div class="cown"><textarea data-reading-text rows="5" aria-label="The reading, as TeX">${esc(draft)}</textarea>
     <p class="cfine">Written as TeX: math in <code>$…$</code>, the paper's macros.${several}</p>
@@ -1589,11 +1699,19 @@ function wirePaper() {
       if (act === "cancel") { ask.hidden = true; return; }
       const guidance = ask.querySelector("textarea").value.trim();
       if (act === "send" && !guidance) { toast("Say what the agent should do instead.", true); return; }
+      // off the list at the click, not once the run is read again (a second or more on a loaded mount); back
+      // if the server refuses it
+      const id = box.dataset.rid, sec = box.closest(".reviews"), slug = S.slug, key = reviewKey(slug, id);
+      REVIEWED.add(key); box.hidden = true;
+      if (sec && !sec.querySelector(".review:not([hidden])")) sec.hidden = true;
       try {
-        await post(`/api/runs/${encodeURIComponent(S.slug)}/review`, { id: box.dataset.rid, verdict: act === "send" ? "reject" : "approve", guidance });
+        await post(`/api/runs/${encodeURIComponent(slug)}/review`, { id, verdict: act === "send" ? "reject" : "approve", guidance });
         toast(act === "send" ? (P.detail.summary.orch ? "Sent — the agent acts on it" : "Recorded — an agent acts on it once one is attached") : "Approved");
-        onChange(`run:${S.slug}`);
-      } catch (err) { toast(err.message, true); }
+        onChange(`run:${slug}`);
+      } catch (err) {
+        REVIEWED.delete(key); box.hidden = false; if (sec) sec.hidden = false;
+        toast(err.message, true);
+      }
     }
   });
   // the message being written: its words, and the files chosen or dropped on its box
@@ -1863,6 +1981,8 @@ for (const ev of ["wheel", "touchstart"]) window.addEventListener(ev, () => { re
 window.addEventListener("keydown", (e) => { if (/^(Page|Arrow|Home|End| )/.test(e.key)) revealRun++; });
 
 /* drawer */
+/** Why an earlier version's drawer shows no Lean: its bundle kept none, and the toolkit's is the current version's. */
+const LEAN_NOT_KEPT = "The Lean of this earlier version was not kept; open the current version for its Lean.";
 function openDrawer(id) {
   const r = resultById(id); if (!r) return;
   P.drawer = id; P.drawn.drawer = JSON.stringify(r);
@@ -1907,6 +2027,7 @@ function openDrawer(id) {
       lean += `<div class="xlscope">${nl}${stmt}${un.size ? `<p class="stmt-note">Phrases shown faint are stated by no Lean row.</p>` : ""}${!segs.length && !r.linksStale ? `<p class="stmt-note">F5 links these rows to the paper's words when it runs (nl_links.json).</p>` : ""}</div>`;
     }
     else if (r.leanMissing) lean += `<p class="stmt-note">The file no longer holds this declaration (it was renamed, moved or removed since the report): no statement to show.</p>`;
+    else if (P.detail.leanNotKept) lean += `<p class="stmt-note">${LEAN_NOT_KEPT}</p>`;
   } else if (r.umbrella) {
     // An umbrella has no declaration of its own: it holds exactly when its propositions do.
     const bs = (r.blocks ?? []).map(resultById).filter(Boolean);
@@ -1920,12 +2041,14 @@ function openDrawer(id) {
     // a citation with no Lean statement: its host's Lean does not assume it
     const host = resultById(r.citedIn), name = esc(envOf(r.citedIn)?.heading ?? r.citedIn);
     lean = `<p class="none">${citedDropped(r) ? `The paper's proof of ${name} invoked this result; the proof as corrected does not use it (see the correction on ${name}), so Lean has no statement of it.` : host?.lean ? `Lean has no statement of this cited result: the Lean proof of ${name} does not assume it.` : `No Lean statement yet — the Lean stages decide whether the proof of ${name} assumes it.`}</p>`;
-  } else lean = r.citedLean ? `<p class="none">The paper cites this result and does not prove it; Lean states it as a proposition the results that use it assume.</p>` : `<p class="none">Not formalized yet — the Lean stages run after the referee accepts the core.</p>`;
+  } else if (P.detail.leanNotKept) lean = `<p class="none">${LEAN_NOT_KEPT}</p>`;
+  else lean = r.citedLean ? `<p class="none">The paper cites this result and does not prove it; Lean states it as a proposition the results that use it assume.</p>` : `<p class="none">Not formalized yet — the Lean stages run after the referee accepts the core.</p>`;
   $("#d-body").innerHTML = `${r.cites ? `<h4>Cited from</h4><p><code>${esc(r.cites)}</code></p>${r.citedSource?.copy ? `<details class="ds-fold" open><summary>The source's statement, as copied for this run</summary><div class="cited-src">${typeset(r.citedSource.copy, m, esc)}${r.citedSource.cut ? "\n… (cut; the whole text is in the run's discovery/cited_sources/)" : ""}</div></details>` : r.citedSource?.unavailable ? `<p class="stmt-note">The source could not be obtained, so the citation is taken as printed and not checked: ${esc(r.citedSource.unavailable)}</p>` : r.citedSource === null ? `<p class="stmt-note">The run holds no copy of the source's statement.</p>` : ""}` : ""}${r.citedLean || (r.citedIn && !r.lean) ? "" : `<h4>Verdict</h4><div class="grades">${badge(r) || `<span class="pill b-neutral">not graded yet</span>`}</div>`}
     ${r.review ? `<h4>Referee (V1.5)</h4><div class="grades">${g("faithful", r.review.faithfulness)}${g("ambiguity", r.review.ambiguity)}${g("correctness", r.review.correctness)}</div>${r.review.detail ? `<div class="prose">${texEnum(r.review.detail, m)}</div>` : ""}${r.review.reading ? `<p><b>Pinned reading:</b> ${tex(r.review.reading, m)}</p>` : ""}` : ""}
     ${r.paperError ? `<h4>${r.paperError.kind === "clarification" ? "Clarification" : r.paperError.kind === "undetermined" ? "Not determined as printed" : "Error in the paper"}</h4><div class="prose">${texEnum(r.paperError.detail, m)}</div>${r.paperError.witness ? `<details class="cmore" open><summary>Counterexample</summary><div class="prose">${texEnum(r.paperError.witness, m)}</div></details>` : ""}` : ""}
     ${r.conditions?.length ? `<h4>Conditions added (${r.conditions.length})</h4><ul class="conds">${r.conditions.map((c) => `<li data-cond="${esc(c.id)}">${tex(c.condition, m)} <code>${esc(c.id)}</code></li>`).join("")}</ul>` : ""}
     <h4>${r.umbrella ? "Its propositions" : "Lean"}</h4>${lean}
+    ${r.leanProof ? leanProofHTML(r.leanProof, m) : ""}
     ${r.deps.length && !r.umbrella ? `<h4>Its proof uses</h4><p>${r.deps.map((d) => esc(envOf(d)?.heading ?? d)).join(", ")}</p>` : ""}`;
   // an umbrella's propositions: to the block in the paper, its drawer in place of this one
   $$("#d-body [data-umbgo]").forEach((b) => b.addEventListener("click", () => { jumpTo(b.dataset.umbgo); openDrawer(b.dataset.umbgo); }));
@@ -1936,6 +2059,113 @@ function openDrawer(id) {
     requestAnimationFrame(() => { at?.scrollIntoView({ block: "nearest" }); });
   }
 }
+/* The Lean Proof in English (F5, `lean_proof_english.json`): the result's proof as the Lean gives it
+   (the helpers only it uses proved inside), the shared lemmas it cites (each in a fold; an older file's
+   auxiliary definitions too), the review of the English against the
+   Lean, and how the printed proof compares — a printed step the Lean proof corrects in blue, as the
+   paper marks it. A phrase anchored on Lean lines ([phrase](lean:A-B), or lean:FILE:A-B for a helper
+   proved inside the account) opens those lines under its paragraph; a cited auxiliary lemma opens its
+   statement there. */
+const LPE = new Map();
+const LPE_CITE = new Map(); // auxiliary id → its statement, drawn
+const LPE_ANCHOR = /\[((?:\$\$[^$]+\$\$|\$[^$]+\$|\\\[(?:[^\\]|\\[^\]])*\\\]|\\\((?:[^\\]|\\[^)])*\\\)|\\[^[\]()]|[^[\]$\\]|\[[^[\]$\\]*\])*)\]\(lean:(?:([^\s():]+\.lean):)?(\d+)(?:-(\d+))?\)/g;
+const LPE_VERDICT = { follows: ["b-verified", "Follows the printed proof"], "other-route": ["b-neutral", "Argues some steps differently"], departs: ["b-repaired", "Corrects the printed proof"] };
+function leanProofHTML(lp, m) {
+  LPE.clear(); LPE_CITE.clear(); // one result's drawer at a time
+  const auxOf = new Map(lp.aux.map((a) => [a.id, a]));
+  const word = (k) => (/^(def|abbrev|structure|inductive|class)$/.test(k) ? "definition" : "lemma");
+  const nameOf = (id) => {
+    if (auxOf.has(id)) return `Auxiliary ${word(auxOf.get(id).kind)} ${id}`;
+    const h = envOf(id)?.heading;
+    if (h) return h;
+    const r = lp.refs?.[id];
+    return r ? `${r.kind.charAt(0).toUpperCase()}${r.kind.slice(1)} ${r.label ?? id}` : id;
+  };
+  // a text: paragraphs; in each, the anchored phrases as buttons over the Lean lines they render
+  const prose = (text, piece) => {
+    LPE.set(piece.id, piece.lean);
+    // references named per piece of text, after the anchors are found (a name may hold brackets)
+    // a cited auxiliary lemma: a button opening its statement (marked through the TeX, then drawn)
+    const named = (t) => tex(t.replace(/⟦([^⟦⟧\s]+)⟧/g, (_, id) => (auxOf.has(id) ? `\uE000${id}\uE001` : nameOf(id))), m)
+      .replace(/\uE000([^\uE001]*)\uE001/g, (_, id) => `<span class="lpe-ref" role="button" tabindex="0" data-aux="${esc(id)}" title="Show its statement">${esc(nameOf(id))}</span>`);
+    return String(text ?? "").split(/\n\s*\n/).filter((x) => x.trim()).map((para) => {
+      const out = [];
+      let last = 0;
+      for (const a of para.matchAll(LPE_ANCHOR)) {
+        out.push(named(para.slice(last, a.index)));
+        out.push(`<span class="lpe-a" role="button" tabindex="0" data-lpe="${esc(piece.id)}" data-file="${esc(a[2] ?? "")}" data-from="${a[3]}" data-to="${a[4] ?? a[3]}" title="Lean, ${a[2] ? `${esc(a[2])}, ` : ""}lines ${a[3]}${a[4] ? `–${a[4]}` : ""}">${named(a[1])}</span>`);
+        last = a.index + a[0].length;
+      }
+      out.push(named(para.slice(last)));
+      return `<p class="lpe-p">${out.join("")}</p>`;
+    }).join("");
+  };
+  const review = (p) => (!p.review ? `<p class="stmt-note">Not reviewed against the Lean.</p>`
+    : `${p.review.faithful ? "" : `<p class="lpe-unconfirmed">Not confirmed faithful to the Lean — a review found: ${p.review.issues.map((x) => tex(x, m)).join("; ")}</p>`}${p.review.readability?.length ? `<p class="stmt-note">A reader may stumble here: ${p.review.readability.map((x) => tex(x, m)).join("; ")}</p>` : ""}`);
+  const at = (p) => `<span class="ds-fold-at">${esc(p.lean.file)}:${esc(p.lean.line)}</span>`;
+  for (const a of lp.aux) LPE_CITE.set(a.id, `${review(a)}${prose(a.statement, a)}<p class="stmt-note"><span class="lpe-goto" role="button" tabindex="0" data-aux="${esc(a.id)}">${a.proof ? "Its proof" : "It"} is below, under ${esc(nameOf(a.id))}.</span></p>`);
+  const c = lp.comparison;
+  // only gaps found: the printed proof is not wrong, it leaves steps out
+  const gapsOnly = c?.verdict === "departs" && c.departures.length > 0 && c.departures.every((d) => d.kind === "printed-gap" && !d.placed);
+  const [cls, words] = !c ? [] : gapsOnly ? ["b-neutral", "Leaves steps out of the printed proof"] : LPE_VERDICT[c.verdict] ?? ["b-neutral", c.verdict];
+  // two sections: how the printed proof compares (its corrections numbered, each printed step over the
+  // Lean proof's), then the Lean Proof in English itself, in its own frame, with the lemmas it cites
+  const kindOf = (d) => (d.kind === "printed-gap" ? "A gap in the printed proof" : "Wrong as printed");
+  const correction = (d, i, n) => `<li class="lpe-fix"><div class="lpe-fix-h">${n > 1 ? `${i + 1} of ${n} · ` : ""}${kindOf(d)}</div>
+      <div class="rv del"><span class="rv-tag">Printed</span>${tex(d.printed, m)}</div><div class="rv ins"><span class="rv-tag">Lean proof</span>${tex(d.intended, m)}</div>
+      <p class="lpe-fix-why">${tex(d.reason, m)}</p><p class="lpe-fix-at">${d.placed ? "Marked in blue in the paper (“Corrected (Lean proof)”)." : d.kind === "printed-gap" ? "Listed here only: a gap is not marked in the paper." : "Not marked in the paper: the step could not be located in the printed proof."}</p></li>`;
+  const compare = lp.noPrintedProof ? `<p class="stmt-note">${lp.splitFrom ? `A repair split this result off ${esc(envOf(lp.splitFrom)?.heading ?? lp.splitFrom)}: the printed proof is that result's, and it is not compared block by block.` : "The paper prints no proof of this result: the Lean proof below is the only proof shown."}</p>`
+    : !c ? `<p class="stmt-note">Not compared with the printed proof.</p>`
+    : `<div class="lpe-cmp"><p class="lpe-verdict"><span class="pill ${cls}">${esc(words)}</span> ${tex(c.summary, m)}</p>
+      ${c.departures.length ? `<ol class="lpe-fixes">${c.departures.map((d, i) => correction(d, i, c.departures.length)).join("")}</ol>` : ""}
+      ${c.routes.length ? `<details class="ds-fold"><summary>Steps argued differently (${c.routes.length})</summary><div class="ds-fold-body">${c.routes.map((x) => `<p class="lpe-p"><b>Printed:</b> ${tex(x.printed, m)}<br><b>Lean:</b> ${tex(x.lean, m)}</p>`).join("")}</div></details>` : ""}
+      ${c.unclear?.length ? `<details class="ds-fold"><summary>Steps the printed proof leaves out or leaves unclear (${c.unclear.length})</summary><div class="ds-fold-body">${c.unclear.map((x) => `<p class="lpe-p"><b>Printed:</b> ${tex(x.printed, m)}<br><b>As the Lean proof argues it:</b> ${tex(x.lean, m)}${x.suggestion ? `<br><b>Suggested wording:</b> ${tex(x.suggestion, m)}` : ""}</p>`).join("")}</div></details>` : ""}</div>`;
+  const compared = c && !lp.noPrintedProof; // else the note stands under the proof's heading
+  return `${compared ? `<h4>Compared with the printed proof</h4>${compare}` : ""}
+    <h4>Lean Proof in English</h4>${compared ? "" : compare}
+    <p class="stmt-note">Written from the Lean alone${[lp.proof, ...lp.aux].every((p) => p.review) ? " and reviewed against it" : ""}. Click an underlined phrase to see the Lean lines it renders, a cited auxiliary lemma to see its statement.</p>
+    <div class="lpe lpe-main">${review(lp.proof)}<p class="lpe-proof-h">Proof.</p>${prose(lp.proof.proof, lp.proof)}</div>
+    ${lp.aux.length ? `<p class="lpe-aux-h">Auxiliary lemmas and definitions (${lp.aux.length})</p>` : ""}
+    ${lp.aux.map((a) => `<details class="ds-fold" data-aux="${esc(a.id)}"><summary><span class="ds-fold-kind">Auxiliary ${word(a.kind)} ${esc(a.id)}</span>${at(a)}</summary><div class="ds-fold-body lpe">${review(a)}${prose(a.statement, a)}${a.proof ? `<div class="lpe-proof"><i>Proof.</i>${prose(a.proof, a)}</div>` : ""}</div></details>`).join("")}`;
+}
+/** What stands opened under paragraph `p` (Lean lines, a cited statement), of class `cls`. */
+function openUnder(p, cls) {
+  for (let x = p.nextElementSibling; x && (x.classList.contains("lpe-lean") || x.classList.contains("lpe-cite")); x = x.nextElementSibling) if (x.classList.contains(cls)) return x;
+  return null;
+}
+/** The Lean lines an anchored phrase renders, opened (or closed) under its paragraph. */
+function toggleLeanLines(el) {
+  const p = el.closest(".lpe-p"), lean = LPE.get(el.dataset.lpe);
+  if (!p || !lean) return;
+  const key = `${el.dataset.lpe}:${el.dataset.file}:${el.dataset.from}-${el.dataset.to}`;
+  const open = openUnder(p, "lpe-lean");
+  if (open) { open.remove(); if (open.dataset.key === key) return; }
+  // the declaration the anchor is on: the account's own, or a helper proved inside it (by file and lines)
+  const a0 = Number(el.dataset.from), file = el.dataset.file || lean.file;
+  const decl = [lean, ...(lean.inline ?? [])].find((d) => d.file === file && a0 >= d.line && a0 <= d.line + d.source.split("\n").length - 1) ?? lean;
+  const all = decl.source.split("\n");
+  // within the declaration (an anchor past it shows what of it there is)
+  const from = Math.max(decl.line, a0), to = Math.min(decl.line + all.length - 1, Math.max(from, Number(el.dataset.to)));
+  const lines = all.slice(from - decl.line, to - decl.line + 1).join("\n");
+  p.insertAdjacentHTML("afterend", `<pre class="lpe-lean" data-key="${esc(key)}"><span class="meta">${esc(decl.file)}, lines ${from}–${to}</span>\n${esc(lines)}</pre>`);
+}
+/** A cited auxiliary lemma's statement, opened (or closed) under the paragraph citing it. */
+function toggleCited(el) {
+  const p = el.closest(".lpe-p"), html = LPE_CITE.get(el.dataset.aux);
+  if (!p || html === undefined) return;
+  const open = openUnder(p, "lpe-cite");
+  if (open) { open.remove(); if (open.dataset.aux === el.dataset.aux) return; }
+  p.insertAdjacentHTML("afterend", `<div class="lpe-cite lpe" data-aux="${esc(el.dataset.aux)}">${html}</div>`);
+}
+/** The fold of an auxiliary lemma, opened and brought into view. */
+function gotoAux(el) {
+  const d = [...document.querySelectorAll("details.ds-fold[data-aux]")].find((x) => x.dataset.aux === el.dataset.aux);
+  if (d) { d.open = true; d.scrollIntoView({ block: "start", behavior: "smooth" }); }
+}
+// a cited lemma inside an anchored phrase opens the lemma, not the Lean lines
+const lpeAct = (t) => { const r = t.closest?.(".lpe-ref"); if (r) return () => toggleCited(r); const g = t.closest?.(".lpe-goto"); if (g) return () => gotoAux(g); const a = t.closest?.(".lpe-a"); return a ? () => toggleLeanLines(a) : null; };
+document.addEventListener("click", (e) => { const act = lpeAct(e.target); if (act) act(); });
+document.addEventListener("keydown", (e) => { if ((e.key !== "Enter" && e.key !== " ") || e.repeat) return; const act = lpeAct(e.target); if (act) { e.preventDefault(); act(); } });
 /** The note over linked rows: how to read them against the paper's `segs`, `found` of them on the page. */
 const xlNote = (segs, found) => (!segs.length ? "" : `<p class="stmt-note">${found ? `Point at a row to see where the paper says it; click to jump there. Point at the paper's statement — its linked phrases are underlined — to find its row.${found < segs.length ? ` ${segs.length - found} of its ${segs.length} phrases could not be found on this page.` : ""}` : "The paper's phrases for these rows could not be located on this page."}</p>`);
 /** The Lean declarations that formalize what a block of the paper states: those tagged with a core node

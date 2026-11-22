@@ -20,6 +20,7 @@ import { existsSync } from "node:fs";
 import { mkdir, readdir, readFile } from "node:fs/promises";
 import path from "node:path";
 import { indexSourcesFromToolkit } from "../library/sources.js";
+import { canonicalLeanSubdir, leanModulePrefix } from "../paths.js";
 import { MODELS } from "../models.js";
 import { claudeRoleModel } from "../claude_roles.js";
 import { writeJsonAtomic, writeTextAtomic } from "../shared/json_atomic.js";
@@ -29,7 +30,7 @@ import { loadLedger } from "../toolkit/ledger.js";
 import { namesOutsideTopic, topicNamespace, umbrellaImports } from "../toolkit/namespaces.js";
 import { effectiveTaxonomy, ensureTaxonomy, newTopicProblem, taxonomyPromptText, topicOfModulePath, type Taxonomy } from "../toolkit/taxonomy.js";
 import type { ClaudeRunInput } from "../workers/claude.js";
-import type { CandidateScan } from "./candidate_scan.js";
+import type { GraphScan } from "./candidate_scan.js";
 import { parseDecisionBlock, type ChecklistDecision } from "./checklist.js";
 import { askJson, claudeAsker, listToolkitModules, readProposalPrompt, recordPrompt, section, TEX_RE, type TokenLedger } from "./curator.js";
 import { sha256 } from "./gate.js";
@@ -133,12 +134,12 @@ export function moduleOfRel(rel: string): string {
 
 /** Toolkit declarations a base library already states (the same normalized statement in an indexed
  *  base library): flagged after a pin bump, when the base gains what the toolkit proved. */
-export async function baseDuplicates(cfg: ToolkitConfig, scan: Pick<CandidateScan, "declarations"> | null): Promise<Map<string, string>> {
+export async function baseDuplicates(cfg: ToolkitConfig, scan: Pick<GraphScan, "declarations"> | null): Promise<Map<string, string>> {
   const out = new Map<string, string>();
   if (!scan) return out;
   const mine = scan.declarations.filter((d) => d.module === cfg.lib || d.module.startsWith(`${cfg.lib}.`));
   if (mine.length === 0) return out;
-  const want = new Map(mine.map((d) => [normalizeType(d.type), d.name] as const));
+  const want = new Map(mine.flatMap((d) => (d.type !== undefined ? [[normalizeType(d.type), d.name] as const] : [])));
   for (const src of indexSourcesFromToolkit(cfg)) {
     if (path.resolve(src.indexPath) === path.resolve(cfg.indexPath)) continue;
     const idx = JSON.parse(await readFile(src.indexPath, "utf8")) as { entries?: Array<{ name?: string; statement?: string }> };
@@ -146,6 +147,43 @@ export async function baseDuplicates(cfg: ToolkitConfig, scan: Pick<CandidateSca
       if (!e.name || !e.statement) continue;
       const hit = want.get(normalizeType(e.statement));
       if (hit && !out.has(hit)) out.set(hit, e.name);
+    }
+  }
+  return out;
+}
+
+// ─── papers left out of the graph ──────────────────────────────────────────
+
+/** A run's paper as a module prefix (`Papers.<Pascal>`): its `runs/<slug>/state.json` `lean_subdir`
+ *  (the run's own record), else the canonical one for the slug (`canonicalLeanSubdir`: the papers
+ *  library and `slugToPascal(slug)`, which every run's `lean_subdir` is held to); null for a slug
+ *  that is not a slug. */
+export async function paperOfSlug(cfg: Pick<ToolkitConfig, "runsDir" | "papersLib">, slug: string): Promise<string | null> {
+  const state = await readFile(path.join(cfg.runsDir, slug, "state.json"), "utf8").then((t) => JSON.parse(t) as { lean_subdir?: unknown }, () => null);
+  if (typeof state?.lean_subdir === "string" && state.lean_subdir.trim()) return leanModulePrefix(state.lean_subdir);
+  try {
+    return leanModulePrefix(canonicalLeanSubdir(slug, cfg.papersLib));
+  } catch {
+    return null;
+  }
+}
+
+/** Toolkit declarations the ledger records as used by a paper the graph left out
+ *  (`declarations[].used_by` naming a slug whose paper is in `excluded`), with those slugs. */
+export async function usedByExcludedPapers(
+  cfg: Pick<ToolkitConfig, "runsDir" | "papersLib">,
+  ledger: { declarations: ReadonlyArray<{ name: string; used_by?: readonly string[] }> } | null,
+  excluded: readonly string[],
+): Promise<Map<string, string[]>> {
+  const out = new Map<string, string[]>();
+  if (!ledger || excluded.length === 0) return out;
+  const left = new Set(excluded);
+  const paperOf = new Map<string, string | null>();
+  for (const d of ledger.declarations) {
+    for (const slug of d.used_by ?? []) {
+      if (!paperOf.has(slug)) paperOf.set(slug, await paperOfSlug(cfg, slug));
+      const p = paperOf.get(slug);
+      if (p && left.has(p)) out.set(d.name, [...(out.get(d.name) ?? []), slug]);
     }
   }
   return out;
@@ -160,10 +198,20 @@ export function gardenFindings(args: {
   baseDups?: ReadonlyMap<string, string>;
   /** Toolkit division modules (dotted) → their text: namespace, umbrella-import and direction findings. */
   moduleTexts?: ReadonlyMap<string, string>;
+  /** Toolkit declarations a paper left out of the graph uses (`usedByExcludedPapers`): never
+   *  reported unused or stale — the graph cannot see that use. */
+  usedByExcluded?: ReadonlySet<string>;
 }): GardenFinding[] {
   const { cfg, graph } = args;
   const h = args.health ?? toolkitHealth(graph);
   const byId = new Map(graph.nodes.map((n) => [n.id, n] as const));
+  // a helper's use is its main results' (the main view collapses it into its owners)
+  const usedElsewhere = new Set<string>();
+  for (const d of args.usedByExcluded ?? []) {
+    usedElsewhere.add(d);
+    const n = byId.get(d);
+    if (n?.tier === "aux") for (const o of n.owners ?? []) usedElsewhere.add(o);
+  }
   const relOf = (id: string) => moduleRel(byId.get(id)?.module ?? id);
   const local = (id: string) => id.slice(id.lastIndexOf(".") + 1);
   const out: Omit<GardenFinding, "id">[] = [];
@@ -183,10 +231,10 @@ export function gardenFindings(args: {
     out.push({ kind: "duplicate", modules: [...new Set(g.map(relOf))], decls: g, existing: g[0], detail: `the same statement is in the toolkit ${g.length} times: ${g.map(local).join(", ")}` });
   }
   const stale = new Set(h.stale);
-  for (const id of h.isolated.filter((x) => !stale.has(x) && !dupOfBase.has(x))) {
+  for (const id of h.isolated.filter((x) => !stale.has(x) && !dupOfBase.has(x) && !usedElsewhere.has(x))) {
     out.push({ kind: "unused", modules: [relOf(id)], decls: [id], detail: `${local(id)} is used by no paper and no other toolkit result yet` });
   }
-  for (const id of h.stale.filter((x) => !dupOfBase.has(x))) {
+  for (const id of h.stale.filter((x) => !dupOfBase.has(x) && !usedElsewhere.has(x))) {
     out.push({ kind: "stale", modules: [relOf(id)], decls: [id], detail: `${local(id)} has not been used by any paper for a long time` });
   }
   if (args.taxonomy) {
@@ -414,6 +462,10 @@ export interface GardenBatch {
   /** sha256 of every toolkit module's text when the list was made: the next gardener reads in full
    *  the modules changed since. */
   module_hashes?: Record<string, string>;
+  /** The papers the graph left out (they did not build; `ToolkitGraph.excluded_papers`). */
+  excluded_papers?: string[];
+  /** The toolkit generation the graph was taken against (`ToolkitGraph.generation`, a workspace's). */
+  generation?: number;
 }
 
 /** What the gardener reads in full, at most this many bytes of Lean (findings' modules first). */
@@ -476,6 +528,8 @@ export async function runGardener(args: {
   runClaude?: (o: ClaudeRunInput) => Promise<string>;
   /** The run's token ledger the call is recorded in (none from `paperformalizer garden`). */
   ledger?: TokenLedger;
+  /** Papers the graph left out (`ToolkitGraph.excluded_papers`). */
+  excludedPapers?: readonly string[];
   log: (m: string) => void;
 }): Promise<{ findings: GardenFinding[]; items: GardenItem[] }> {
   const cfg = args.toolkit;
@@ -486,6 +540,10 @@ export async function runGardener(args: {
     section("TOPIC TREE (doc/taxonomy.json)", taxonomyPromptText(args.taxonomy)),
     section("EXISTING TOOLKIT MODULES", modules.length ? modules.map((m) => `- ${m.path}: ${m.overview}`).join("\n") : "(none yet)"),
     section("MAIN RESULTS (the main view: what each states, where it sits, what it uses)", mainViewSummary(args.graph, args.docs ?? new Map(), args.titles ?? new Map())),
+    ...(args.excludedPapers?.length
+      ? [section("PAPERS NOT IN THE GRAPH", `These papers did not build, so the graph does not show what they use of the toolkit: ${args.excludedPapers.join(", ")}. ` +
+        "A result the graph shows as used by nothing may be used by one of them: never recommend retiring or removing a result on that ground alone.")]
+      : []),
     section("FINDINGS", args.findings.length ? JSON.stringify(args.findings, null, 1) : "(none)"),
     section(
       "SOURCE (the full Lean of every module a finding names and of every module added or changed since the last list)",
@@ -556,6 +614,14 @@ export function renderGardenChecklist(batch: GardenBatch, opts: { toolkitRoot: s
     `    paperformalizer garden --verify ${md} --toolkit ${opts.toolkitRoot}`,
     "",
   ];
+  const left = batch.excluded_papers ?? [];
+  if (left.length) {
+    head.splice(2, 0,
+      `**Papers left out of the graph** (their modules did not build when it was taken): ${left.join(", ")}. What they use of the`,
+      "toolkit is not in the graph: a result the ledger, or the last graph that had the paper, records as used by one of",
+      "them is not reported unused, but a newer use of theirs may be missing — check before retiring or removing a result.",
+      "");
+  }
   const body = batch.items.map((it) => {
     const d = opts.decisions?.[it.finding_id] ?? { kind: "pending" as const };
     return [
@@ -680,7 +746,7 @@ export async function runGardenRound(args: {
   /** The run's token ledger the gardener's call is recorded in. */
   ledger?: TokenLedger;
   /** The `--graph` scan the graph was built from (base duplicates, docstrings); default: the one on file. */
-  scan?: Pick<CandidateScan, "declarations"> | null;
+  scan?: Pick<GraphScan, "declarations"> | null;
   /** Toolkit module texts (namespace, imports, direction); default: read from the toolkit. */
   moduleTexts?: ReadonlyMap<string, string>;
 }): Promise<{ path: string; items: number } | null> {
@@ -689,7 +755,26 @@ export async function runGardenRound(args: {
   const scan = args.scan !== undefined ? args.scan : await readGraphScan(cfg);
   const moduleTexts = args.moduleTexts ?? (await toolkitModuleTexts(cfg));
   const module_hashes = Object.fromEntries([...moduleTexts].map(([m, t]) => [m, sha256(t)] as const));
-  const all = gardenFindings({ cfg, graph: args.graph, taxonomy, baseDups: await baseDuplicates(cfg, scan), moduleTexts });
+  const excludedPapers = args.graph.excluded_papers ?? [];
+  const ledger = await loadLedger(cfg.ledgerPath).catch(() => null);
+  const usedByExcluded = await usedByExcludedPapers(cfg, ledger, excludedPapers);
+  // and what they used in the last graph that had them (`ToolkitGraph.excluded_paper_uses`), under
+  // the names the ledger's renames (`renamed_from`) gave those declarations since
+  const renamedTo = new Map(((ledger?.declarations ?? []) as Array<{ name: string; renamed_from?: unknown }>)
+    .flatMap((x) => (typeof x.renamed_from === "string" && x.renamed_from !== x.name ? [[x.renamed_from, x.name] as const] : [])));
+  const current = (d: string): string => {
+    const seen = new Set<string>([d]);
+    for (let n = renamedTo.get(d); n !== undefined && !seen.has(n); n = renamedTo.get(n)) { seen.add(n); d = n; }
+    return d;
+  };
+  for (const [p, decls] of Object.entries(args.graph.excluded_paper_uses ?? {})) {
+    for (const d of decls.map(current)) usedByExcluded.set(d, [...(usedByExcluded.get(d) ?? []), p]);
+  }
+  if (excludedPapers.length) {
+    args.log(`gardening: ${excludedPapers.length} paper(s) left out of the graph (they do not build): ${excludedPapers.join(", ")}` +
+      `${usedByExcluded.size ? `; ${usedByExcluded.size} toolkit declaration(s) the ledger or the last graph records as used by them are not reported unused` : ""}`);
+  }
+  const all = gardenFindings({ cfg, graph: args.graph, taxonomy, baseDups: await baseDuplicates(cfg, scan), moduleTexts, usedByExcluded: new Set(usedByExcluded.keys()) });
   const mains = mainView(args.graph).nodes.filter((n) => n.layer === "toolkit").map((n) => n.id).sort();
   const last = await lastGardenBatch(cfg);
   const settled = settledFindings(all, last, module_hashes);
@@ -701,12 +786,11 @@ export async function runGardenRound(args: {
     return null;
   }
   if (settled.size) args.log(`gardening: ${settled.size} finding(s) judged fine on the last list and unchanged since are not sent again`);
-  const docs = new Map((scan?.declarations ?? []).map((d) => [d.name, (d as { doc?: string | null }).doc ?? null] as const));
-  const ledger = await loadLedger(cfg.ledgerPath).catch(() => null);
+  const docs = new Map((scan?.declarations ?? []).map((d) => [d.name, d.doc ?? null] as const));
   const titles = new Map(((ledger?.declarations ?? []) as Array<{ name: string; title?: string }>).flatMap((x) => (x.title ? [[x.name, x.title] as const] : [])));
   const sources = gardenerSources(moduleTexts, last?.module_hashes ?? null, findings);
   const judged = await runGardener({
-    toolkit: cfg, findings, taxonomy, graph: args.graph, docs, titles, sources, log: args.log,
+    toolkit: cfg, findings, taxonomy, graph: args.graph, docs, titles, sources, log: args.log, ...(excludedPapers.length ? { excludedPapers } : {}),
     ...(args.dryRun ? { dryRun: true } : {}), ...(args.runClaude ? { runClaude: args.runClaude } : {}), ...(args.ledger ? { ledger: args.ledger } : {}),
   });
   const items = judged.items.filter((it) => it.action !== "keep");
@@ -716,7 +800,11 @@ export async function runGardenRound(args: {
     ...carried.map((c) => ({ finding_id: c.finding.id, title: c.title, reason: c.reason })),
   ];
   const created = (args.now ?? (() => new Date()))().toISOString();
-  const batch: GardenBatch = { created, findings: [...judged.findings, ...carried.map((c) => c.finding)], items, left_as_is: left, main_results: mains, module_hashes };
+  const batch: GardenBatch = {
+    created, findings: [...judged.findings, ...carried.map((c) => c.finding)], items, left_as_is: left, main_results: mains, module_hashes,
+    ...(excludedPapers.length ? { excluded_papers: [...excludedPapers] } : {}),
+    ...(args.graph.generation !== undefined ? { generation: args.graph.generation } : {}),
+  };
   const p = gardenPaths(cfg, created);
   await mkdir(path.dirname(p.md), { recursive: true });
   await writeJsonAtomic(p.json, batch);
@@ -730,9 +818,9 @@ export async function runGardenRound(args: {
 }
 
 /** The scan `refreshToolkitGraph` last wrote (`.lake/build/paperformalizer/graph_scan.json`), or null. */
-export async function readGraphScan(cfg: Pick<ToolkitConfig, "toolkitRoot">): Promise<CandidateScan | null> {
+export async function readGraphScan(cfg: Pick<ToolkitConfig, "toolkitRoot">): Promise<GraphScan | null> {
   const p = path.join(cfg.toolkitRoot, ".lake", "build", "paperformalizer", "graph_scan.json");
-  return existsSync(p) ? (JSON.parse(await readFile(p, "utf8")) as CandidateScan) : null;
+  return existsSync(p) ? (JSON.parse(await readFile(p, "utf8")) as GraphScan) : null;
 }
 
 // ─── files ─────────────────────────────────────────────────────────────────

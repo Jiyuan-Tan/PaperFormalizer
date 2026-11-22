@@ -118,7 +118,11 @@ function grade(id: string, over: Partial<V15NodeVerdict> = {}): V15NodeVerdict {
 async function review(r: Setup, over: Record<string, Partial<V15NodeVerdict>> = {}): Promise<V15Review> {
   const c = JSON.parse(await readFile(path.join(r.runDir, VERIFY_FILES.coreJson), "utf8")) as Core;
   const ids = [...new Set([c, core()].flatMap((k) => [...k.statements, ...k.assumptions, ...k.definitions].map((n) => n.id)))];
-  return { verdict: "PASS", summary: "s", nodes: ids.map((id) => grade(id, over[id])), patch_review: { key_results_ok: true, detail: "thm:main is the headline" } };
+  // a severity for each weakened key result: accepted, or a suggestion the confirming pass grades as applied
+  const pf = await readFile(path.join(r.runDir, VERIFY_FILES.patches), "utf8").then((t) => JSON.parse(t) as PatchFile, () => null);
+  const weak = new Set([...(pf?.patches ?? []).filter((p) => p.accepted_weakening).map((p) => p.node), ...(pf?.unfixable ?? []).filter((u) => u.suggested_repair && u.declined === undefined).map((u) => u.node)]);
+  const weakenings = [...weak].filter((n) => pf?.key_results.includes(n)).map((node) => ({ node, severity: "limited" as const, reason: "r" }));
+  return { verdict: "PASS", summary: "s", nodes: ids.map((id) => grade(id, over[id])), patch_review: { key_results_ok: true, detail: "thm:main is the headline", weakenings } };
 }
 
 /** The render's routing of a repair text of `node` that does not compile (`fragment_routing.ts`: what
@@ -1193,6 +1197,14 @@ describe("the repair travels whole between a patch and a suggestion", () => {
     // what it followed is the card's: no referee is shown it
     const { patchesShown } = await import("../../src/verify/stage_v1_5.js");
     expect(JSON.stringify(patchesShown({ patches: follows } as never))).not.toMatch(/consequence_/);
+    // a shard grading only a reading or side condition a repair states is shown that repair whole
+    const { patchReadingId, patchConditionId } = await import("../../src/verify/core_graph.js");
+    const stating = file({ patches: [{ node: "lem:rate", ...body, readings: ["$n$ counts queries"], conditions: ["$f$ is measurable"] }] });
+    for (const id of [patchReadingId("lem:rate", "$n$ counts queries"), patchConditionId("lem:rate", "$f$ is measurable")]) {
+      const shown = patchesShown({ patches: stating } as never, [id]) as { patches: { node: string; readings?: string[] }[] } | null;
+      expect(shown?.patches[0]).toMatchObject({ node: "lem:rate", readings: ["$n$ counts queries"] });
+    }
+    expect(patchesShown({ patches: stating } as never, ["lem:other"])).toBeNull();
     const state = fresh();
     for (let pass = 0; pass < 2; pass++) {
       // (written again, the ledger entry the first receipt made holds the grade)

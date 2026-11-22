@@ -8,9 +8,10 @@ import path from "node:path";
 import type { ToolkitConfig } from "../toolkit/config.js";
 import { splitKinds } from "../verify/core_graph.js";
 import { unwrapSource, type NoteMacroTable } from "../verify/note_macros.js";
+import type { TexEnv } from "../verify/types.js";
 import { readJsonCached } from "./fscache.js";
 import { coreWhere, ownerReadingsByComment, runDetail, type CoreFile, type OwnerReadingEntry, type ResultView, type RunDetail, type RunReport, type TokenTotals } from "./run_model.js";
-import { paperRenderer, tikzPictures, tikzSetup, type MathFailure, type RenderedPaper } from "./tex_html.js";
+import { anchorOccurrences, paperRenderer, tikzPictures, tikzSetup, type MathFailure, type RenderedPaper } from "./tex_html.js";
 import { TIKZ_DIR, tikzFailure, tikzPdf } from "./tikz.js";
 
 /** The agent's replacements for formulas neither renderer reads (source → TeX), per run. */
@@ -18,7 +19,7 @@ export const MATH_OVERRIDES_FILE = "ui_math_overrides.json";
 /** Files a paper page may load from the paper's directory (figures, the typeset PDF). */
 export const ASSET_EXT = new Set([".png", ".jpg", ".jpeg", ".gif", ".svg", ".webp", ".pdf", ".eps", ".ps"]);
 /** Keys of a run's detail whose strings are TeX the page shows (rendered under the paper's macros). */
-const TEX_KEYS = new Set(["detail", "reason", "given_up", "witness", "reading", "condition", "text", "guidance", "why"]);
+const TEX_KEYS = new Set(["detail", "reason", "given_up", "witness", "reading", "condition", "text", "guidance", "why", "summary", "printed", "intended", "suggestion"]);
 
 /** The TeX strings of a run's detail (`TEX_KEYS`), each once, in the order met. Pure. */
 export function texStrings(detail: unknown): string[] {
@@ -45,13 +46,15 @@ export type Fragment = (tex: string) => { html: string; failures: MathFailure[] 
  * The paper of the run at `dir` (its annotated copy, else its source): the files it is drawn from
  * (`inputs`, under `base`) and `render`, which draws it with its figures addressed under
  * `assetBase` and gives the renderer of the run's other TeX. Null when the run has no paper.
+ * `workDir`: where the TikZ pictures are typeset and the agent's formula replacements read — the run's
+ * own directory, also for one of its frozen versions (`run_model.ts` `runWorkDir`), which is never written.
  */
-export async function runPaper(dir: string, assetBase: string): Promise<{ base: string; inputs: string[]; render: () => Promise<{ view: PaperView; fragment: Fragment }> } | null> {
+export async function runPaper(dir: string, assetBase: string, workDir: string = dir): Promise<{ base: string; inputs: string[]; render: () => Promise<{ view: PaperView; fragment: Fragment }> } | null> {
   const annotated = path.join(dir, "annotated");
   const useAnnotated = existsSync(annotated) && readdirSync(annotated).some((f) => f.endsWith(".tex"));
   const base = useAnnotated ? annotated : path.join(dir, "source");
   const state = await readJsonCached<{ verify?: { source?: { main_file?: string } } }>(path.join(dir, "state.json"));
-  const envs = await readJsonCached<{ main_file?: string; newtheorem?: Record<string, string>; note_macros?: NoteMacroTable }>(path.join(dir, "discovery", "envs.json"));
+  const envs = await readJsonCached<{ main_file?: string; newtheorem?: Record<string, string>; note_macros?: NoteMacroTable; envs?: TexEnv[] }>(path.join(dir, "discovery", "envs.json"));
   const main = state?.verify?.source?.main_file ?? envs?.main_file ?? (existsSync(base) ? readdirSync(base).find((f) => f.endsWith(".tex")) : undefined);
   if (!main || !existsSync(path.join(base, main))) return null;
   const files = listTex(base);
@@ -59,7 +62,7 @@ export async function runPaper(dir: string, assetBase: string): Promise<{ base: 
   const bbl = path.join(base, main.replace(/\.tex$/, ".bbl"));
   const pdf = path.join(base, main.replace(/\.tex$/, ".pdf"));
   const coreFiles = ["core.json", "core.transcribed.json"].map((f) => path.join(dir, "discovery", f));
-  const overridesFile = path.join(dir, MATH_OVERRIDES_FILE);
+  const overridesFile = path.join(workDir, MATH_OVERRIDES_FILE);
   const patchesFile = path.join(dir, "discovery", "patches.json");
   const render = async () => {
     const texts: Record<string, string> = {};
@@ -84,6 +87,7 @@ export async function runPaper(dir: string, assetBase: string): Promise<{ base: 
     const sourceLines = new Map<string, string[]>();
     const anchors: Array<{ node: string; file: string; line: string; at?: number; after?: true; nth?: [number, number] }> = [];
     const anchorHeadings: Record<string, string> = {};
+    const segmentTitles: Record<string, string> = {};
     for (const cf of coreFiles) {
       const core = await readJsonCached<{ statements?: Array<{ id: string; cited_in?: string | null; tex_locator?: { file?: string; from?: number; env?: string; label?: string | null } }> }>(cf);
       for (const st of core?.statements ?? []) {
@@ -93,17 +97,22 @@ export async function runPaper(dir: string, assetBase: string): Promise<{ base: 
         if (!sourceLines.has(loc.file)) sourceLines.set(loc.file, src.split("\n"));
         const lines = sourceLines.get(loc.file)!;
         const line = lines[loc.from - 1] ?? "";
-        if (line.trim().length < 8) continue;
+        const segment = envs?.envs?.find((e) => e.envName === "segment" && e.id === st.id && e.lines.file === loc.file && e.lines.from === loc.from);
+        // A segmented assertion can start with a display delimiter rather than a prose
+        // heading. Its recorded title names it; the occurrence count still pins the anchor.
+        if (!line.trim() || (line.trim().length < 8 && !segment)) continue;
+        if (segment?.title) segmentTitles[st.id] = segment.title;
         // which occurrence of that line it is in the source (k of n): the rendered copy may have shifted its lines
         const needle = line.trim(), lineStart = lines.slice(0, loc.from - 1).join("\n").length + (loc.from > 1 ? 1 : 0);
-        const hits: number[] = [];
-        for (let i = src.indexOf(needle); i >= 0; i = src.indexOf(needle, i + 1)) hits.push(i);
+        const hits = anchorOccurrences(src, needle);
         const k = hits.findIndex((i) => i >= lineStart);
         // a citation invoked inside a proof is located at that proof: its label stands after the proof's
         // opening, inside it — before it, the proof would read as the cited result's own
         anchors.push({ node: st.id, file: loc.file, line, at: loc.from, ...(k >= 0 ? { nth: [k, hits.length] as [number, number] } : {}), ...(st.cited_in ? { after: true as const } : {}) });
-        const named = /\b(Theorem|Lemma|Proposition|Corollary|Definition|Assumption|Result|Claim|Condition|Property|Criterion)\s+([A-Z]?\d+(?:\.\d+)*[a-z]?)/.exec(line);
-        if (named) anchorHeadings[st.id] = `${named[1]} ${named[2]}`;
+        // A prose heading may close its font group before its number (\textit{Property} 1.)
+        // or have no number at all (\textsc{Theorem.}). Keep the printed name in both cases.
+        const named = /\b(Theorem|Lemma|Proposition|Corollary|Definition|Assumption|Result|Claim|Condition|Property|Criterion)(?:\s*\})?\s*(?:([A-Z]?\d+(?:\.\d+)*[a-z]?)\b|(?=\.(?:\s|\}|\\|$)))/.exec(line);
+        if (named) anchorHeadings[st.id] = `${named[1]}${named[2] ? ` ${named[2]}` : ""}`;
       }
     }
     // an assumption or definition no labelled environment holds: anchored where its own text
@@ -119,7 +128,7 @@ export async function runPaper(dir: string, assetBase: string): Promise<{ base: 
     const mathOverrides = await readJsonCached<Record<string, string>>(overridesFile);
     const pictures = tikzPictures(texts, main);
     const setup = tikzSetup(texts, main);
-    const tikzFile = tikzPdf(dir, base, texts[main] ?? "", pictures, setup);
+    const tikzFile = tikzPdf(workDir, base, texts[main] ?? "", pictures, setup);
     const { paper: r, fragment } = paperRenderer({
       files: texts, main, aux: existsSync(aux) ? await readFile(aux, "utf8") : null, bbl: existsSync(bbl) ? await readFile(bbl, "utf8") : null,
       theoremKinds: envs?.newtheorem ?? null, assets: listAssets(base), assetBase, tikz: tikzFile ? { url: `${assetBase}/_tikz/${tikzFile}`, pictures } : null, anchors, readings: where.readings, mathOverrides,
@@ -144,6 +153,9 @@ export async function runPaper(dir: string, assetBase: string): Promise<{ base: 
       if (r.anchors[st.id] && !anchorHeadings[st.id] && !st.cited_in && !(st.tex_locator?.label && labelled.has(st.tex_locator.label)) && st.source?.cite) {
         anchorHeadings[st.id] = `[${st.source.cite}${st.source.locator ? `, ${st.source.locator}` : ""}]`;
       }
+      if (r.anchors[st.id] && !anchorHeadings[st.id] && !st.cited_in && !(st.tex_locator?.label && labelled.has(st.tex_locator.label)) && segmentTitles[st.id]) {
+        anchorHeadings[st.id] = segmentTitles[st.id]!;
+      }
     }
     // a result the page names by no environment (drawn by its kind on the proof map, "Thm ?" or "Thm (theorem 4)"):
     // its anchor found no environment of its own — often one placed at the wrong line
@@ -156,12 +168,12 @@ export async function runPaper(dir: string, assetBase: string): Promise<{ base: 
       unknownCommands: Object.fromEntries(unknown.filter(([k]) => !k.startsWith("env:"))),
       unknownEnvironments: Object.fromEntries(unknown.filter(([k]) => k.startsWith("env:")).map(([k, n]) => [k.slice(4), n])),
       missingFigures: h.missingFigures, omittedDrawings: h.omitted,
-      tikz: tikzFile ? null : tikzFailure(dir, base, texts[main] ?? "", pictures, setup), unresolvedRefs: h.unresolvedRefs, unnamedResults,
+      tikz: tikzFile ? null : tikzFailure(workDir, texts[main] ?? "", pictures, setup), unresolvedRefs: h.unresolvedRefs, unnamedResults,
     };
     const view: PaperView = { ...r, ownerReadings, anchorHeadings, from: useAnnotated ? "annotated" : "source", pdf: existsSync(pdf) ? `${assetBase}/${main.replace(/\.tex$/, ".pdf").split("/").map(encodeURIComponent).join("/")}` : null, renderProblems };
     return { view, fragment };
   };
-  return { base, inputs: [...files.map((f) => path.join(base, f)), aux, bbl, pdf, path.join(dir, "discovery", "envs.json"), ...coreFiles, overridesFile, patchesFile, path.join(dir, TIKZ_DIR)], render };
+  return { base, inputs: [...files.map((f) => path.join(base, f)), aux, bbl, pdf, path.join(dir, "discovery", "envs.json"), ...coreFiles, overridesFile, patchesFile, path.join(workDir, TIKZ_DIR)], render };
 }
 
 /** Figure and PDF files under `dir` (relative, `/`-separated; three levels deep). */

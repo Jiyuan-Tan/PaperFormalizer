@@ -2,46 +2,53 @@
 //
 //   accept / accept_with_edits  MOVE the result and its closure (`moves_with`: the helper lemmas
 //                               and definitions it needs) out of the paper into the target toolkit
-//                               module (`move.ts`), under the promotion lock, gated by
-//                               `lake build <lib>`, `lake build <paper>`, `#print axioms` (moved
-//                               declarations clean, the paper's headline results unchanged), the
-//                               layout lints, statement invariance and the toolkit index. A move
-//                               that fails its gate is left as written and escalated: the
-//                               orchestrator repairs it by hand and the next `--apply` runs the
-//                               gate on the files as they stand. The result is recorded `tier: main`, its closure
-//                               `tier: aux` owned by it.
+//                               module (`move.ts`). The run's moves are prepared in a private
+//                               workspace and committed (`local_moves.ts`): written and gated there
+//                               as one batch — `lake build <lib>`, `lake build <paper>`, `#print
+//                               axioms` (moved declarations clean, the paper's headline results
+//                               unchanged), the layout lints, statement invariance and the toolkit
+//                               index — then one at a time after a batch that does not pass,
+//                               stopping at the first that fails; what passed is committed to the
+//                               shared toolkit (`shared/commit.ts`). A move that fails its gate
+//                               reaches nothing of the shared toolkit and is escalated. The result
+//                               is recorded `tier: main`, its closure `tier: aux` owned by it.
 //   decline / defer             recorded only (with the items declined automatically as already
 //                               available).
 //
-// Items are applied one at a time in dependency order; each successful item is recorded in the
-// ledger at once, so a failure part-way leaves the earlier items applied and recorded and a re-run
-// continues with the rest. Before any write the paper is re-scanned: an accepted item that is no
-// longer a clean candidate, or whose closure changed, refuses the apply (re-propose with
-// `--from-stage V6`). Around the moves the toolkit graph is re-derived: before, a duplicate of a
-// toolkit result refuses its item; after, what the moves made worse (a result used by nothing, a
-// module falling apart) is reported — never undone. A dry run records decisions (in its own ledger)
-// and describes the moves; it never touches Lean.
-import { existsSync, readFileSync } from "node:fs";
-import { mkdir, readdir, readFile, writeFile } from "node:fs/promises";
+// A run that died after its commit records its moves at its next apply (its landed records). A
+// gate builds the toolkit and the moving paper only; the whole library is built by the daily
+// library check (`libraryCheck`), never by an apply. Before any write the paper is re-scanned: an
+// accepted item that is no longer a clean candidate, or whose closure changed, refuses the apply
+// (re-propose with `--from-stage V6`). Around the moves the toolkit graph is re-derived in the
+// workspace: before, a duplicate of a toolkit result refuses its item; after, what the moves made
+// worse (a result used by nothing, a module falling apart) is reported — never undone. A dry run
+// records decisions (in its own ledger) and describes the moves; it never touches Lean.
+import { execFile } from "node:child_process";
+import { existsSync } from "node:fs";
+import { appendFile, mkdir, readFile, writeFile } from "node:fs/promises";
 import path from "node:path";
 import { crosswalkFullJsonPath, leanModulePrefix, leanTheoremDir, PAPER_TMP_DIR } from "../paths.js";
 import { withPromotionLock } from "../shared/build_mutex.js";
 import { writeJsonAtomic } from "../shared/json_atomic.js";
 import { loadState } from "../state.js";
 import { paperFormalizerToolsDir, type ToolkitConfig } from "../toolkit/config.js";
+import { declaredNames } from "../toolkit/lean_source.js";
 import { appendDecisionRecords, loadLedger, type LedgerDeclaration } from "../toolkit/ledger.js";
 import { parseAxiomReport } from "../verify/lean_evidence.js";
 import { writeReportToolkitSection, loadRunReuse } from "../verify/report_toolkit.js";
 import { VERIFY_FILES } from "../verify/types.js";
-import { buildProposal, builtByOwnStudy, reproveAsCorollary, type CorollaryDeps } from "./build.js";
+import { buildProposal, builtByOwnStudy, type CorollaryDeps } from "./build.js";
 import { indexNameTable, nameProblems } from "./curator.js";
-import { carryReceipts, fingerprintScanCmd, parseFingerprints, receiptsBefore, statementInvarianceFailure, takeFingerprints } from "./invariance.js";
+import { carryReceipts } from "./invariance.js";
 import { candidatesPath, filterCandidates, obtainScan, paperObjects, paperShapedReasons, reportHeadlineDecls, type CandidateScan, type CandidatesFile } from "./candidate_scan.js";
 import type { runSubstratePipeline as RunStudy } from "../substrate/pipeline.js";
 import { newTopics, parseChecklist, pendingIds, topicKey, type ChecklistDecision } from "./checklist.js";
 import { addTopics, effectiveTaxonomy, topicOfModulePath, type Taxonomy, type Topic } from "../toolkit/taxonomy.js";
 import { axiomsProbeText, classifyTarget, detectToolkitIndexStep, realApplyDeps, type ApplyDeps, type GateStep } from "./gate.js";
-import { applyMoveItem, planMove, verifyKeptMove, type MoveDecl, type MoveTarget } from "./move.js";
+import { findImporters, NO_IMPORTERS } from "./importers.js";
+import { commitOnFile, honourCommit } from "../shared/commit.js";
+import { landedRecords, localCommitMoves, localCorollary, type LocalLanded, type MoveSpec } from "./local_moves.js";
+import { failingModules, killedModules, type BatchRecord, type MoveDecl, type MoveTarget } from "./move.js";
 import {
   applyEdits,
   checklistPath,
@@ -95,14 +102,15 @@ export interface ApplyRoundBArgs {
   toolsDir?: string;
   /** Toolkit-index gate step; `undefined` = detect from the lakefile. */
   indexStep?: GateStep | null;
-  /** Run `fn` under the toolkit promotion lock (tests may pass an identity). */
-  withLock?: <T>(fn: () => Promise<T>) => Promise<T>;
   /** The toolkit graph (tests); default: re-derived from the Lean. Null = no graph checks. */
   graph?: () => Promise<ToolkitGraph | null>;
   /** The study pipeline that builds a `generalize` entry (tests inject a fake). */
   runStudy?: typeof RunStudy;
   /** The corollary re-proof's agent and build (tests). */
   corollary?: Partial<CorollaryDeps>;
+  /** The toolkit graph of the toolkit and this paper in the promotion's workspace (`local_moves.ts`;
+   *  tests); default re-derived there, or `graph` when given. */
+  graphIn?: (cfgP: ToolkitConfig) => Promise<ToolkitGraph | null>;
 }
 
 export interface ApplyRoundBResult {
@@ -113,6 +121,10 @@ export interface ApplyRoundBResult {
   moves: RoundBMove[];
   /** What the moves made worse in the toolkit graph (main view), in words; reported, not undone. */
   regressions: string[];
+  // compat 2026-11-11: remove after the processes started before this merge have exited (≤2 days)
+  // (a `cli.ts` loaded before the merge reads them: always empty — the library check is the daily one's)
+  libraryBreaks: string[];
+  libraryBreaksMaybeOlder: boolean;
 }
 
 const LEAN_NAME_RE = /^[A-Za-z_][A-Za-z0-9_'!?]*(\.[A-Za-z_][A-Za-z0-9_'!?]*)*$/;
@@ -122,47 +134,6 @@ const leafOf = (n: string) => n.slice(n.lastIndexOf(".") + 1);
 export function movesProgressPath(cfg: ToolkitConfig, qid: string): string {
   return path.join(proposalsRunDir(cfg, qid), "B.moves.json");
 }
-/** A move left as written after its gate failed, for the orchestrator: what the gate needs to run
- *  again on the repaired files (`runs/<slug>/proposals/move_pending.json`). */
-export interface PendingMove {
-  proposal_id: string;
-  decls: MoveDecl[];
-  target: Omit<MoveTarget, "existingText">;
-  /** Headline declarations and their axioms before the move. */
-  baseline: Array<[string, string[]]>;
-  /** The statement hashes before the move (a file of `invariance.ts`), or null when not taken. */
-  statements_before: string | null;
-  /** The F4 targets current before the move. */
-  cleared: string[];
-  /** The gate step that failed. */
-  failed: string;
-}
-export function pendingMovePath(cfg: ToolkitConfig, qid: string): string {
-  return path.join(proposalsRunDir(cfg, qid), "move_pending.json");
-}
-
-/**
- * The statement hashes a pending move recorded before it wrote anything, or null when it took none.
- * They are what its gate compares with: a snapshot on record that is gone is a refusal, never a gate
- * run without the comparison.
- */
-export function pendingMoveSnapshot(pend: PendingMove, where: { pendingFile: string; journal: string; voided: string }): Map<string, string> | null {
-  if (!pend.statements_before) return null;
-  const before = existsSync(pend.statements_before) ? parseFingerprints(readFileSync(pend.statements_before, "utf8")) : null;
-  if (!before) {
-    throw new Error(
-      `${pend.proposal_id}: a move is pending (${where.pendingFile}) and the statement snapshot taken before it is missing or holds no statement hashes (${pend.statements_before}) — ` +
-        `its gate cannot check that no statement changed. Put the file back (a re-proposed round keeps earlier files under ${where.voided}), ` +
-        `or undo the move by hand (${where.journal} holds the original bytes), delete ${where.pendingFile} and apply again.`,
-    );
-  }
-  return before;
-}
-
-export function moveJournalPath(cfg: ToolkitConfig, qid: string): string {
-  return path.join(proposalsRunDir(cfg, qid), "move_journal.json");
-}
-
 function decisionLabel(d: Decision): string {
   return d.kind === "accept" ? "accepted" : "accepted-with-edits";
 }
@@ -234,20 +205,8 @@ export function roundBDecisionProblems(proposals: readonly Proposal[], owner: Re
   return out;
 }
 
-async function listPaperFiles(dir: string): Promise<string[]> {
-  const out: string[] = [];
-  const walk = async (d: string): Promise<void> => {
-    for (const e of await readdir(d, { withFileTypes: true }).catch(() => [])) {
-      const abs = path.join(d, e.name);
-      if (e.isDirectory()) { if (!(d === dir && e.name === PAPER_TMP_DIR)) await walk(abs); }
-      else if (e.isFile() && e.name.endsWith(".lean")) out.push(abs);
-    }
-  };
-  await walk(dir);
-  return out.sort();
-}
-
-/** `#print axioms` of the headline declarations as the paper stands (the move gate's baseline). */
+/** `#print axioms` of the headline declarations as the paper stands (the move gate's baseline),
+ *  taken in the promotion's workspace (`cfg` rebased to it; the probe imports the paper alone). */
 async function headlineBaseline(cfg: ToolkitConfig, paperModule: string, headlines: readonly string[], probe: string, d: ApplyDeps): Promise<Map<string, string[]>> {
   const out = new Map<string, string[]>();
   if (headlines.length === 0) return out;
@@ -313,88 +272,78 @@ export async function applyRoundB(args: ApplyRoundBArgs): Promise<ApplyRoundBRes
       await recordNow(baseRecord(p, owner[p.id]!));
     }
   } else if (build.length > 0) {
+    // Prepared in a private workspace and committed briefly (`local_moves.ts`).
+    log("promotion: the moves are prepared in a workspace of their own and committed");
     const state = await loadState(cfg.toolkitRoot, qid);
     const paperModule = leanModulePrefix(state.lean_subdir);
     const leanDir = leanTheoremDir(cfg.toolkitRoot, state.lean_subdir);
     const toolsDir = args.toolsDir ?? paperFormalizerToolsDir();
     const indexStep = args.indexStep !== undefined ? args.indexStep : await detectToolkitIndexStep(cfg, d);
-    const withLock = args.withLock ?? (<T,>(fn: () => Promise<T>) => withPromotionLock(cfg.toolkitRoot, fn, cfg.lockPath));
-    const journal = moveJournalPath(cfg, qid);
-    const pendingFile = pendingMovePath(cfg, qid);
-    const probe = path.join(proposalsRunDir(cfg, qid), "move_axioms.lean");
-    await mkdir(path.dirname(probe), { recursive: true });
     const fpDir = proposalsRunDir(cfg, qid);
+    await mkdir(fpDir, { recursive: true });
     const fpAfterFile = (id: string) => path.join(fpDir, `statements_after_${id}.json`);
     // What a move that passed its gate leaves behind: the run's records, and its receipts carried.
-    const completeMove = async (p: Proposal, dec: Decision, decls: readonly MoveDecl[], module: string, cleared: readonly string[], checked: boolean) => {
+    const completeMove = async (p: Proposal, dec: Decision, decls: ReadonlyArray<{ from: string; to: string }>, module: string, cleared: readonly string[], checked: boolean, afterFile = fpAfterFile(p.id)) => {
       const repointed = await repointMovedResults(cfg, qid, decls);
       if (repointed.length) log(`${p.id}: crosswalk / report now point ${repointed.join(", ")} at the toolkit`);
       moves.push({ proposal_id: p.id, decision: dec.kind, module, decls: decls.map((x) => ({ from: x.from, to: x.to })) });
       await writeJsonAtomic(movesProgressPath(cfg, qid), moves);
       await recordNow({ ...baseRecord(p, dec), promoted: decls.map((x) => x.to) });
-      const carried = await carryReceipts(cfg, qid, leanDir, cleared, fpAfterFile(p.id)).catch(() => 0);
+      const carried = await carryReceipts(cfg, qid, leanDir, cleared, afterFile).catch(() => 0);
       log(`${p.id}: moved and gated (${decls.length} declaration(s))${checked ? `; every statement unchanged${carried ? `, ${carried} F4 receipt(s) carried over` : ""}` : ""}`);
     };
-    const invarianceOf = (id: string, fpBefore: ReadonlyMap<string, string>, movedNames: readonly { from: string; to: string }[]) => {
-      const fpAfter = fpAfterFile(id);
-      return {
-        cmd: fingerprintScanCmd(cfg, paperModule, fpAfter),
-        check: (): string | null => {
-          const after = existsSync(fpAfter) ? parseFingerprints(readFileSync(fpAfter, "utf8")) : null;
-          return after ? statementInvarianceFailure(fpBefore, after, movedNames) : "the scan after the move reported no statement hashes";
-        },
-      };
+    // The moves of a passed batch, recorded (`file`: the landed record they came from).
+    const recordLanded = async (file: string, rec: BatchRecord, fresh = false) => {
+      for (const m of rec.moves.filter((x) => x.slug === qid)) {
+        if (done.has(m.proposal_id)) continue;
+        const p = build.find((x) => x.id === m.proposal_id);
+        if (!p) throw new Error(`${m.proposal_id}: its batch passed the gate (${file}), but its entry is no longer accepted as a move; record or undo it by hand (the batch's log is move_batch.log beside it) and delete ${path.basename(file)}`);
+        log(fresh ? `${p.id}: committed — recording it` : `${p.id}: its batch passed the gate before the last apply ended — recording it`);
+        await completeMove(p, owner[p.id]!, m.decls, m.module, m.cleared ?? [], m.checked ?? rec.checked, fpAfterFile("batch"));
+        build.splice(build.indexOf(p), 1);
+      }
     };
-    const escalation = (id: string, logFile: string, tail: string) =>
-      `${id}: the move did not pass its gate and nothing was restored — every file is as the move wrote it (log: ${logFile}):\n${tail}\n` +
-        `This is the orchestrator's to settle. Repair the Lean by hand (the target toolkit module, the paper files that used the result), then re-run ` +
-        `\`paperformalizer propose ${qid} --round B --apply\`: it runs the gate again on the files as they stand and goes on with the rest. ` +
-        `To give the move up instead, put back by hand the files it wrote (${journal} holds each one's original bytes), delete that journal and ${pendingFile}, and change the entry's decision. ` +
-        `Items applied before it stay applied and recorded.`;
-    // A move a previous apply left as written: the gate again, on the files as they stand.
-    let settled: string | null = null;
-    if (existsSync(pendingFile)) {
-      const pend = JSON.parse(await readFile(pendingFile, "utf8")) as PendingMove;
-      const p = build.find((x) => x.id === pend.proposal_id);
-      if (!p) throw new Error(`${pend.proposal_id}: a move is pending (${pendingFile}) but its entry is no longer accepted as a move; undo it by hand (${journal} holds the original bytes) and delete ${pendingFile}`);
-      const fpBefore = pendingMoveSnapshot(pend, { pendingFile, journal, voided: path.join(fpDir, "voided") });
-      const movedNames = pend.decls.map((x) => ({ from: x.from, to: x.to }));
-      log(`${p.id}: a move left as written after its gate failed (${pend.failed}) — running the gate on the files as they stand`);
-      const indexStep0 = args.indexStep !== undefined ? args.indexStep : await detectToolkitIndexStep(cfg, d);
-      const res = await withLock<{ ok: boolean; log: string; timedOut?: boolean }>(() => verifyKeptMove({
-        cfg, toolsDir, proposalId: p.id, paperModule, target: { ...pend.target, existingText: null }, decls: pend.decls,
-        headlineBaseline: new Map(pend.baseline), probeFile: probe, indexStep: indexStep0, journalFile: journal,
-        ...(fpBefore ? { invariance: invarianceOf(p.id, fpBefore, movedNames) } : {}),
-      }, d));
-      const logFile = path.join(fpDir, `move_${p.id}.log`);
-      await writeFile(logFile, res.log, "utf8");
-      if (!res.ok) throw new Error(escalation(p.id, logFile, res.log.split("\n").slice(-25).join("\n")));
-      await completeMove(p, owner[p.id]!, pend.decls, pend.target.module, pend.cleared, fpBefore !== null);
-      await d.removeFile(pendingFile);
-      settled = p.id;
-    }
-    if (settled) build.splice(build.findIndex((x) => x.id === settled), 1);
+    // What a commit of this run's moves landed (`local_moves.ts`), recorded now: after the commit, or
+    // at the next apply of a run that died before it recorded them.
+    const recordLocal = async (file: string, rec: LocalLanded, fresh = false) => {
+      for (const c of rec.covered) {
+        if (done.has(c.proposal_id)) continue;
+        const p = build.find((x) => x.id === c.proposal_id);
+        if (!p) continue;
+        const repointed = await repointMovedResults(cfg, qid, [{ from: c.from, to: c.existing }]);
+        await recordNow({ ...baseRecord(p, owner[p.id]!), decision: { kind: "covered", note: `covered by ${c.existing}: the toolkit already states it (the paper keeps its own proof)` }, promoted: [] });
+        log(`${p.id}: covered by \`${c.existing}\`${repointed.length ? `; crosswalk / report now point ${repointed.join(", ")} at it` : ""}`);
+        done.add(p.id);
+        build.splice(build.indexOf(p), 1);
+      }
+      // (the graph after the moves was taken in the workspace, before the commit)
+      for (const r of rec.regressions ?? []) log(`toolkit graph: ${r}`);
+      regressions = [...regressions, ...(rec.regressions ?? [])];
+      if (rec.batch.moves.length) await recordLanded(file, rec.batch, fresh);
+      await d.removeFile(file);
+    };
+    // A toolkit commit on file (this run's, interrupted after its commit point, or another's): rolled
+    // forward under the promotion lock before anything is planned — never planned on the old base.
+    if (await commitOnFile(cfg.toolkitRoot)) await withPromotionLock(cfg.toolkitRoot, () => honourCommit(cfg.toolkitRoot, log), cfg.lockPath, log);
+    for (const { file, landed } of await landedRecords(cfg, qid)) await recordLocal(file, landed);
 
-    // Re-scan: the batch must still describe the paper.
+    // Other papers that use this one (papers may build on each other): a move rewrites their
+    // references to what it moves, as in this paper, and its gate builds the modules it rewrote —
+    // those that built just before it (`brokenBefore`: a live run's paper may be mid-edit; what it
+    // breaks is not the move's, and the daily library check reports it).
+    const imp = dryRun || build.length === 0 ? NO_IMPORTERS : await findImporters(cfg, paperModule).catch((err) => {
+      log(`other papers' use of ${paperModule} not read (${err instanceof Error ? err.message : String(err)}); the moves rewrite this paper only — the daily library check reports what breaks`);
+      return NO_IMPORTERS;
+    });
+    if (imp.files.length) log(`other papers: ${imp.files.length} file(s) of ${[...imp.declared.keys()].join(", ")} name this paper — the moves rewrite their references too`);
+
+    // Re-scan (in a workspace, `withScanRoot`): the batch must still describe the paper.
     const scan = args.scan ? await args.scan() : await obtainScan({ toolkit: cfg, qid, leanSubdir: state.lean_subdir, log });
     const fresh = filterCandidates(scan, await paperObjects(cfg, qid));
     const freshByName = new Map(fresh.candidates.map((c) => [c.name, c] as const));
     const alreadyMoved = new Map<string, { to: string; module: string }>(moves.flatMap((m) => m.decls.map((x) => [x.from, { to: x.to, module: m.module }] as const)));
-    // The toolkit graph before the moves: a statement the toolkit already states is not moved twice.
-    const graphOf = args.graph ?? (() => refreshToolkitGraph({ toolkit: cfg, log }));
-    const before = await graphOf().catch((err: unknown) => {
-      log(`promotion: toolkit graph not built (${err instanceof Error ? err.message : String(err)}); moving without the graph checks`);
-      return null;
-    });
-    if (before) {
-      const hashes = new Map(before.nodes.filter((n) => n.layer === "toolkit" && n.statement_hash).map((n) => [n.statement_hash!, n.id] as const));
-      const own = new Map(before.nodes.filter((n) => n.layer === "paper").map((n) => [n.id, n.statement_hash] as const));
-      for (const p of build) {
-        const h = own.get(p.source.ref);
-        const dup = h ? hashes.get(h) : undefined;
-        if (dup) throw new Error(`${p.id}: the toolkit already states ${p.source.ref} as \`${dup}\`; decline it (the paper can use \`${dup}\`), then re-run`);
-      }
-    }
+    // (the toolkit graph before the moves, the duplicate and paper-name checks and the graph after
+    // the moves are taken in the workspace, of each base: `local_moves.ts`)
     for (const p of build) {
       const c = freshByName.get(p.source.ref);
       if (!c) throw new Error(`${p.id}: ${p.source.ref} is no longer a clean round-B candidate in the paper as it stands; re-propose with \`paperformalizer verify … --from-stage V6\``);
@@ -418,31 +367,26 @@ export async function applyRoundB(args: ApplyRoundBArgs): Promise<ApplyRoundBRes
       const problems = nameProblems(name, names);
       if (problems.length) throw new Error(`${p.id}: ${problems.join("; ")} — decide accept_with_edits with a proposed_name that fixes it, then re-run`);
     }
+    // (the headline baseline is taken in the workspace, of each base)
     const headlines = await reportHeadlineDecls(cfg, qid);
-    const baseline = await headlineBaseline(cfg, paperModule, headlines, probe, d);
-    log(`promotion: headline \`#print axioms\` baseline taken for ${baseline.size} declaration(s)`);
     const byName = new Map(scan.declarations.map((x) => [x.name, x] as const));
-
-    for (const p of build) {
+    // What one move is, given what moved before it: its declarations, its place, its records.
+    const prepare = (p: Proposal, movedBefore: ReadonlyMap<string, { to: string; module: string }>) => {
       const dec = owner[p.id]!;
       const eff = applyEdits(p, dec);
       const placement = classifyTarget(eff.target_module, cfg);
       if (placement.division !== eff.division) throw new Error(`${p.id}: target_module ${eff.target_module} is not in division ${eff.division}`);
-      const closure = (freshByName.get(p.source.ref)?.moves_with ?? []).filter((n) => !alreadyMoved.has(n));
+      const closure = (freshByName.get(p.source.ref)?.moves_with ?? []).filter((n) => !movedBefore.has(n));
       const ns = nsOf(eff.proposed_name);
       const decls: MoveDecl[] = [
         ...closure.map((n) => ({ from: n, to: ns ? `${ns}.${leafOf(n)}` : leafOf(n), kind: byName.get(n)?.kind ?? "theorem" })),
         { from: p.source.ref, to: eff.proposed_name, kind: byName.get(p.source.ref)?.kind ?? "theorem" },
       ];
       const targetAbs = path.join(cfg.toolkitRoot, ...eff.target_module.split("/"));
-      const target: MoveTarget = {
+      const place: Omit<MoveTarget, "existingText"> = {
         rel: eff.target_module, module: placement.module, division: placement.division,
         overview: eff.new_module_overview ?? `${eff.division} results proved in verified papers.`,
-        existingText: (await d.exists(targetAbs)) ? await d.readFile(targetAbs) : null,
       };
-      const files = await listPaperFiles(leanDir);
-      const paperFiles = new Map<string, string>();
-      for (const f of files) paperFiles.set(f, await d.readFile(f));
       const toolkitModulesUsed = [...new Set(decls.flatMap((x) => {
         const s = byName.get(x.from);
         return s ? [...s.type_constants, ...s.body_constants].filter((c) => c.class === "toolkit").map((c) => c.module) : [];
@@ -454,14 +398,6 @@ export async function applyRoundB(args: ApplyRoundBArgs): Promise<ApplyRoundBRes
         const s = byName.get(x.from);
         return s ? [...s.type_constants, ...s.body_constants].filter((c) => (c.class === "base" || c.class === "toolkit") && !movedNames.has(c.name)) : [];
       }).map((c) => [c.name, { name: c.name, module: c.module }] as const)).values()];
-      const planFor = (importMode: "minimal" | "source") => planMove({
-        cfg, paperFiles, decls, mainFrom: p.source.ref,
-        docstringOverride: dec.kind === "accept_with_edits" && (dec.edits.title || dec.edits.content || dec.edits.reference) ? proposalDocstring(eff) : null,
-        fallbackDocstring: proposalDocstring(eff),
-        target, alreadyMoved, toolkitModulesUsed, usedConstants, importMode,
-        readModule: (m) => paperFiles.get(path.join(cfg.toolkitRoot, ...m.split(".")) + ".lean") ?? null,
-      });
-      const plan = planFor("minimal");
       const alsoIn = [...new Set((p.recurrence ?? []).filter((r) => r.kind === "identical").map((r) => r.slug))];
       const date = now().toISOString().slice(0, 10);
       // The main result and its closure: one main node, the rest auxiliaries it owns.
@@ -474,67 +410,60 @@ export async function applyRoundB(args: ApplyRoundBArgs): Promise<ApplyRoundBRes
           ? { tier: "main", title: eff.title, ...(alsoIn.length ? { also_in: alsoIn } : {}) }
           : { tier: "aux", owners: [eff.proposed_name] }),
       }));
-      // Paper results moving now leave the paper: the headline gate compares what remains.
-      const itemBaseline = new Map([...baseline].filter(([h]) => !decls.some((x) => sameDecl(h, x.from))));
-      log(`${p.id}: moving ${decls.map((x) => (x.from === x.to ? x.to : `${x.from} → ${x.to}`)).join(", ")} into ${placement.module}${target.existingText === null ? " (new module)" : ""}`);
-      // What every declaration of the paper and the toolkit states now, under the names this move
-      // gives: the gate requires the same after it. The run's current F4 receipts are carried over.
-      const movedNames_ = decls.map((x) => ({ from: x.from, to: x.to }));
-      const fpBeforeFile = path.join(fpDir, `statements_before_${p.id}.json`);
-      const fpBefore = await withLock(() => takeFingerprints(d, cfg, paperModule, fpBeforeFile, movedNames_));
-      if (!fpBefore) log(`${p.id}: statement invariance not checked — the scan reported no statement hashes (update the toolkit's CandidateScan.lean from the template)`);
-      const invariance = fpBefore ? invarianceOf(p.id, fpBefore, movedNames_) : undefined;
-      const cleared = fpBefore ? await receiptsBefore(cfg, qid, leanDir, fpBeforeFile) : [];
-      const attempt = (pl: ReturnType<typeof planMove>) => withLock(() => applyMoveItem({
-        cfg, toolsDir, slug: qid, proposalId: p.id, paperModule, plan: pl, target, decls, headlineBaseline: itemBaseline,
-        ledgerEntries, journalFile: journal, probeFile: probe, indexStep, now: now(), ...(invariance ? { invariance } : {}),
-      }, d));
-      // On record before the first write: an apply that dies part-way leaves a move to settle, too.
-      const pend: PendingMove = {
-        proposal_id: p.id, decls,
-        target: { rel: target.rel, module: target.module, division: target.division, overview: target.overview },
-        baseline: [...itemBaseline].map(([h, ax]) => [h, [...ax]]),
-        statements_before: fpBefore ? fpBeforeFile : null, cleared: [...cleared], failed: "the apply was interrupted",
-      };
-      await writeJsonAtomic(pendingFile, pend);
-      let res = await attempt(plan);
-      if (!res.ok && !res.timedOut) {
-        // Once more with the source files' imports (a tactic no used constant brings in), written over the first.
-        log(`${p.id}: the minimal header (${plan.importsAdded.length} import(s) of what the declarations use) did not pass the gate; retrying with the source files' imports`);
-        const first = res.log;
-        res = await attempt(planFor("source"));
-        res = { ...res, log: `${first}\n\n--- retry with the source files' imports ---\n${res.log}` };
+      return { dec, eff, placement, decls, targetAbs, place, toolkitModulesUsed, usedConstants, ledgerEntries };
+    };
+    type Prepared = ReturnType<typeof prepare>;
+    // What `planMove` needs of a move besides the files (planned from the files as they stand: `plannerFor`).
+    const specOf = (p: Proposal, m: Prepared, movedBefore: ReadonlyMap<string, { to: string; module: string }>): MoveSpec => ({
+      proposalId: p.id, mainFrom: p.source.ref, decls: m.decls, ledgerEntries: m.ledgerEntries, place: m.place,
+      alreadyMoved: [...movedBefore].map(([k, v]) => [k, { ...v }] as [string, { to: string; module: string }]),
+      toolkitModulesUsed: m.toolkitModulesUsed, usedConstants: m.usedConstants,
+      docstringOverride: m.dec.kind === "accept_with_edits" && (m.dec.edits.title || m.dec.edits.content || m.dec.edits.reference) ? proposalDocstring(m.eff) : null,
+      fallbackDocstring: proposalDocstring(m.eff),
+    });
+
+    // The moves, prepared in the run's workspace as one batch and committed (`local_moves.ts`).
+    if (build.length > 0) {
+      const out = await localCommitMoves({
+        cfg, d, qid, log, toolsDir, indexStep, leanSubdir: state.lean_subdir, paperModule, imp, headlines,
+        moves: (skip) => {
+          const sim = new Map(alreadyMoved);
+          return build.filter((p) => !skip.has(p.id)).map((p) => {
+            const movedBefore = new Map(sim);
+            const m = prepare(p, movedBefore);
+            for (const x of m.decls) sim.set(x.from, { to: x.to, module: m.placement.module });
+            return { proposalId: p.id, mainFrom: p.source.ref, spec: specOf(p, m, movedBefore), module: m.placement.module, ledgerEntries: m.ledgerEntries };
+          });
+        },
+        graphIn: args.graphIn ?? (args.graph ? () => args.graph!() : (c) => refreshToolkitGraph({ toolkit: c, log, scope: { qid, papers: [paperModule] } })),
+        baselineIn: (c, probeFile) => headlineBaseline(c, paperModule, headlines, probeFile, d),
+        ownName: (id, name) => { const p = build.find((x) => x.id === id); return !!p && builtByOwnStudy(declared, qid, p, name); },
+        scanBefore: path.join(fpDir, "statements_before_batch.json"), scanAfter: fpAfterFile("batch"),
+        // compat 2026-11-11: remove after the processes started before this merge have exited (≤2 days)
+        localScans: true,
+      });
+      if (out.landed) {
+        const rec = (JSON.parse(await readFile(out.landed, "utf8")) as { record: LocalLanded }).record;
+        for (const m of rec.batch.moves) for (const x of m.decls) alreadyMoved.set(x.from, { to: x.to, module: m.module });
+        await recordLocal(out.landed, rec, true);
       }
-      const logFile = path.join(fpDir, `move_${p.id}.log`);
-      await writeFile(logFile, res.log, "utf8");
-      if (!res.ok) {
-        const tail = res.log.split("\n").slice(-25).join("\n");
-        if (!res.kept) {
-          await d.removeFile(pendingFile);
-          throw new Error(`${p.id}: the move could not be written (log: ${logFile}):\n${tail}\nNothing was written. Items applied before it stay applied and recorded.`);
-        }
-        await writeJsonAtomic(pendingFile, { ...pend, failed: (/gate step '([^']+)'/.exec(res.log.split("\n").slice(-3).join("\n")) ?? [])[1] ?? "apply error" });
-        throw new Error(escalation(p.id, logFile, tail));
+      if (out.failed) {
+        throw new Error(`${out.failed}\nNothing of it reached the shared toolkit (the moves before it that passed are committed and recorded). ` +
+          `This is the orchestrator's to settle: repair the Lean of the paper (or decide the entry again), then re-run \`paperformalizer propose ${qid} --round B --apply\`.`);
       }
-      for (const x of decls) alreadyMoved.set(x.from, { to: x.to, module: placement.module });
-      for (const h of [...baseline.keys()]) if (!itemBaseline.has(h)) baseline.delete(h);
-      // The move is on record before its pending marker goes (as a settled pending move is): an
-      // apply that dies between the two leaves a move to settle, never one that was applied and lost.
-      await completeMove(p, dec, decls, placement.module, cleared, fpBefore !== null);
-      await d.removeFile(pendingFile);
-    }
-    // The toolkit graph after the moves: what they made worse is reported to the owner.
-    const after = before ? await graphOf().catch(() => null) : null;
-    if (before && after) {
-      regressions = healthRegressions(toolkitHealth(before), toolkitHealth(after), moves.flatMap((m) => m.decls.map((x) => x.to)));
-      for (const r of regressions) log(`toolkit graph: ${r}`);
     }
   }
 
+  // The gates built the moving paper only: the whole library is built by the daily library check
+  // the operator schedules (`libraryCheck`), never after an apply — an exclusive build of every paper
+  // stops every other build for as long as it takes. What the moves broke is reported there.
+  if (!dryRun && moves.length > 0) log(`library check: left to the daily build of ${cfg.papersLib}; a break the moves caused is reported there`);
   // Built in general form by the study pipeline; the paper's result is re-proved as its corollary.
   if (generalize.length > 0) {
     const runStudy = args.runStudy ?? (await import("../substrate/pipeline.js")).runSubstratePipeline;
-    const graphOf = args.graph ?? (() => refreshToolkitGraph({ toolkit: cfg, log }));
+    // the toolkit and this paper (which uses the general results as its corollaries' proofs)
+    const papers = dryRun ? [] : [leanModulePrefix((await loadState(cfg.toolkitRoot, qid)).lean_subdir)];
+    const graphOf = args.graph ?? (() => refreshToolkitGraph({ toolkit: cfg, log, scope: { qid, papers } }));
     const before = dryRun ? null : await graphOf().catch(() => null);
     const files = existsSync(candidatesPath(cfg, qid))
       ? new Map((JSON.parse(await readFile(candidatesPath(cfg, qid), "utf8")) as CandidatesFile).candidates.map((c) => [c.name, c.file] as const))
@@ -551,26 +480,20 @@ export async function applyRoundB(args: ApplyRoundBArgs): Promise<ApplyRoundBRes
       let corollary: boolean | undefined;
       const file = files.get(p.source.ref);
       if (!dryRun && b.main && file) {
-        // The re-proof may change the proof of that one result and nothing any declaration states.
+        // The re-proof may change the proof of that one result and nothing any declaration states:
+        // re-proved in the run's workspace and committed (`local_moves.ts`).
         const state = await loadState(cfg.toolkitRoot, qid);
         const paperModule = leanModulePrefix(state.lean_subdir);
         const leanDir = leanTheoremDir(cfg.toolkitRoot, state.lean_subdir);
         const fpDir = proposalsRunDir(cfg, qid);
         const fpFile = (when: "before" | "after") => path.join(fpDir, `statements_${when}_${p.id}.json`);
-        const fpBefore = args.corollary ? null : await takeFingerprints(d, cfg, paperModule, fpFile("before"));
-        const cleared = fpBefore ? await receiptsBefore(cfg, qid, leanDir, fpFile("before")) : [];
-        corollary = (await reproveAsCorollary({
-          toolkit: cfg, qid, proposalId: p.id, decl: p.source.ref, file: path.join(cfg.toolkitRoot, file), general: b.main, log,
-          ...(args.corollary ? { deps: args.corollary } : {}),
-          ...(fpBefore ? {
-            verify: async () => {
-              const after = await takeFingerprints(d, cfg, paperModule, fpFile("after"));
-              return after ? statementInvarianceFailure(fpBefore, after) : "the scan after the re-proof reported no statement hashes";
-            },
-          } : {}),
-        })).ok;
-        if (corollary && fpBefore) {
-          const carried = await carryReceipts(cfg, qid, leanDir, cleared, fpFile("after")).catch(() => 0);
+        const r = await localCorollary({
+          cfg, d, qid, log, paperModule, leanSubdir: state.lean_subdir, proposalId: p.id, decl: p.source.ref, file: path.join(cfg.toolkitRoot, file), general: b.main,
+          ...(args.corollary ? { deps: args.corollary } : {}), scans: !args.corollary, scanFile: fpFile,
+        });
+        corollary = r.ok;
+        if (r.ok && r.cleared.length) {
+          const carried = await carryReceipts(cfg, qid, leanDir, r.cleared, fpFile("after")).catch(() => 0);
           log(`${p.id}: every statement unchanged${carried ? `; ${carried} F4 receipt(s) carried over` : ""}`);
         }
       } else if (!dryRun) {
@@ -609,7 +532,68 @@ export async function applyRoundB(args: ApplyRoundBArgs): Promise<ApplyRoundBRes
   log(`ledger: ${added.length} decision record(s) appended${skipped.length ? `, ${skipped.length} already recorded` : ""} → ${ledgerFile}`);
   await recordDecisions(statementStorePath(cfg, qid, dryRun), qid, new Map(proposed.map((p) => [p.id, owner[p.id]!.kind as DecisionKind] as const)), statementStoreLockPath(cfg, qid, dryRun));
   if (!dryRun) await writeReportToolkitSection(path.join(cfg.runsDir, qid), await loadRunReuse(path.join(cfg.runsDir, qid)), moves);
-  return { decisions, records, promoted: [...moves.flatMap((m) => m.decls.map((x) => x.to)), ...records.filter((r) => generalize.some((p) => p.id === r.proposal_id)).flatMap((r) => r.promoted)], moves, regressions };
+  return { decisions, records, promoted: [...moves.flatMap((m) => m.decls.map((x) => x.to)), ...records.filter((r) => generalize.some((p) => p.id === r.proposal_id)).flatMap((r) => r.promoted)], moves, regressions, libraryBreaks: [], libraryBreaksMaybeOlder: false };
+}
+
+/** Of `names`, those a paper's source declares (fully qualified): the files that mention a name's
+ *  last component (one `grep` over the papers' sources, their `tmp/` scratch left out), parsed for
+ *  their declarations. (`declaredNames` reads declaration headers: a structure's fields or an
+ *  inductive's constructors, and a name on a header split over several lines, are not seen — the
+ *  daily library check is what catches those.) */
+export async function paperDeclaredNames(cfg: ToolkitConfig, names: readonly string[]): Promise<Set<string>> {
+  const out = new Set<string>();
+  const leaves = [...new Set(names.map(leafOf))];
+  const dir = path.join(cfg.toolkitRoot, cfg.papersLib);
+  if (!leaves.length || !existsSync(dir)) return out;
+  // grep: 0 = matches, 1 = none, anything else = it could not read the sources
+  const stdout = await new Promise<string>((resolve, reject) => {
+    execFile("grep", ["-rlF", "--include=*.lean", `--exclude-dir=${PAPER_TMP_DIR}`, ...leaves.flatMap((l) => ["-e", l]), dir], { encoding: "utf8", maxBuffer: 256 * 1024 * 1024 }, (err, so, se) => {
+      if (!err || (err as { code?: unknown }).code === 1) resolve(err ? "" : so);
+      else reject(new Error(`the papers' sources could not be searched for the target names (grep: ${se.trim() || err.message}); re-run once the toolkit graph builds`));
+    });
+  });
+  const wanted = new Set(names);
+  for (const f of stdout.split("\n").filter(Boolean)) {
+    for (const x of declaredNames(await readFile(f, "utf8"))) if (wanted.has(x.name)) out.add(x.name);
+  }
+  return out;
+}
+
+/** What the library check found: `breaks`, the modules that do not build; `killed`, those whose Lean
+ *  was still killed by a signal (out of memory) after the re-builds — resources, not breaks. */
+export interface LibraryCheck { breaks: string[]; killed: string[] }
+
+/** The daily library check: build every paper (`lake build <papers_lib>`, under the Lake build lock
+ *  as any build; a scheduled daily check runs it in a workspace of its own): the modules
+ *  that fail, as Lake names them (or the command itself when it names none); empty when it passes.
+ *  (2026-11-11) A module whose Lean was killed (137, the OOM killer on a loaded node): the library is
+ *  built again with less parallelism (`LEAN_NUM_THREADS` 2, then 1: Lake 4.33 has no `-j`), two
+ *  rounds at most; still killed, it is reported as `killed`. Each round's output is appended to `logFile`. */
+export async function libraryCheck(cfg: ToolkitConfig, d: ApplyDeps, logFile: string): Promise<LibraryCheck> {
+  const cmd = `lake build ${cfg.papersLib}`;
+  const r = await d.run(cmd, cfg.toolkitRoot);
+  await writeFile(logFile, `$ (${cfg.toolkitRoot}) ${cmd}\n${r.log}`, "utf8");
+  if (r.code === 0 && !r.timedOut) return { breaks: [], killed: [] };
+  let killed = killedModules(r.log);
+  const breaks = new Set(failingModules(r.log).filter((m) => !killed.includes(m)));
+  if (!breaks.size && !killed.length) return { breaks: [r.timedOut ? `${cmd} (watchdog-killed)` : cmd], killed: [] };
+  // the whole target again, not the killed modules alone: Lake builds no dependent of a module that
+  // failed, so a break further on shows only now (what is built already is skipped)
+  for (const threads of ["2", "1"]) {
+    if (!killed.length) break;
+    const again = `LEAN_NUM_THREADS=${threads} ${cmd}`;
+    const rr = await d.run(cmd, cfg.toolkitRoot, { env: { LEAN_NUM_THREADS: threads } });
+    await appendFile(logFile, `\n$ (${cfg.toolkitRoot}) ${again}\n${rr.log}`, "utf8");
+    if (rr.code === 0 && !rr.timedOut) { killed = []; break; }
+    const stillKilled = killedModules(rr.log);
+    const failing = failingModules(rr.log).filter((m) => !stillKilled.includes(m));
+    for (const m of failing) breaks.add(m);
+    // failed, naming nothing: never a pass
+    if (!rr.timedOut && !failing.length && !stillKilled.length) breaks.add(again);
+    // watchdog-killed: what it did not finish is still out of resources
+    killed = rr.timedOut ? [...new Set([...killed, ...stillKilled])].filter((m) => !breaks.has(m)).sort() : stillKilled;
+  }
+  return { breaks: [...breaks].sort(), killed };
 }
 
 // ─── paper results moved to the toolkit ──────────────────────────────────────

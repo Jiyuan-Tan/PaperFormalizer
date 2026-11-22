@@ -91,6 +91,7 @@ export const stateSchema = z
       scaffold_redirect: z.string().nullable().optional(),
       plan_rewind_violations: z.string().nullable().optional(),
       f1_blocked: z.object({ message: z.string(), review: z.unknown().optional() }).nullable().optional(),
+      f1_replan_asked: z.boolean().nullable().optional(),
       // Proof-review loop iteration budgets — persisted so a `--resume` cannot silently
       // hand the loop a fresh budget (see types.ts).
       proof_loop_counters: z

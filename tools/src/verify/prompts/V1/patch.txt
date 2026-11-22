@@ -50,6 +50,14 @@ restating the results that use it.
 
 === WHEN A RESULT CANNOT BE REPAIRED ===
 
+First read what the finding refutes; its detail says which. It refutes the STATEMENT when its
+witness satisfies the statement's hypotheses and fails its conclusion; it refutes only the PROOF
+when its witness breaks a step, a lemma the proof invokes or a bound it uses, but not the statement
+itself. A statement whose proof alone fails may still be true: repair the proof (step (1)), by
+another argument, another lemma of the paper or a result it cites, if the printed route is broken.
+Weaken such a result only when no proof you can write works; its note's `gives_up` then begins
+"printed claim not refuted:".
+
 When every repair of a node would weaken the paper's claim, list it under `unfixable`, with
 `reason` = "any repair weakens the contribution: <what would have to change>", and give in
 `suggested_repair` the STRONGEST version still true: the least-weakening corrected statement,
@@ -58,6 +66,13 @@ up (null when it gives nothing up). It is never applied by you: the paper's owne
 decides whether to formalize it. `suggested_repair` is null only when nothing true of the
 result survives. An unfixable result with no suggestion on a key result's path stops the run;
 an unfixable side result no key result uses is reported and left out of the formalization.
+
+The suggestion gives up only what the witness forces. Name what makes the statement fail on the
+witness (its mechanism: a tie broken adversarially, an atom, a shift, an adaptive choice), and
+exclude only the cases that share it: a condition ruling out that mechanism, or the class the
+witness lies outside, before dropping a conclusion or a whole clause. Its note's `fix` says why each
+case or conclusion lost cannot be kept: a witness refutes it, or the repaired proof needs its
+exclusion.
 
 === OUTPUT ===
 

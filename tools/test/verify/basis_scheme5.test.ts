@@ -66,8 +66,10 @@ const moved = (a: Core, b: Core): string[] => IDS.filter((id) => nodeFingerprint
 describe("scheme 5: what a basis reads", () => {
   it("a proof-only edit of a deep lemma moves that lemma's basis and no user's", () => {
     expect(moved(chain(), withStatement(chain(), "lem:deep", (st) => (st.proof_tex = "Condition on $X$; then integrate.")))).toEqual(["lem:deep"]);
-    // … nor does its locator, or any other field its users are not shown
-    expect(moved(chain(), withStatement(chain(), "lem:deep", (st) => (st.tex_locator = { ...st.tex_locator!, from: 19 })))).toEqual(["lem:deep"]);
+    // … nor does its locator, or any other field its users are not shown; its lines move not even its
+    // own (scheme 6: where a node is printed is not what it says)
+    expect(moved(chain(), withStatement(chain(), "lem:deep", (st) => (st.tex_locator = { ...st.tex_locator!, from: 19 })))).toEqual([]);
+    expect(moved(chain(), withStatement(chain(), "lem:deep", (st) => (st.tex_locator = { ...st.tex_locator!, label: "lem:other" })))).toEqual(["lem:deep", "lem:mid"]);
   });
 
   it("a changed statement of a dependency moves its direct users, not theirs; the text is read whole, past where the prompt cuts it", () => {
@@ -112,7 +114,8 @@ describe("scheme 5: what a basis reads", () => {
     expect(regradeCause({ inputs: a, clean: true }, b)).toBe("dependency verdict");
     // only results have a verdict line: a hypothesis or definition used is shown by its text
     expect(basisInputs(c, "lem:deep", new Map(), undefined, () => "x").verdicts).toBeUndefined();
-    for (const id of ["ass:overlap", "def:propensity"]) expect(nodeFingerprint(c, id)).toBe(basisOf(basisInputsV4(c, id)));
+    // (the scheme-5 basis, which read a node's lines, as the transition computes it)
+    for (const id of ["ass:overlap", "def:propensity"]) expect(basisOf(basisInputs(c, id, new Map(), undefined, undefined, 5))).toBe(basisOf(basisInputsV4(c, id)));
     expect(regradeCause({ inputs: basisInputs(c, "lem:mid"), clean: true }, basisInputs(withStatement(c, "lem:deep", (st) => (st.statement += " Exactly.")), "lem:mid"))).toBe("dependency");
   });
 });
@@ -527,5 +530,41 @@ describe("scheme 5 inside the stage", () => {
     expect(h.state.verify!.confirmed_scheme).toBe(BASIS_SCHEME);
     const after = await readReview(h.runDir);
     expect(after.nodes.map((n) => [n.id, n.basis_scheme, n.basis, n.graded]).sort()).toEqual(now.nodes.map((n) => [n.id, BASIS_SCHEME, n.basis, "carried"]).sort());
+  });
+});
+
+describe("scheme 6: where a node is printed is not what it says", () => {
+  /** The cache a scheme-5 pass left on `c` (the node's lines read into its basis). */
+  function passedUnder5(c: Core): { prior: V15Review; confirmed: Record<string, string> } {
+    const { prior } = passed(c);
+    const nodes = prior.nodes.map((n) => ({ ...n, basis: basisOf(basisInputs(c, n.id, new Map(), undefined, (d) => n.basis_inputs?.verdicts?.[d], 5)), basis_scheme: 5 }));
+    return { prior: { ...prior, nodes }, confirmed: Object.fromEntries(nodes.map((n) => [n.id, n.basis] as const)) };
+  }
+  const shifted = (c: Core, by: number): Core => {
+    const out = structuredClone(c);
+    for (const n of [...out.assumptions, ...out.definitions, ...out.statements]) if (n.tex_locator) n.tex_locator = { ...n.tex_locator, from: n.tex_locator.from + by, to: n.tex_locator.to + by };
+    return out;
+  };
+
+  it("a revision that moves every result's lines carries every verdict: the scheme-6 cache, and a scheme-5 one whose basis still holds (re-keyed)", () => {
+    const { prior, confirmed } = passed(chain());
+    expect(partitionByBasis(shifted(chain(), 7), confirmed, prior).toGrade).toEqual([]);
+    const old = passedUnder5(chain());
+    // the scheme-5 bases differ from the scheme-6 ones (they read the lines) …
+    expect(old.confirmed["lem:deep"]).not.toBe(confirmed["lem:deep"]);
+    // … and hold on the core they were given on: carried, re-keyed under scheme 6
+    const same = partitionByBasis(chain(), old.confirmed, old.prior);
+    expect(same.toGrade).toEqual([]);
+    expect(same.carried.find((n) => n.id === "lem:deep")).toMatchObject({ basis: confirmed["lem:deep"], basis_scheme: BASIS_SCHEME });
+    // a scheme-5 basis read the lines: on a core whose lines moved since, it no longer holds …
+    expect(partitionByBasis(shifted(chain(), 7), old.confirmed, old.prior).toGrade).toContain("lem:deep");
+    // … unless it is read on the lines the revision moved them from (`revision.lines_before`)
+    const linesBefore = Object.fromEntries([...chain().assumptions, ...chain().definitions, ...chain().statements].flatMap((n) => (n.tex_locator ? [[n.id, n.tex_locator] as const] : [])));
+    const moved5 = partitionByBasis(shifted(chain(), 7), old.confirmed, old.prior, new Map(), {}, new Map(), shownVerdictOf(shifted(chain(), 7)), { linesBefore });
+    expect(moved5.toGrade).toEqual([]);
+    expect(moved5.carried.find((n) => n.id === "lem:deep")).toMatchObject({ basis: confirmed["lem:deep"], basis_scheme: BASIS_SCHEME });
+    // and an edit is graded as under any scheme
+    const edited = withStatement(chain(), "lem:deep", (st) => (st.proof_tex = "Condition on $X$; then integrate."));
+    expect(partitionByBasis(edited, old.confirmed, old.prior).toGrade).toEqual(["lem:deep"]);
   });
 });

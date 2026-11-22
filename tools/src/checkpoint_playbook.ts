@@ -68,7 +68,8 @@ const PERSIST_BANNER =
 
 /** A halt the run cannot get past: the Lean it needs is out of reach (F1 `blocked`, F2's missing architecture). */
 const END_FAILED_EXIT =
-  "Machinery out of reach (the planner says `blocked-infeasible`, or a missing item is a whole theory — not a few definitions or lemmas a run builds under `Papers/<Slug>/`), which you confirm by searching Mathlib, the base libraries and the toolkit → end the run with its report: `--resume --from-stage V6` (no result is checked in Lean; the run shows as failed at this stage), after you post the reason on the page (on a full-auto run yours; else ask the user first). Never leave such a run halted, nor edit `state.json` by hand";
+  "A result the paper cites (another paper's, a book's) is never out of reach: prove it from the source, or take it as a cited assumption (the result is then conditional on it); when you need the source's text and cannot fetch it, ask the user for it (`orch.mjs ask`, on full auto `--owner-only`) and wait — never end the run for it. " +
+  "Machinery out of reach (the planner says `blocked-infeasible`, or a missing item is a whole theory the paper does not cite — not a few definitions or lemmas a run builds under `Papers/<Slug>/`), which you confirm by searching Mathlib, the base libraries and the toolkit → end the run with its report: `--resume --from-stage V6` (no result is checked in Lean; the run shows as failed at this stage), after you post the reason on the page (on a full-auto run yours; else ask the user first). Never leave such a run halted, nor edit `state.json` by hand";
 
 /** F1 answered `blocked` (first plan, or a re-plan inside the F1.5 loop): no plan was written. */
 const F1_BLOCKED_GUIDANCE =
@@ -109,7 +110,7 @@ function perStageGuidance(
       }
       return (
         "F2–F4: follow the checkpoint route (hint / build-substrate / fix-source / unclear / bank-partial); keep running while revisions converge. A paper-statement finding comes back as a proposed rewind for you to approve or reject. " +
-        "Use fix-source only when the paper is wrong (a report finding, never an edit to the source); unclear is undetermined, so investigate. Ending the run here (`--from-stage V6`) is not a checkpoint ruling: it is the owner's unless the run is on full auto, and a run on `--persist` refuses it. After hand de-laundering, re-run the loop (`--from-stage F2.5`) through F5 and record added_assumptions. paperformalizer SKILL §'F stages'."
+        "Use fix-source only when the paper is wrong (a report finding, never an edit to the source); unclear is undetermined, so investigate. Ending the run here (`--from-stage V6`) is not a checkpoint ruling: it is the owner's unless the run is on full auto, and a run on `--persist` refuses it; a build-substrate escalation for a result the paper cites never ends it — prove that result from the source or take it as a cited assumption, and ask the user for a source you cannot fetch. After hand de-laundering, re-run the loop (`--from-stage F2.5`) through F5 and record added_assumptions. paperformalizer SKILL §'F stages'."
       );
 
     case "5":

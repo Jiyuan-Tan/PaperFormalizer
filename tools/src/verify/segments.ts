@@ -60,6 +60,31 @@ export const SegmentsSchema = z.object({
 });
 export type Segments = z.infer<typeof SegmentsSchema>;
 
+/** The entries of `before` that `after` no longer has, one line each: a segmenter asked to fill gaps
+ * in an existing file adds to it and never drops what it holds (11-16: an edit that emptied the file
+ * was taken, and the paper read as having no results). Each entry of `before` is matched to its own
+ * entry of `after`, one to one: a result by its printed head, its id or where its statement starts
+ * (any one of them: the agent may correct the others, or its kind); a binding by its result; an
+ * extension by its environment. Pure. */
+export function segmentEntriesDropped(before: Segments, after: Segments): string[] {
+  const unmatched = <T>(old: readonly T[], now: readonly T[], same: (a: T, b: T) => boolean, name: (a: T) => string): string[] => {
+    const used = new Set<number>();
+    return old.flatMap((a) => {
+      const k = now.findIndex((b, i) => !used.has(i) && same(a, b));
+      if (k === -1) return [name(a)];
+      used.add(k);
+      return [];
+    });
+  };
+  type R = Segments["results"][number];
+  const sameResult = (a: R, b: R): boolean => (a.printed !== undefined && a.printed === b.printed) || (a.id !== undefined && a.id === b.id) || a.lines[0] === b.lines[0];
+  return [
+    ...unmatched(before.results, after.results, sameResult, (r) => `result ${r.kind} ${r.printed ?? r.id ?? `at line ${r.lines[0]}`}`),
+    ...unmatched(before.bindings, after.bindings, (a, b) => a.result === b.result, (b) => `the proof binding of ${b.result}`),
+    ...unmatched(before.extend, after.extend, (a, b) => a.env === b.env, (e) => `the extension of ${e.env}`),
+  ];
+}
+
 /** Parser warnings that mean a result or proof exists in the source and was not placed. */
 const GAP_RE = [
   /is attached to no result/,

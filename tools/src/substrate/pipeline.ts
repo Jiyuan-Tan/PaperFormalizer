@@ -3,8 +3,7 @@ import { mkdir, writeFile, readdir, readFile } from "node:fs/promises";
 import path from "node:path";
 import { createHash } from "node:crypto";
 import { ensureRequirement } from "./requirement.js";
-import { substrateRecordDir, substrateRunDir, substrateLeanDir, substrateModulePrefix, substrateStatePath } from "./paths.js";
-import { withPromotionLock } from "../shared/build_mutex.js";
+import { studyRunId, substrateRecordDir, substrateRunDir, substrateLeanDir, substrateModulePrefix, substrateStatePath } from "./paths.js";
 import type { ToolkitConfig } from "../toolkit/config.js";
 import {
   clearStudyCap, createInitialSubstrateState, loadSubstrateState, saveSubstrateState, substrateStateExists,
@@ -13,7 +12,7 @@ import { runScaffolder as realScaffolder } from "./scaffolder.js";
 import { runFillers as realFillers } from "./filler.js";
 import { runReviewer as realReviewer } from "./reviewer.js";
 import { buildTargets as realBuild } from "./build.js";
-import { coordinate as realCoordinate, coordinateJournalPath, describeCoordinatePlan } from "./coordinate.js";
+import { describeCoordinatePlan, realCoordinateDeps, type CoordinateArgs } from "./coordinate.js";
 import {
   buildCoordinatorPrompt, buildFillerPrompt, buildReviewerPrompt, buildScaffolderPrompt, toolkitPromptContext,
 } from "./prompts.js";
@@ -33,13 +32,15 @@ export interface SubstratePipelineDeps {
   runFillers: typeof realFillers;
   runReviewer: typeof realReviewer;
   buildTargets: typeof realBuild;
-  coordinate: typeof realCoordinate;
+  /** One coordinate attempt: prepared in a private workspace and committed (`local_coordinate.ts`);
+   *  a dry run only describes it. */
+  coordinate: (args: CoordinateArgs) => Promise<{ ok: boolean; log: string; timedOut?: boolean; conflict?: boolean }>;
   writePlan?: (runDir: string, md: string) => Promise<void>;
 }
 
 const realDeps: SubstratePipelineDeps = {
   runScaffolder: realScaffolder, runFillers: realFillers, runReviewer: realReviewer,
-  buildTargets: realBuild, coordinate: realCoordinate,
+  buildTargets: realBuild, coordinate: async (args) => (await import("./local_coordinate.js")).localCoordinate(args, realCoordinateDeps),
   writePlan: async (runDir, md) => { await mkdir(runDir, { recursive: true }); await writeFile(path.join(runDir, "plan.md"), md, "utf8"); },
 };
 
@@ -98,12 +99,16 @@ export function dryRunDeps(): SubstratePipelineDeps {
   };
 }
 
-async function listLeanFiles(leanDir: string): Promise<string[]> {
+/** The study's module files under `leanDir`, sorted (exported for its test). */
+export async function listStudyModuleFiles(leanDir: string): Promise<string[]> {
   const entries = await readdir(leanDir, { withFileTypes: true }).catch(() => []);
   const files: string[] = [];
   for (const entry of entries) {
     const abs = path.join(leanDir, entry.name);
-    if (entry.isDirectory()) files.push(...await listLeanFiles(abs));
+    // (a directory whose name starts with "." — a probe's `.scratch/`, an editor's — holds no
+    // module: no Lean module segment can start with "."; built as one, the round is refused,
+    // 2026-11-10 "invalid Lean module target: Toolkit.Staging.<Study>..scratch.…")
+    if (entry.isDirectory() && !entry.name.startsWith(".")) files.push(...await listStudyModuleFiles(abs));
     else if (entry.isFile() && entry.name.endsWith(".lean")) files.push(abs);
   }
   return files.sort();
@@ -241,7 +246,7 @@ export async function runSubstratePipeline(
       // prompts, rebuild, then hand control back to the scaffolder (phase
       // `build`) so it assesses the build and decides review vs. another round.
       const reports = await d.runFillers({ repoRoot, toolkit, runDir, round: state.buildRounds + 1, leanDir, modulePrefix, prompts: state.pendingPrompts, concurrency: FILLER_CONCURRENCY });
-      const files = await listLeanFiles(leanDir);
+      const files = await listStudyModuleFiles(leanDir);
       const targets = files.length > 0
         ? leanModuleTargets(leanDir, modulePrefix, files)
         : [modulePrefix];
@@ -270,7 +275,7 @@ export async function runSubstratePipeline(
       state.lastReview = verdict;
       let reviewPassed = verdict.pass;
       if (verdict.pass) {
-        const files = await listLeanFiles(leanDir);
+        const files = await listStudyModuleFiles(leanDir);
         const targets = files.length > 0
           ? leanModuleTargets(leanDir, modulePrefix, files)
           : [modulePrefix];
@@ -300,32 +305,21 @@ export async function runSubstratePipeline(
         }
       }
     } else if (state.phase === "coordinate") {
-      const files = await listLeanFiles(leanDir);
-      // Serialize coordination across concurrent study runs on one toolkit: the whole step
-      // (barrel edits + merges into shared modules + ledger + lake build + lints) mutates the
-      // shared toolkit, so two runs must never interleave — otherwise they clobber each
-      // other's snapshots and race on the `.lake` build dir. A queued run waits here. A dry
-      // run mutates nothing, so it takes no lock (and writes nothing outside its run record).
-      const attempt = () => d.coordinate({
+      const files = await listStudyModuleFiles(leanDir);
+      // One coordinate attempt: the manifest applied and gated in the study's own promotion
+      // workspace, then committed to the shared toolkit (`local_coordinate.ts`). A dry run mutates
+      // nothing (and writes nothing outside its run record): it describes the attempt.
+      const coordArgs = {
         toolkit, slug, leanDir, requirement, modulePrefix, runDir,
         leanFiles: files, round: state.coordinateRounds + 1,
-        lastFailureLog: state.lastCoordinateLog,
+        lastFailureLog: state.lastCoordinateLog, requirementVersion: state.requirementVersion,
         ...(provenance ? { provenance } : {}),
-      });
-      if (!opts.dryRun) {
-        if (state.pendingApply) {
-          console.log(`[study] coordinate round ${state.pendingApply.round} was interrupted; its journal is recovered first.`);
-        }
-        state.pendingApply = { round: state.coordinateRounds + 1, journal: coordinateJournalPath(toolkit, slug) };
-        await saveSubstrateState(repoRoot, slug, state, dryRun);
-      }
-      const res = opts.dryRun
-        ? await attempt()
-        : await withPromotionLock(toolkit.toolkitRoot, attempt, toolkit.lockPath);
-      state.pendingApply = null;
+      };
+      const res = await d.coordinate(coordArgs);
       if (opts.dryRun) console.log(res.log);
       if (res.conflict) {
-        // The interrupted promotion cannot be undone automatically: a human resolves it.
+        // Refused (a duplicate of the base toolkit, a toolkit that kept moving under it, a commit
+        // that could not be finished): a human resolves it.
         state.phase = "escalated";
         state.terminalRequirementHash = requirementHash;
         state.terminalEscalationKind = "coordinate-recovery";
@@ -364,6 +358,13 @@ export async function runSubstratePipeline(
           // Retry: re-enter coordinate with the failure log fed back to the coordinator.
           state.phase = "coordinate";
         }
+      }
+      // (2026-11-11) the step ended for good (committed, refused, halted): its promotion workspace on this
+      // machine released (`local_coordinate.ts` prepares it; a retry, above, keeps it)
+      if (!opts.dryRun && state.phase !== "coordinate") {
+        const { releaseStudyPromo } = await import("../shared/workspace.js");
+        await releaseStudyPromo(toolkit.toolkitRoot, studyRunId(slug), (line) => console.log(`[study] ${line}`)).catch((err) =>
+          console.log(`[study] its promotion workspace not released (${err instanceof Error ? err.message : String(err)})`));
       }
     } else {
       // done | halted | escalated

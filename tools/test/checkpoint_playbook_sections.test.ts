@@ -63,6 +63,11 @@ describe("checkpoint playbook", () => {
 
   it("the missing-architecture block and the proof-loop cap carry their exits in the reminder", () => {
     expect(checkpointGuidance("2", "blocked", { missing_architecture: true })).toMatch(/F2 MISSING ARCHITECTURE[\s\S]*flags\.missing_architecture_items/);
+    // a result the paper cites is never grounds for ending the run — before the exit that ends one, in both halts
+    for (const g of [checkpointGuidance("2", "blocked", { missing_architecture: true })!, checkpointGuidance("3", "checkpoint", {}, false, "PROOF-REVIEW LOOP ESCALATION [build-substrate]")!]) {
+      expect(g).toMatch(/the paper cites[\s\S]*(cited assumption[\s\S]*never end|never end[\s\S]*cited assumption)/);
+    }
+    expect(checkpointGuidance("2", "blocked", { missing_architecture: true })!.indexOf("cited assumption")).toBeLessThan(checkpointGuidance("2", "blocked", { missing_architecture: true })!.indexOf("--from-stage V6"));
     // picked by the stage of the result: the loop's phases, and the guard that refuses F5 on an unresolved escalation
     for (const st of ["3", "3.5", "4"] as const) expect(checkpointGuidance(st, "checkpoint", {})).toContain("F2–F4: follow the checkpoint route");
     expect(checkpointGuidance("5", "checkpoint", {}, false, "PROOF-REVIEW ESCALATION UNRESOLVED [hint]: cannot enter F5")).toContain("F2–F4: follow the checkpoint route");

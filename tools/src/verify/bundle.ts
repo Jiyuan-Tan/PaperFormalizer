@@ -406,7 +406,8 @@ async function writeLean(a: BundleArgs, dir: string, names: Record<string, strin
   let count = files.length;
   const barrel = rel.split("/").join(".");
   if (existsSync(`${from}.lean`)) { await put(`${from}.lean`, `${rel}.lean`); count += 1; }
-  // The toolkit modules it imports, and theirs: copied (they are the user's own, and few).
+  // Local dependencies, including reached modules of sibling papers, and their imports.
+  // Do not copy the package's aggregate root: the bundle generates its own root below.
   const lib = rel.split("/")[0]!;
   const toolkit: string[] = [];
   const done = new Set<string>();
@@ -414,7 +415,7 @@ async function writeLean(a: BundleArgs, dir: string, names: Record<string, strin
     grew = false;
     for (const m of [...new Set([...written.values()].flatMap((h) => h.imports))].sort()) {
       const root = m.split(".")[0]!;
-      if (done.has(m) || root === lib || !existsSync(path.join(a.toolkitRoot, `${root}.lean`)) || !existsSync(path.join(a.toolkitRoot, root))) continue;
+      if (done.has(m) || written.has(m) || m === lib || !existsSync(path.join(a.toolkitRoot, `${root}.lean`)) || !existsSync(path.join(a.toolkitRoot, root))) continue;
       done.add(m);
       const file = `${m.split(".").join("/")}.lean`;
       if (!existsSync(path.join(a.toolkitRoot, file))) continue;

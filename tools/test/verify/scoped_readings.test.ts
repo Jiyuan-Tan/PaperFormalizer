@@ -180,8 +180,9 @@ describe("scoped symbol readings: the verdict basis", () => {
   it("a table without scoped clauses hashes under scheme 4 exactly as before the split: every scheme-4 basis of the fixture is the one the earlier code gave; a node using nothing keeps it under scheme 5", () => {
     expect(basesV4(core())).toEqual(BEFORE);
     expect(basisInputsV4(core(), "lem:a").scheme).toBe(4);
-    expect(basisInputs(core(), "lem:a").scheme).toBe(5);
-    for (const id of ["ass:h", "ass:g"]) expect(bases(core())[id]).toBe(BEFORE[id]);
+    expect(basisInputs(core(), "lem:a").scheme).toBe(6);
+    // (as scheme 5 read it: scheme 6 reads no node's lines)
+    for (const id of ["ass:h", "ass:g"]) expect(basisOf(basisInputs(core(), id, new Map(), undefined, undefined, 5))).toBe(BEFORE[id]);
     // a clause applicable to no node of the core moves nothing either
     const stale = core();
     stale.symbols[0]!.scoped = [{ results: ["thm:gone"], text: "stale" }];

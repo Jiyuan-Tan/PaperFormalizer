@@ -245,6 +245,10 @@ export interface V15NodeVerdict {
    * of the paper, never the fixer's. */
   witness_regime?: "in_scope" | "degenerate" | null;
   witness_instance?: string | null;
+  /** TYPOS of the node's PROOF that leave the result true (a wrong index, a sign, `=` for `≤`, a wrong
+   * reference): never a grade — the runner corrects the printed proof with them (`patches.ts`
+   * `typo_fixes`), and the report lists them. Absent on reviews written before the field. */
+  typos?: Array<{ printed: string; intended: string; reason: string }>;
   /** Runner-owned: the paper's owner withdrew this finding (`--reject-finding`): the referee's
    * error on the node is overruled — graded `ok` — and `owner_reason` says why. */
   owner_overruled?: boolean;
@@ -312,12 +316,23 @@ export interface V15SymbolVerdict {
   shards?: string[];
 }
 
+/** The referee's severity of one accepted weakening of a key result: `substantial` = the headline
+ * claim is cut; `limited` = corner cases, a standard assumption, an unadvertised constant. */
+export interface PatchWeakening {
+  node: string;
+  severity: "substantial" | "limited";
+  reason: string;
+}
+
 /** The confirming referee's judgement of the fixer's `key_results` (present exactly when the
  * core carries patches): a headline result the fixer left out would let it descope the part of
  * the paper it could not repair. */
 export interface V15PatchReview {
   key_results_ok: boolean;
   detail: string;
+  /** How much each accepted weakening of a key result gives up; the paper grade reads it (a
+   * `substantial` one is a MAJOR error). Absent in reviews written before 2026-11-14. */
+  weakenings?: PatchWeakening[];
   /** Runner-owned: hash of the key results and key contribution judged, so a later pass with no
    * node to grade can carry an approval of the same list. */
   basis?: string;
@@ -431,7 +446,18 @@ export interface VerifyState {
     sha256: string;
     /** The paper's arXiv identifier, as the owner declared it (`report --arxiv`). */
     arxiv?: string;
+    /** The sources fixes in place replaced (`closeInPlaceFix`): no plain entry reads one as a revision. */
+    fixed_from?: string[];
   };
+  /** The version of the paper this run is on (`--revise`, `revision.ts`); absent = 1. */
+  version?: number;
+  /** The earlier versions, each frozen under `versions/v<n>/`, oldest first. */
+  versions?: import("./revision.js").VersionRecord[];
+  /** The revision being run, from `--revise` until the next one (what V1's re-pointing found). */
+  revision?: import("./revision.js").RevisionRecord;
+  /** A closed fix in place's `lines_before` (scheme 5, as a revision's): V1.5 reads it before the
+   *  revision record's, until the next revision. */
+  fix_lines_before?: Record<string, unknown>;
   /** `--targets` labels, or null = every theorem-like env. */
   targets: string[] | null;
   /** sha256 of `core.json` as accepted by V1.5. The F-stage entry gate in verify mode

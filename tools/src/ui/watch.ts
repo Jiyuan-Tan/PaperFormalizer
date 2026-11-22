@@ -12,7 +12,7 @@ import { checklistPath, listRunSlugs, runDir, runPulse } from "./run_model.js";
 const RUN_FILES = [
   "state.json", "pipeline.jsonl", "report.json", "nl_links.json",
   "discovery/core.json", "discovery/v1_5_review.json", "discovery/patches.json",
-  "proposals/A.json", "proposals/B.json", "repair_recommendations.json", "proposals/apply_A.pid", "proposals/apply_B.pid", "proposals/move_pending.json", "proposals/apply_failed.json", "proposals/A.recommendations.json", "proposals/B.recommendations.json", "proposals/A.decisions.json", "proposals/B.decisions.json", "orch.json", "orch_requests.json", "orch_messages.json", "orch_decisions.json", "owner_objections.json", "ui_math_overrides.json",
+  "proposals/A.json", "proposals/B.json", "repair_recommendations.json", "proposals/apply_A.pid", "proposals/apply_B.pid", "proposals/apply_failed.json", "proposals/A.recommendations.json", "proposals/B.recommendations.json", "proposals/A.decisions.json", "proposals/B.decisions.json", "orch.json", "orch_requests.json", "orch_messages.json", "orch_decisions.json", "owner_objections.json", "ui_math_overrides.json",
 ];
 
 /** The files whose change makes a run's views stale. */

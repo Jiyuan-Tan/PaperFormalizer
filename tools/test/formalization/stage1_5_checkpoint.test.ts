@@ -3,7 +3,7 @@ import { afterEach, beforeEach, describe, expect, it } from "vitest";
 import { mkdtemp, mkdir, writeFile, rm } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import path from "node:path";
-import { runStage1 } from "../../src/formalization/stage1.js";
+import { runStage1, takePlanStood } from "../../src/formalization/stage1.js";
 import { haltUnactionableReview, notReviewed, runStage1_5, spendPlanReviewRound } from "../../src/formalization/stage1_5.js";
 import { namedPlanEntries } from "../../src/formalization/revise_scope.js";
 import { runReviewBoundary } from "../../src/shared/review_boundary.js";
@@ -128,6 +128,46 @@ describe("F1.5 without the intervention judge (2026-10-07)", () => {
     const fresh = await runStage1_5({ ctx: ctx(), state, deps });
     expect(prompts).toHaveLength(2 * PLAN_REVIEW_ROUNDS_MAX + 1);
     expect(fresh.message).toContain("correction budget spent");
+  });
+
+  it("a passing review of a re-plan is stamped: the same plan and core are not reviewed again, a changed core is", async () => {
+    let reviews = 0;
+    // An F1 that found nothing moved since its plan was written (`planCorePath` = the core): the plan stands.
+    const markPlanStood = async (): Promise<void> => {
+      const c = path.join(formalizationDir(repoRoot, QID), "discovery", "core.json");
+      await writeFile(planCorePath(repoRoot, QID), await (await import("node:fs/promises")).readFile(c, "utf8"), "utf8");
+      const r = await runStage1({ ctx: ctx(), state, deps: { runClaude: async () => { throw new Error("F1 must not plan"); } } as unknown as StageDeps });
+      expect(r.message).toMatch(/the plan stands/);
+    };
+    const deps = {
+      runClaude: async () => { throw new Error("no F1 run"); },
+      runCodex: async () => { reviews += 1; return { stdout: JSON.stringify({ status: "pass" }), stderr: "" }; },
+    } as unknown as StageDeps;
+    const reviewPrompt = promptPath(repoRoot, "stage1_5_reuse_soundness.txt");
+    await mkdir(path.dirname(reviewPrompt), { recursive: true });
+    await writeFile(reviewPrompt, "stub review", "utf8");
+    const state = createInitialState(QID);
+    state.stage_completed = "4"; // an approved plan, formalized since
+    await mkdir(path.dirname(planPath(repoRoot, QID)), { recursive: true });
+    await writeFile(planPath(repoRoot, QID), JSON.stringify(GATE_CLEAN_PLAN), "utf8");
+    expect(await runStage1_5({ ctx: ctx(), state, deps })).toMatchObject({ stage: "1.5", status: "completed" });
+    expect(reviews).toBe(1);
+    // entered at F1.5 itself (no F1 that left the plan standing): reviewed
+    await runStage1_5({ ctx: ctx(), state, deps });
+    expect(reviews).toBe(2);
+    // right after F1 left the plan standing (in this process): the gate runs, the model does not
+    await markPlanStood();
+    const again = await runStage1_5({ ctx: ctx(), state, deps });
+    expect(again).toMatchObject({ stage: "1.5", status: "completed" });
+    expect(again.message).toMatch(/unchanged since the last passing review/);
+    expect(reviews).toBe(2);
+    // the record is consumed: an entry at F1.5 after it is reviewed
+    expect(takePlanStood(ctx())).toBe(false);
+    const corePath = path.join(formalizationDir(repoRoot, QID), "discovery", "core.json");
+    await writeFile(corePath, JSON.stringify({ ...core, target_estimand: "E[Y] again" }), "utf8");
+    await markPlanStood();
+    await runStage1_5({ ctx: ctx(), state, deps });
+    expect(reviews).toBe(3);
   });
 
   it("a reject from the reviewer halts end to end: no F1 run, the findings and the orchestrator's duty in the message", async () => {

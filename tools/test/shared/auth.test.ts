@@ -8,6 +8,7 @@ import {
   resolveProviderAuth,
   workerEnv,
 } from "../../src/auth.js";
+import { LAKE_SHIM_DIR } from "../../src/shared/build_mutex.js";
 import { claudeAuthArgs } from "../../src/workers/claude.js";
 
 const NO_CONFIG = { env: {} as NodeJS.ProcessEnv, config: {} };
@@ -128,7 +129,12 @@ describe("workerEnv", () => {
     expect(out.ANTHROPIC_API_KEY).toBe("sk-ant");
     expect(out.OPENAI_API_KEY).toBe("sk-oai");
     expect(out.CODEX_HOME).toBe(path.join(os.homedir(), ".codex-paperformalizer-api"));
-    expect(out.PATH).toBe("/usr/bin");
+    // the workers' `lake` is the shim that takes the toolkit's build lock
+    expect(out.PATH).toBe(process.platform === "win32" ? "/usr/bin" : `${LAKE_SHIM_DIR}${path.delimiter}/usr/bin`);
+    if (process.platform !== "win32") expect(out.LAKE).toBe(path.join(LAKE_SHIM_DIR, "lake"));
+    // a model worker's process: its own scripts may not take the lock (only the shim does)
+    expect(out.PAPERFORMALIZER_MODEL_WORKER).toBe("1");
+    expect(workerEnv({ env: { PATH: "/usr/bin", PAPERFORMALIZER_LAKE_SHIM: "0" }, config: {} }).PATH).toBe("/usr/bin");
     const claudeOnly = workerEnv({
       env: { PATH: "/usr/bin" },
       config: { anthropicAuth: "api", anthropicApiKey: "sk-ant" },

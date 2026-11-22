@@ -16,6 +16,7 @@ import { hasRealSorry } from "../graph/extractor.js";
 import { MODELS } from "../models.js";
 import type { runCodex as RunCodex } from "../shared/codex.js";
 import { withLakeBuildLock } from "../shared/build_mutex.js";
+import { toolkitLayout, unitOf } from "../shared/build_inputs.js";
 import { requirementPath, studyRunId } from "../substrate/paths.js";
 import type { runSubstratePipeline as RunStudy } from "../substrate/pipeline.js";
 import { studyExit } from "../substrate/state.js";
@@ -201,11 +202,15 @@ export interface CorollaryDeps {
   build: (cfg: ToolkitConfig, module: string) => Promise<{ ok: boolean; log: string }>;
 }
 
+/** One paper module's build: a shared hold of its paper (exclusive when shared mode is off or the
+ *  toolkit is not clean), as a worker's build of that paper takes — never a hold of the whole toolkit. */
 async function lakeBuild(cfg: ToolkitConfig, module: string): Promise<{ ok: boolean; log: string }> {
+  // (a layout that cannot be read: exclusive, as before — never a throw past the file's restore)
+  const paper = await toolkitLayout(cfg.toolkitRoot).then((t) => unitOf(t, module), () => null);
   return withLakeBuildLock(cfg.toolkitRoot, async () => {
     const r = await spawnWithInactivityTimeout("lake", ["build", module], { cwd: cfg.toolkitRoot, env: process.env, inactivityTimeoutMs: 20 * 60 * 1000 });
     return { ok: r.exitCode === 0, log: [r.stdout, r.stderr].filter(Boolean).join("\n") };
-  });
+  }, `corollary: lake build ${module}`, undefined, undefined, paper ? { papers: [paper] } : {});
 }
 
 /** The reason of a reply's closing `COROLLARY: not possible — <reason>` line ("" when it gave none). */

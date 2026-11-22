@@ -53,8 +53,9 @@ the file directly. From `tools/`, always `source scripts/node_env.sh` first (nev
   --timeout 600`, re-run it). Keep it running while you orchestrate: it reports every halt,
   finish or crash (also of a run the user resumed from the page) and when the user rejects a ruling of
   yours on the page or reports an issue on a comment; act on it yourself. Launch long runs detached (`setsid nohup … &`) with
-  the log in a scratch directory. Kill a run by its PID, never by a pattern that can match your own
-  shell. See the skill's "Mechanics".
+  the log in a scratch directory. Stop a run with `verify --stop --slug <slug> --toolkit <toolkit>`;
+  only when that cannot be used, by its PID, never by a pattern that can match your own shell. See
+  the skill's "Mechanics".
 - The user decides, on the paper's page, what changes what the paper claims or what enters their
   toolkit: a repair that would WEAKEN a main result (`--accept-repair` / `--decline-repair` /
   `--redo-repair`) and the promotion rounds (the round A / round B checklists). Always put your
@@ -88,7 +89,10 @@ the file directly. From `tools/`, always `source scripts/node_env.sh` first (nev
 
 ## Lean
 
-- Never run `lake` on the toolkit while a run or another agent builds it (`ps` first).
+- Run no `lake build` of your own on the toolkit outside the pipeline's commands: the pipeline
+  queues every build behind the toolkit's build lock (a run with a Lean workspace, behind its
+  workspace's own), and one of yours would bypass it. Hand edits of the toolkit's Lean go between
+  `paperformalizer toolkit-flux on` and `off --id <the id it printed>`.
 - Green is not proved: `lake` exits 0 with `sorry`. Check a full build of the module, grep the source
   for `sorry|admit|axiom`, and `#print axioms` via `lake env lean`.
 

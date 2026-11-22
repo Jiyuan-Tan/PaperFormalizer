@@ -7,6 +7,7 @@
  */
 import { existsSync } from "node:fs";
 import path from "node:path";
+import os from "node:os";
 import { applyAuthEnv } from "../auth.js";
 import { applyWorkerEnv, assertLeanProjectOverride } from "../local_config.js";
 import { assertQidSlug, childrenPath, statePath, verifyRunDir } from "../paths.js";
@@ -20,11 +21,12 @@ import { runVerifyPipeline } from "./pipeline.js";
 import { haltAnswerConflict, haltAnswerFlags, type HaltAnswers } from "./weakening.js";
 import { FROM_STAGE_USAGE, fromStageRefusal, STAGE_HALT_IDS, STOP_AFTER_USAGE, stopAfterRefusal, type StageHaltId } from "../constants.js";
 import { warmUpLeanOrThrow } from "../shared/lean_warmup.js";
+import { RUN_SLUG_ENV } from "../shared/lock_holds.js";
 
 export const USAGE =
   "Usage: paperformalizer verify <paper.tex|dir|archive> [--toolkit <path>] [--slug s] [--main relpath] " +
   "[--targets label,label] [--resume] " +
-  "[--from-stage <stage>] [--fresh-review] [--from-transcript] [--stop-after <stage>] [--clear-gate <flag>]... [--defer-proposals] [--debug | --full-auto] [--persist | --no-persist] [--dry-run]\n" +
+  "[--from-stage <stage>] [--fresh-review] [--from-transcript] [--revise] [--stop-after <stage>] [--clear-gate <flag>]... [--defer-proposals] [--debug | --full-auto] [--persist | --no-persist] [--dry-run]\n" +
   "  <paper.tex>: a .tex that includes files lying beside it is taken with its directory (the file the main one);\n" +
   "  one whose included .tex files are missing is refused — pass the paper's directory or an archive\n" +
   "  --defer-proposals: skip toolkit promotion round A (after F1); the paper's cited results stay assumptions\n" +
@@ -51,6 +53,13 @@ export const USAGE =
   "  core.json becomes discovery/core.transcribed.json again; patches, verdicts, the error ledger, owner receipts and\n" +
   "  every F-stage artefact are moved under runs/<slug>/_archive/from_transcript_<stamp>/ and cleared (owner rulings\n" +
   "  stay); the next step is a fresh V1.5. Refused mid-V1, without a transcript, or when the source changed.\n" +
+  "  --revise: <paper> is an author's revision of the run's paper (same --slug): the version that stands is frozen\n" +
+  "  under runs/<slug>/versions/v<n>/ (source, report, annotated paper, bundle with its lean/ and page), the revised\n" +
+  "  source takes its place, and the run re-enters V1, which re-points the transcription at it: what the revision\n" +
+  "  left unchanged keeps its verdicts, repairs, plan entry and Lean, however much else no longer points anywhere.\n" +
+  "  Not with --resume, --from-stage or --from-transcript. Without --revise, a paper given with the --slug of an\n" +
+  "  existing run that differs from its paper is read as its revision too. A source edited in place\n" +
+  "  (runs/<slug>/source/) and re-entered with --from-stage V1 is re-pointed as a fix, with no new version.\n" +
   "  With --resume, --slug alone names the run: the paper it was launched on is read again.\n" +
   "  The run id is the slug: --slug, else the input's file name. --main applies at a cold start only; --targets at a\n" +
   "  cold start or with --from-stage V1 (the new transcription takes the new scope), never with a plain --resume.\n" +
@@ -111,6 +120,8 @@ export interface VerifyArgs {
   freshReview: boolean;
   /** `--from-transcript` (with `--resume`): restart from the finished V1 transcription (`from_transcript.ts`). */
   fromTranscript: boolean;
+  /** `--revise`: the input is the paper's next version (`revision.ts`). */
+  revise: boolean;
   /** `--reject-rewind "<reason>"` (with `--resume`): reject the proposed F-stage rewind. */
   rejectRewind: string | null;
   /** `--clear-patch-cap` (with `--resume`): one more window of patch rounds at a cap. */
@@ -208,6 +219,7 @@ function parseVerifyArgs(argv: string[]): VerifyArgs {
   const dryRun = takeFlag("--dry-run");
   const freshReview = takeFlag("--fresh-review");
   const fromTranscript = takeFlag("--from-transcript");
+  const revise = takeFlag("--revise");
   const clearPatchCap = takeFlag("--clear-patch-cap");
   const acceptCap = takeFlag("--accept-cap");
   // `--accept-repair` alone, or followed by a comma-separated node list (`thm:a,lem:b`).
@@ -343,21 +355,26 @@ function parseVerifyArgs(argv: string[]): VerifyArgs {
   }
 
   if (stop) {
-    const others = Object.entries({ resume, auto: autoFlag, debug, fullAuto, persist, noPersist, deferProposals, dryRun, freshReview, fromTranscript, main, targets, fromStage, stopAfter, answers: answers.length > 0, clearGates: clearGates.length > 0 })
+    const others = Object.entries({ resume, auto: autoFlag, debug, fullAuto, persist, noPersist, deferProposals, dryRun, freshReview, fromTranscript, revise, main, targets, fromStage, stopAfter, answers: answers.length > 0, clearGates: clearGates.length > 0 })
       .filter(([, v]) => v !== false && v !== null)
       .map(([k]) => k);
     if (others.length > 0) throw usageError(`--stop combines only with --toolkit and --slug (got ${others.join(", ")}).`);
   }
   if (answers.length > 0 && fromStage) throw usageError(`${answers.join(", ")} answers a halt; it does not combine with --from-stage.`);
-  // The source is prepared at a cold start only; the scope may change with a new transcription.
+  if (revise) {
+    if (resume || fromStage || fromTranscript) throw usageError("--revise starts the paper's next version at V1: it does not combine with --resume, --from-stage or --from-transcript.");
+    if (answers.length > 0) throw usageError(`--revise does not answer a halt (${answers.join(", ")}): answer it with --resume first.`);
+  }
+  // The source is prepared at a cold start (or a revision) only; the scope may change with a new transcription.
   if (main !== null && (resume || fromStage)) throw usageError("--main names the main file of a new run; it does not combine with --resume or --from-stage.");
+  if (freshReview && revise) throw usageError("--fresh-review re-grades every node: run the revision first, then --from-stage V1.5 --fresh-review.");
   if (targets !== null && (resume || fromStage) && fromStage !== "V1") throw usageError("--targets sets the scope of a transcription: give it at a cold start or with --from-stage V1, not with a plain --resume.");
   if (fromTranscript) {
     if (!resume) throw usageError("--from-transcript requires --resume (it re-enters an existing run).");
     if (fromStage || freshReview) throw usageError("--from-transcript already re-enters at a fresh V1.5; it does not combine with --from-stage or --fresh-review.");
     if (answers.length > 0) throw usageError(`--from-transcript clears every halt; it does not combine with ${answers.join(", ")}.`);
   }
-  return { input, toolkit, slug, main, targets, resume, fromStage, stopAfter, clearGates, freshReview, fromTranscript, rejectRewind, clearPatchCap, acceptCap, acceptRepair, declineRepair, redoRepair, rejectFinding, addCondition, editReading, removeReading, umbrella, auto, debug, fullAuto, persist, noPersist, deferProposals, dryRun, stop };
+  return { input, toolkit, slug, main, targets, resume, fromStage, stopAfter, clearGates, freshReview, fromTranscript, revise, rejectRewind, clearPatchCap, acceptCap, acceptRepair, declineRepair, redoRepair, rejectFinding, addCondition, editReading, removeReading, umbrella, auto, debug, fullAuto, persist, noPersist, deferProposals, dryRun, stop };
 }
 
 function stageIndex(stage: VerifyFromStage): number {
@@ -418,7 +435,7 @@ export async function runVerifyCli(argv: string[]): Promise<void> {
   // Refuse a dry/live mode mismatch before the Lean warm-up or any model call (the runner
   // checks again; this only moves the refusal ahead of the expensive start-up).
   if (existsSync(statePath(toolkit.toolkitRoot, qid))) {
-    const refusal = dryRunRefusal(await loadState(toolkit.toolkitRoot, qid), parsed.dryRun, { fromStage: parsed.fromStage });
+    const refusal = dryRunRefusal(await loadState(toolkit.toolkitRoot, qid), parsed.dryRun, { fromStage: parsed.revise ? "V1" : parsed.fromStage });
     if (refusal) throw new Error(refusal);
   }
 
@@ -426,6 +443,27 @@ export async function runVerifyCli(argv: string[]): Promise<void> {
   // `verify` on the same slug is refused before it touches the run's files.
   const { withRunHeartbeat } = await import("../shared/run_heartbeat.js");
   await withRunHeartbeat(toolkit.toolkitRoot, qid, () => runVerifyLocked(parsed, toolkit, qid));
+  // A run done for good leaves no Lean workspace behind on this machine, nor its paper's scratch
+  // (`tmp/`): marked released (another machine's sweep removes its copies there) and removed here,
+  // once its runner is gone. A later revision or resume makes them again.
+  if (!parsed.dryRun) await releaseDoneRun(toolkit.toolkitRoot, qid);
+}
+
+export async function releaseDoneRun(toolkitRoot: string, qid: string): Promise<void> {
+  try {
+    const { readFile } = await import("node:fs/promises");
+    const st = JSON.parse(await readFile(statePath(toolkitRoot, qid), "utf8")) as { verify?: { phase?: string } };
+    if (st.verify?.phase !== "done") return;
+    // a batch job's run (`batch_orch.mjs`): its driver releases it once nothing is left to it (an owner's
+    // request may resume it); so does a run under a Slurm job, which a driver may follow
+    if (process.env.PAPERFORMALIZER_BATCH_JOB || process.env.SLURM_JOB_ID) return;
+    const { releasedMarker, releaseWorkspaces } = await import("../shared/workspace.js");
+    const { writeJsonAtomic } = await import("../shared/json_atomic.js");
+    await writeJsonAtomic(releasedMarker(toolkitRoot, qid), { at: new Date().toISOString(), host: os.hostname(), phase: "done" });
+    await releaseWorkspaces(toolkitRoot, qid, (l) => console.log(`[paperformalizer] ${l}`));
+  } catch (err) {
+    console.log(`[paperformalizer] [workspace] ${qid}: its workspaces not released (${err instanceof Error ? err.message : String(err)})`);
+  }
 }
 
 async function runVerifyLocked(
@@ -435,6 +473,13 @@ async function runVerifyLocked(
 ): Promise<void> {
   // From here every child is recorded, so `verify … --stop` can clean up after a crash.
   setChildrenFile(childrenPath(toolkit.toolkitRoot, qid));
+  // The run's lock holds (and its workers', which inherit it) name it (`shared/lock_holds.ts`).
+  process.env[RUN_SLUG_ENV] = qid;
+  // this runner knows shared holds (a dry run too): another run's start may turn them on beside it
+  await (await import("../shared/workspace.js")).markKnowsShared(toolkit.toolkitRoot, qid);
+  // With workspaces on (`shared/workspace.ts`; a run may opt out), the run builds in a Lake workspace
+  // of its own from here on: its children, the lean-lsp server among them, get it.
+  if (!parsed.dryRun) await (await import("../shared/workspace.js")).enableRunWorkspace(toolkit.toolkitRoot, qid, (l) => console.log(`[paperformalizer] ${l}`));
 
   const { startSharedLeanLsp } = await import("../shared/lean_lsp_server.js");
 
@@ -471,6 +516,8 @@ async function runVerifyLocked(
       dryRun: parsed.dryRun,
       freshReview: parsed.freshReview,
       ...(parsed.fromTranscript ? { fromTranscript: true } : {}),
+      ...(parsed.revise ? { revise: true } : {}),
+      ...(parsed.slug !== null ? { explicitSlug: true } : {}),
       rejectRewind: parsed.rejectRewind,
       clearPatchCap: parsed.clearPatchCap,
       acceptCap: parsed.acceptCap,

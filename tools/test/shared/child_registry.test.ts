@@ -77,6 +77,20 @@ afterEach(() => {
   for (const d of dirs.splice(0)) rmSync(d, { recursive: true, force: true });
 });
 
+describe("a runner started from a model worker's environment", () => {
+  it("drops the model-worker variable, so its own lock requests are the pipeline's", async () => {
+    const dir = mkdtempSync(path.join(os.tmpdir(), "tc-registry-env-"));
+    try {
+      const r = await execa(process.execPath, ["--import", "tsx/esm", HARNESS, "env", dir], {
+        cwd: path.join(HERE, "..", ".."), reject: false, env: { ...process.env, PAPERFORMALIZER_MODEL_WORKER: "1" },
+      });
+      expect(r.stdout).toContain("MODEL_WORKER=unset");
+    } finally {
+      rmSync(dir, { recursive: true, force: true });
+    }
+  });
+});
+
 function startHarness(mode: string, dir: string): ResultPromise {
   return execa(process.execPath, ["--import", "tsx/esm", HARNESS, mode, dir], { cwd: path.join(HERE, "..", ".."), reject: false });
 }

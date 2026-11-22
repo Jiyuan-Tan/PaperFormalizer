@@ -18,6 +18,7 @@ import { z } from "zod";
 import { nonAsciiProblem, texRegions } from "./annotate_tex.js";
 import { BUILTIN_ENVS } from "./tex_envs.js";
 import { sentenceSpans } from "./transcription_lint.js";
+import { texBalanceProblems } from "./tex_balance.js";
 
 /**
  * The node-id rule, the ONE predicate every author-facing check and filter applies (the V1 fixer's
@@ -401,7 +402,19 @@ export function texMathProblems(text: string, field?: string, opts: { reference?
     const before = t.slice(0, at);
     return (before.match(/\\begin\s*\{/gu)?.length ?? 0) > (before.match(/\\end\s*\{/gu)?.length ?? 0);
   };
-  const doubled = [...t.matchAll(/\\\\[A-Za-z]+/gu)].find((m) => !inReference(m[0]) && !inEnvironment(m.index!));
+  // So is `\\` inside the argument of a stacking macro: `\sum_{\substack{i<j\\q_i+q_j>0}}` (a referee's
+  // correct verdict was set aside over it).
+  const inRowGroup = (at: number): boolean =>
+    [...t.slice(0, at).matchAll(/\\(?:substack|Substack|shortstack|Shortstack)\s*(?:\[[^\]]*\])?\s*\{/gu)].some((m) => {
+      let depth = 1;
+      for (let i = m.index! + m[0].length; i < at && depth > 0; i++) {
+        if (t[i] === "\\") i++;
+        else if (t[i] === "{") depth++;
+        else if (t[i] === "}") depth--;
+      }
+      return depth > 0;
+    });
+  const doubled = [...t.matchAll(/\\\\[A-Za-z]+/gu)].find((m) => !inReference(m[0]) && !inEnvironment(m.index!) && !inRowGroup(m.index!));
   if (doubled) out.push(`writes a TeX command with a doubled backslash${where} ("${doubled[0]}") — the decoded text has ONE backslash per command: in the JSON write "\\\\${doubled[0].slice(2)}", which decodes to \\${doubled[0].slice(2)}`);
   if (open && !(opts.reference !== undefined && mathSpans(opts.reference).open === open)) out.push(`leaves "${open}" unclosed${where} — close every math delimiter (a literal dollar sign is \\$)`);
   return out;
@@ -515,6 +528,9 @@ const defectSentence = (kind: DefectKind, d: Record<DefectTextField, string>, su
 /** A slot's leading article lowercased: it continues a sentence ("uses the order bounds", not "uses The …"). */
 const slot = (t: string): string => t.replace(/^(The|A|An)(?= )/u, (w) => w.toLowerCase());
 
+/** A layout box of the paper (`minipage`, `\hfill`) a quote may open or close: `quoted` drops its tags. */
+const LAYOUT_BOX = /\\begin\s*\{minipage\}(?:\s*\[[^\]]*\])*\s*\{[^{}]*\}|\\end\s*\{minipage\}|\\hfill\b/gu;
+
 /** A defect's quoted step and its sentence (`subject` names the step), or null when a field its kind
  * needs is empty. */
 function defectParts(d: Defect, quoteOf: QuoteOf, keep: (t: string) => string): { unit: string; kind: DefectKind; quote: string; sentence: (subject: string) => string; proof: boolean } | null {
@@ -522,7 +538,12 @@ function defectParts(d: Defect, quoteOf: QuoteOf, keep: (t: string) => string): 
   if (KIND_FIELDS[d.kind].some((k) => !f[k])) return null;
   const unit = d.step_unit.trim();
   const printed = quoteOf(unit);
-  return { unit, kind: d.kind, quote: printed?.trim() ? stepQuote(printed) : "", sentence: (subject) => defectSentence(d.kind, f, subject), proof: /\/proof\/\d+\/\d+$/u.test(unit) };
+  const excerpt = printed?.trim() ? stepQuote(printed) : "";
+  // A parser cut can leave a paper unit inside a formula. Keep the defect's explanation,
+  // but do not turn that incomplete source excerpt into broken TeX in the author's note.
+  // (A layout box cut by the quote is fine: `quoted` drops its tags.)
+  const quote = texBalanceProblems(excerpt.replace(LAYOUT_BOX, " ")).length === 0 ? excerpt : "";
+  return { unit, kind: d.kind, quote, sentence: (subject) => defectSentence(d.kind, f, subject), proof: /\/proof\/\d+\/\d+$/u.test(unit) };
 }
 
 /** The defects' prose: each step quoted once; a later defect in a step already quoted names it by that
@@ -548,7 +569,7 @@ function defectsProse(ds: readonly Defect[], quoteOf: QuoteOf, keep: (t: string)
 export function quoted(q: string): string {
   // a quote is cut by sentence, so a layout box of the paper (`minipage`) may open in it and close after
   // it: in a note it lays nothing out, and left open it would swallow the rest of the page
-  const t = q.replace(/\\begin\s*\{minipage\}(?:\s*\[[^\]]*\])*\s*\{[^{}]*\}|\\end\s*\{minipage\}|\\hfill\b/gu, " ").replace(/[ \t]{2,}/gu, " ").trim();
+  const t = q.replace(LAYOUT_BOX, " ").replace(/[ \t]{2,}/gu, " ").trim();
   // Its displays as the TeX parser finds them (`stepQuote` sets each as `\[…\]`).
   const displays = texRegions(t).filter((r) => r.kind === "display" && t.startsWith("\\[", r.start) && t.startsWith("\\]", r.end - 2));
   let out = t;
@@ -611,7 +632,7 @@ export const NOTE_FIELDS_TEXT = String.raw`owner_explanation is the error for th
     detail     every other kind (null for out_of_domain): ONE complete sentence saying what is wrong with the step (e.g. "The step divides by $\hat\sigma_0$, which is zero with positive probability.").
   why        a concrete instance where the PRINTED statement fails (for a phrase that admits more than one reading: an instance on which the readings differ): objects — a list, each ONE complete sentence defining one object of the instance ("Let $X \sim U[0,1]$.", "Take $f(x) = x^{-1/2}$."), together satisfying every hypothesis of the statement (or clause) it refutes; consequence — one complete sentence giving the failing quantity or relation against what the statement claims ("Then $E\{f(X)^2\} = \infty$, while the statement bounds it by $4$."). They are printed in order, as written.
   fix        what the repair changes: the display corrected, the hypothesis added (which), or the conclusion weakened (to what).
-  gives_up   optional: exactly what the corrected statement no longer claims, nothing else, or null (the JSON value, never a word for it) when nothing is lost — a repair of the proof alone, or one that only adds a hypothesis, gives nothing up.
+  gives_up   optional: exactly what the corrected statement no longer claims, nothing else (after the prefix "printed claim not refuted:" when nothing refutes the printed statement), or null (the JSON value, never a word for it) when nothing is lost — a repair of the proof alone, or one that only adds a hypothesis, gives nothing up.
 Every field present; claim, fix, each object and consequence non-empty. No node ids and no words about the checking process (a dependency edge, wiring, depends_on, the core file, transcription, pipeline, referee, fixer) — an edge, a node or a core of the paper's own mathematics is named as the paper names it; the defect fields never mention the repair (no "repair", "fix", "added", "adding", "recorded", "proposed", "suggested", "patch"). An item of a printed list is named by quoting its opening words verbatim, never by a bare number; a purely notational inconsistency is no defect.
 ${RESULT_NAME_RULE}
 ${TEX_MATH_RULE}`;

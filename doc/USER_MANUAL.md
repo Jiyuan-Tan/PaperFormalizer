@@ -65,7 +65,8 @@ It holds three library tiers:
   grows only by the owner's decisions in the promotion rounds ("Promoting results into your toolkit"), by `paperformalizer study`,
   or by the owner's own hand;
 - **papers** — `Papers/<Slug>/`, one module tree per verified paper; may import base and toolkit,
-  and only the root `Papers.lean` barrel imports it (added when the run's F5 completes).
+  never another paper's modules, and only the root `Papers.lean` barrel imports it (added when the
+  run's F5 completes).
 
 Layering, module headers, size and run-token names are lint rules (`bin/lint_toolkit_layout.ts`),
 not conventions.
@@ -104,7 +105,13 @@ on disk reaches an open page within about a second; nothing needs a reload):
   form; every sentence is shown, word for word and in place. A promotion round is decided at the end of the paper and
   written into its checklist. Once the run has written its report, a **Report** tab beside the three
   views shows it typeset in place of the paper, with the path it is saved at
-  (`runs/<slug>/report.md` in the toolkit); the finished run's status box links to it.
+  (`runs/<slug>/report.md` in the toolkit); the finished run's status box links to it. Once F5
+  has written the Lean Proof in English, a result's drawer shows it under the Lean statement: first
+  how the printed proof compares with it (a printed step the Lean proof corrects in blue, as the
+  paper marks it), then the Lean proof itself written out in English, each underlined phrase opening
+  the Lean lines it renders. A revised paper ("A revised paper") has a version picker: an earlier
+  version opens read-only, as it stood, and "Compare with an earlier version" sets the two side by
+  side, one row per result, with what each version's check concluded.
 
 **Who acts on a run.** You work with an agent in an interactive session (Claude Code or Codex) started
 in this repository: ask it, for example, "Use PaperFormalizer to verify the paper at <path>". It
@@ -184,7 +191,7 @@ the element it points at, and how it ends.
 
     npx tsx bin/paperformalizer.ts verify <paper.tex|dir|archive> [--toolkit <path>] [--slug s]
         [--main relpath] [--targets label,label] [--resume] [--from-stage <stage>] [--fresh-review]
-        [--from-transcript] [--stop-after <stage>] [--clear-gate <flag>]... [--defer-proposals] [--debug | --full-auto] [--persist | --no-persist] [--dry-run]
+        [--from-transcript] [--revise] [--stop-after <stage>] [--clear-gate <flag>]... [--defer-proposals] [--debug | --full-auto] [--persist | --no-persist] [--dry-run]
         [--reject-rewind "<reason>"] [--clear-patch-cap] [--accept-cap]
         [--accept-repair [<node>,…]] [--decline-repair "[<node>,…: ]<reason>"] [--redo-repair "<node>: <guidance>"]...
         [--reject-finding "[<node>: [bookkeeping: ]]<reading>"]... [--add-condition "<node>: <condition>"]...
@@ -255,6 +262,7 @@ What the flags that answer a halt, and the re-entry flags, do to the run:
 | flag | in one line | the full account |
 |---|---|---|
 | `--from-stage <stage>`, `--fresh-review`, `--from-transcript` | re-enter a stage; grade every result again; restart from the finished transcription | "Re-entries and proposed rewinds" |
+| `--revise` | run the authors' revision of the paper as its next version, reusing what it left unchanged | "A revised paper" |
 | (plain `--resume`), `--reject-rewind "<reason>"` | approve, or reject, a repair a reviewer of the Lean proposed | "Re-entries and proposed rewinds" |
 | `--clear-patch-cap`, `--accept-cap` | at a patch cap: another window, or end the loop | "Patch caps" |
 | `--accept-repair`, `--decline-repair`, `--redo-repair` | your ruling on a repair that weakens a main theorem | "Weakened repairs and owner readings" |
@@ -278,6 +286,7 @@ A good first run: `--stop-after V1.5`, read the findings on the paper's page (or
       graph.json              the formalization graph (declarations, edges, review receipts)
       review_basis.json       what each node was last reviewed against (F2.5 reviews once per basis)
       nl_links.json           each result linked to its Lean theorem row by row (F5)
+      lean_proof_english.json the Lean Proof in English and how each printed proof compares (F5)
       pipeline_issues.md      pipeline defects the agent met on this run and how it absorbed them
       orch.json               the attached agent session; orch_requests.json (its questions to you),
                               orch_decisions.json (its rulings, with your review), repair_recommendations.json
@@ -301,16 +310,21 @@ A good first run: `--stop-after V1.5`, read the findings on the paper's page (or
                               gates the F4 reviewers flagged)
       proposals/              the promotion rounds: A.json / B.json (the batches), *.decisions.json,
                               *.recommendations.json (the agent's), apply_<A|B>.pid (while an apply runs),
-                              move_journal.json / move_pending.json (a move not yet through its gate),
-                              move and corollary logs; voided/ (receipts and rounds a re-entry set aside);
+                              landed/ (a commit's record of moves not recorded yet), move and corollary
+                              logs; voided/ (receipts and rounds a re-entry set aside);
                               history/ (the files of a round re-opened with --reopen-deferred);
                               dry_run/ (a dry run's checklists and ledger)
       reviews/                review artifacts (`reviews.jsonl`, verdict files)
       logs/                   agent transcripts (`agent_calls.log`, `stages/`), the fixer's prompt and
                               reply per round (`v1_patch_<stamp>_round<N>.json`), `ui_<time>.log` (actions
                               started from the page), `ui_math_failures.json`, `annotated_compile.json`;
-                              children.json (the runner's live worker processes, while it runs; read by `--stop`)
+                              children.json (the runner's live worker processes, while it runs; read by `--stop`);
+                              workspace_released.json (the run's Lean workspaces removed: "Lean workspaces")
       _archive/               what a re-entry set aside (`from_transcript_<stamp>/`, …)
+      versions/               a revised paper's earlier versions, one v<n>/ each (its source, report,
+                              annotated paper, bundle, state; version.json says where it stood);
+                              .inplace/ (what a source edited in place was re-pointed from, until V1
+                              accepts it): "A revised paper"
       SUBSTRATE_DEBT.md       gates registered with `bin/gate.ts`, if any
       MISSING_ARCHITECTURE.md infrastructure F2 found missing, if any
       report.md, report.json  the V6 report
@@ -327,11 +341,15 @@ A good first run: `--stop-after V1.5`, read the findings on the paper's page (or
     <toolkit>/runs/_garden/verify/<stamp>/   the logs of a `garden --verify`
     <toolkit>/runs/toolkit_docstrings/    the records of `paperformalizer docstrings`
     <toolkit>/doc/ledger.json             every toolkit declaration's origin and every promotion decision
-    <toolkit>/doc/statements.json         every scanned statement, for recurrence across your papers
+    <toolkit>/doc/statements/<slug>.json  every scanned statement, one file per paper, for recurrence across your papers
+                                          (an older toolkit's single doc/statements.json: `paperformalizer statements split`)
     <toolkit>/doc/toolkit_graph.json      the toolkit dependency graph, derived from the Lean
-    <toolkit>/doc/toolkit_reuse_history.jsonl   one line per round B: how reuse grew
+    <toolkit>/doc/toolkit_reuse_history.jsonl   how reuse grew, one line per paper (written by earlier
+                                          versions' round B; `toolkit-health` shows it when present)
     <toolkit>/doc/toolkit_index.json      the toolkit's declaration index (`lake exe toolkit_index`)
     <toolkit>/doc/base_index/<name>.json  the index `init` wrote for a base library that ships none
+    <toolkit>/.lake/paperformalizer/gens/ the toolkit's last 3 generations, behind the Lean workspaces
+                                          ("Lean workspaces")
 
 A dry run (`--dry-run`) writes only under `runs/<slug>/`.
 
@@ -625,7 +643,7 @@ with it — written so you need not read Lean:
   declined automatically and listed).
 
 A "Lean details" block under each entry holds the names, the target module, the Lean statement and
-what moves with it. The checklist opens with your toolkit's health. Edit each entry's `decision:`
+what moves with it. Edit each entry's `decision:`
 line — `accept`, `accept_with_edits` (then `edits:` lines for division, target_module, proposed_name,
 title, reference, content — `content` is refused on one of the paper's own stated results, which
 keep what they prove), `generalize_first` (round B: build a general form even of an entry
@@ -637,9 +655,11 @@ proposed to move as is), `decline` or `defer`, optionally with a `note:` — the
 only for, a run started with `--dry-run`: its checklist and ledger records stay under
 `runs/<slug>/proposals/dry_run/`.) Nothing enters your toolkit without your decision. Every new toolkit module and every edited paper
 file is checked (`lake build`, `#print axioms`, the layout lints, the index); a moved module imports
-only what its declarations use. A move that does not pass its checks is left as written and handed
-to the orchestrating agent, which repairs it and runs the checks again; entries applied before it
-stay applied. A promotion never changes what your
+only what its declarations use. The moves are prepared and checked in a private workspace ("Lean
+workspaces"; where a machine cannot have them, the apply is refused and says why) and only
+then committed to your toolkit: a move that does not pass its checks reaches nothing of it, and is
+handed to the orchestrating agent, which repairs the paper's Lean and applies the round again;
+entries applied before it stay applied. A promotion never changes what your
 paper claims, and Lean checks that it did not: every declaration of the paper and the toolkit must
 state after the move exactly what it stated before (a moved result under its new name; a result
 rebuilt in general form keeps its statement and gets a shorter proof). The reviews the paper's
@@ -676,7 +696,8 @@ conclusion as `[phrase](goal)`), as in Causalean — the paper page and the libr
 side, row by row. F5 enforces it on a paper's modules and the study and promotion prompts state it;
 `npx tsx bin/paperformalizer.ts docstrings [--toolkit <path>] [--modules M1,M2]` brings the toolkit's
 existing docstrings to it (docstring edits only, checked from the source text and confirmed by one build; review the diff and commit).
-Run it when no verify run is building the toolkit: the edits rebuild every module importing them.
+It runs in a flux session of its own (`toolkit-flux`), which first waits for the builds running
+side by side; the edits rebuild every module importing them.
 F5 also links each paper result to its Lean theorem row by row (`runs/<slug>/nl_links.json`): for
 every Lean hypothesis, the sentences or formulas of the paper that state it, and the paper text no
 Lean row carries. In a linked result's Lean statement on the page, the rows the paper states stay in
@@ -690,26 +711,126 @@ A result linked from the same statement, Lean and prompts, whose links the audit
 links still fit its statement and Lean is revised from them by the audit call alone; `--fresh`
 links every result from nothing, as `--only` does the results it names.
 
+F5 then writes the **Lean Proof in English** (`runs/<slug>/lean_proof_english.json`): each result's
+Lean proof written out as a paper writes a proof, from the Lean alone, so it can be read and checked
+without opening the Lean. The F stages audit statements, never proofs; this is where the proofs are
+read. A Lean proof often uses lemmas of its own (no node of the paper). One that only this result
+uses is proved inside the result's English proof, as a claim where the argument needs it; one that two
+or more results use is written once as a shared lemma `A<n>`, with its statement and proof, and cited
+from each. A result whose Lean is too long for one call (over 4,000 lines with its lemmas) has its
+largest parts written the same way, as shared lemmas its proof cites. Nothing is cut: every such
+lemma's proof is written somewhere. Definitions are not written out (the F stages checked them against
+the paper). One call per result, the shared lemmas packed several to a call by size;
+every Lean declaration of an account must be rendered (anchored) in it, or the call is asked again. A
+standard named theorem is cited by name, not proved again, and a result the paper cites is cited as
+the paper cites it. A second call reviews the English against the Lean: an entry it finds unfaithful
+or one a reader would stumble on, is revised from what it found, up to three times (a revision not confirmed faithful never replaces a
+faithful text), and one still unfaithful is shown as "not confirmed faithful" with what the review found. A third call then reads each printed proof against the English, for a result whose
+English (its proof and every shared lemma it uses) the review confirmed faithful; any other result is
+not compared. It lists where the two differ in substance, each one a difference (another route; the
+printed text is enough for its own), an ambiguity (the printed proof leaves out an argument or a
+detail the step needs, or its wording is loose or admits a weaker reading: shown with a suggested
+wording) or an error. It reads the paper's source for the definitions, remarks and earlier results
+a step relies on. An error — a printed step that is false in the paper's setting, or concludes what
+its stated reason does not yield — is corrected in the paper from the Lean proof: blue, "Corrected
+(Lean proof)", as V1.5's corrections are, and listed in the report under "Proof slips corrected" and
+"Lean Proof in English". A step the printed proof leaves out is never an error: it is an ambiguity,
+shown in the drawer with the missing step as suggested wording, and never marked in the paper (a run
+compared by an earlier version may still list it as "A gap in the printed proof"). Only the proof
+the paper prints is compared: a result whose proof the paper omits is not, even when a repair wrote
+one. On the paper's page each result's drawer shows it under the Lean
+statement. Click an underlined phrase to see the
+Lean lines it renders. `npx tsx bin/paperformalizer.ts explain-proofs <slug> [--only <node>,…]` runs this step alone on
+the run as it stands (it calls the F5 model; no stage, no Lean build); with `--only`, the file then holds
+those results alone, until a plain run or F5 writes every result again. `report <slug>` then writes the
+report and the corrected paper with its corrections.
+
 **Toolkit health.** `npx tsx bin/paperformalizer.ts toolkit-health [--toolkit <path>] [--all] [--json]
 [--no-rebuild]` re-derives `doc/toolkit_graph.json` from the Lean — declarations as nodes, "uses" as
 edges, the base libraries' declarations as leaves (`--no-rebuild` reads the graph on file) — and
 reports, on your main results (`--all`: helpers too): results nothing uses, results stated twice,
 how many of your papers use the toolkit, modules that hold unrelated groups (split?) or lean on each
-other heavily (merge?), the most reused results, results no paper has used for months, and how
-reuse has grown paper by paper (`--json`: the same as JSON, with the reuse history).
+other heavily (merge?), the most reused results, results no paper has used for months, and, when
+the toolkit has a reuse history on file, how reuse grew paper by paper (`--json`: the same as JSON,
+with the reuse history). The graph is
+read from the compact scan of the template's `CandidateScan.lean`; with an older copy in your toolkit
+it is not built (the promotion round then goes without the graph checks and says so): copy it from
+`templates/toolkit/`.
 
-**Gardening.** When the toolkit's health has findings, round B ends by writing
-`doc/proposals/garden-<stamp>.md` — or run `npx tsx bin/paperformalizer.ts garden [--toolkit <path>]
-[--no-rebuild] [--dry-run]` any time (after a Mathlib update it also flags results the base
-libraries now state; `--dry-run` writes the list with no gardener call, every item recommended
-`decline`). Each item says
+**Gardening.** `npx tsx bin/paperformalizer.ts garden [--toolkit <path>] [--no-rebuild] [--dry-run]`
+writes `doc/proposals/garden-<stamp>.md` when the toolkit's graph has findings (after a Mathlib
+update it also flags results the base libraries now state; `--dry-run` writes the list with no
+gardener call, every item recommended `decline`). Run it any time: round B writes no gardening list
+and reports no health, since both need the whole library's graph, which `garden` and
+`toolkit-health` build. Each item says
 what the graph shows, the suggested change (move a module to its topic, merge or split modules,
 retire a result a library now states, remove an unused one) and a recommendation. The orchestrator
-decides each item and carries out the accepted ones by editing the Lean (your toolkit committed first),
-then `garden --verify <file>` checks the edits against the committed toolkit (builds, axioms, no paper
+decides each item and carries out the accepted ones by editing the Lean (your toolkit committed first,
+between `paperformalizer toolkit-flux on` and `off`), then `garden --verify <file>` checks the edits against the committed toolkit (builds, axioms, no paper
 statement changed, lints, index, graph) and records them in the ledger; a failed item is reverted with git.
 Gardening only reorganises what the toolkit holds; an item that would retire or remove a result is
 the one kind put to you.
+
+## Lean workspaces
+
+Each run builds its paper's Lean in a workspace of its own on the machine's disk: your toolkit as it
+last stood built clean (a *generation*), made of hard links, where the paper's modules are built and
+every other file is a link back to the toolkit. So several papers build side by side, and moving
+results into your toolkit's library never stops a running paper: a promotion prepares and checks its
+moves in a promotion workspace of the run's own, then commits them to the toolkit, which becomes the
+next generation. A running paper takes up the new generation at the start of its next stage.
+
+They are on by default wherever the machine can have them: Linux, or macOS with GNU tools, with
+`flock`, `zstd`, `tar`, bash 4 or later and GNU `cp` and `find` on the `PATH` (README, "What you
+need"). At a run's start, a toolkit with no generation yet is set up for them, once: shared builds
+are turned on (`.lake/paperformalizer/lake-shared-mode`), the toolkit is built clean and its first
+generation published. This happens only while no run of an earlier PaperFormalizer version is live
+on the toolkit (it knows nothing of shared builds); otherwise the run says so and builds as below,
+and a later start sets it up. If the toolkit's clean build fails, the run says so and builds as
+below until the toolkit's sources change; when the failure was not the toolkit's (a machine out of
+memory), remove `.lake/paperformalizer/toolkit-clean.json` and the next start builds it again. The
+last 3 generations are kept, in `<toolkit>/.lake/paperformalizer/gens/`.
+
+Where they cannot be made — on Windows (install in WSL to have them), on a machine that lacks one of
+those tools, or with `PAPERFORMALIZER_WORKSPACES=off` or `PAPERFORMALIZER_LAKE_SHIM=0` — runs build
+in the toolkit itself, behind its build lock, and say so in their log. The promotion rounds still
+propose (their scans read the toolkit itself), but moving results into your toolkit is then refused,
+with the reason: applying a round B's moves, and placing a study's module (round A's accepted
+entries included). The decisions are kept: apply again once workspaces are available. One run alone
+builds in the toolkit itself when its folder holds a file named `no-workspace`
+(`runs/<slug>/no-workspace`).
+
+**Where they live.** Under the machine's local Lean root: `PAPERFORMALIZER_LEAN_LOCAL_ROOT` when
+set, else the one `tools/scripts/lean_local_cache.sh pack` recorded, else
+`<toolkit>/.lake/paperformalizer/local` (the toolkit's own disk). A run's workspace is
+`<local root>/ws/<slug>`, its promotion workspace `<local root>/ws/<slug>.promo`, and each machine
+unpacks the generations it uses under `<local root>/gens/`. On a cluster whose toolkit lies on a
+shared network disk, `lean_local_cache.sh` keeps the toolkit's Lean dependencies and toolchain on
+each machine's local disk (`pack` once, then `sync` on each machine before any Lean runs there; its
+header says how), and the workspaces go there with them. A run with a workspace builds under that
+workspace's own lock, `<its workspace>/.lake/build.lock`, not the toolkit's `.lake-build.lock`.
+
+**Disk use.** A workspace shares the generation's files through hard links, but its own build output
+grows with the paper (several GB for a large one). A run done for good (phase `done`) has its
+workspaces and its paper's scratch directory (`Papers/<Slug>/tmp/`) removed when `verify` exits, and
+is marked released (`runs/<slug>/logs/workspace_released.json`); its copies on another machine go at
+that machine's next run. A later revision or resume makes them again, and builds the paper's Lean
+anew. (A run under a batch job — `batch_orch.mjs`, or any Slurm job — is released by the batch
+driver instead, once nothing is left to it.) Nothing is removed while the run or an apply of it is
+live, or while a journal of its moves is on file. Removing `.lake` (a common reset of a Lean
+project) removes the generations and, with the default local root, the workspaces too; with another
+local root, remove its `gens/` and `ws/` as well (the new generations are numbered from 1 again). By
+hand:
+
+    npx tsx bin/paperformalizer.ts toolkit-gen release <slug>    # remove a run's workspaces on this machine
+    npx tsx bin/paperformalizer.ts toolkit-gen status            # the current generation
+    npx tsx bin/paperformalizer.ts toolkit-gen publish           # publish the toolkit, built clean, as the next one
+    npx tsx bin/paperformalizer.ts toolkit-gen ensure <slug>     # make or re-pin a run's workspace here; prints its path
+
+(each with `[--toolkit <path>]`). A commit into the toolkit that was interrupted (a stopped machine,
+a build killed) stops further promotions until it is settled: `paperformalizer toolkit-commit
+status` shows it, and `toolkit-commit recover`, `undo` or `clear <id>` settles it
+(`toolkit-commit --help`).
 
 ## Environment variables
 
@@ -717,7 +838,10 @@ the one kind put to you.
 |---|---|
 | `PAPERFORMALIZER_TOOLKIT` | toolkit root when `--toolkit` is not given |
 | `PAPERFORMALIZER_SHARE_URL` | the share service `paperformalizer share` (and the UI's Share button) uploads to |
-| `PAPERFORMALIZER_LEANLSP_WARMUP_MS` | cap on the pre-run `lake build` warm-up (default 10 min; `0` disables) |
+| `PAPERFORMALIZER_LEANLSP_WARMUP_MS` | `0` disables the pre-run check that the toolkit's `.lake` is not cold (it builds nothing) |
+| `PAPERFORMALIZER_LAKE_SHIM` | `0`: the model workers' own `lake build`s skip the toolkit's build lock (by default they wait their turn behind it, as the pipeline's builds do; a build of one paper's modules runs beside other papers' in the toolkit's shared builds mode, on by default with the Lean workspaces), and runs get no Lean workspace. Never used on Windows |
+| `PAPERFORMALIZER_WORKSPACES` | `off`: no per-run Lean workspaces; runs build in the toolkit itself, and moving results into it is refused ("Lean workspaces") |
+| `PAPERFORMALIZER_LEAN_LOCAL_ROOT` | the machine's local Lean root, where the Lean workspaces live (default: the one `lean_local_cache.sh pack` recorded, else `<toolkit>/.lake/paperformalizer/local`) |
 | `PAPERFORMALIZER_NOTE_MACROS` | `off`: a new run reads the paper as written, authors' note macros and all ("Authors' note macros") |
 | `PAPERFORMALIZER_STOP_AFTER` | `--stop-after`, for a run started without the flag (the flag wins; F2.5/F3/F3.5 refused) |
 | `PAPERFORMALIZER_LEAN_PROJECT_PATH` | legacy Lean project override; must be unset or equal the toolkit root |
@@ -911,6 +1035,7 @@ attached to that run: the page writes `runs/<slug>/start_request.json` and start
 | `--runs <n>` | runs at work at once (default 3); a finished run is replaced from the queue |
 | `--batch` | take `--runs` runs, see them through and exit, instead of replacing each finished run |
 | `--full-auto` | start the new runs it takes with `verify --full-auto` |
+| `--persist` | start the new runs it takes with `verify --persist` (kept across resumes; a run started before keeps its own) |
 | `--hours <h>`, `--grace-min <m>` | a time budget: `--grace-min` (default 20) before it ends, stop the agents and runners, put the unfinished runs back at the head of the queue and exit 75, for a successor to take them |
 | `--max-agents <n>` | agent turns at once (default 2) |
 | `--brief <file>` | the owner's standing instructions, given to every agent |
@@ -1190,9 +1315,14 @@ shown beside its entry, and the user may decide and apply there. The checklist's
 recommendations" enters your recommendation on every entry and new topic the user left undecided and
 applies the round; it is disabled while one has none, so record one for each. Then wait for the
 user's decision on every entry; never decide or apply on your own, and never write a `decision:`
-line into a promotion checklist yourself, not even for an item that changes nothing. A Tricks entry
-qualifying by judgement alone is a first sighting: recommend `defer` — it returns when another paper
-proves the same pattern. Gardening is different: it reorganises what is already in the toolkit, and
+line into a promotion checklist yourself, not even for an item that changes nothing. `defer` is for
+a Tricks entry qualifying by judgement alone (a first sighting): it returns when another paper proves
+the same pattern. A standard or named result, one that recurs, or one another paper's Lean already
+uses is never deferred for want of a second consumer, nor a move for its cost (a move only relocates
+proved Lean): recommend accept, or decline when it is wrong, already available, or a small one-off
+step. Only a generalize or round-A entry whose build needs a whole theory the libraries lack may be
+deferred for its cost, with what it needs said. A gate that failed on another paper's Lean, a
+watchdog kill or a lock wait is never the entry's: the entry stays accepted and is applied again. Gardening is different: it reorganises what is already in the toolkit, and
 the owner does not decide it (see "Gardening: the procedure").
 
 **The rounds.** Each stops the run with a checklist `<toolkit>/doc/proposals/<slug>.<A|B>.md` (a dry
@@ -1212,7 +1342,11 @@ run's under `runs/<slug>/proposals/dry_run/`).
   rather than skipped for being paper-shaped; `generalize_first` asks for it on any entry. A verbatim
   move of a paper-shaped result is refused. Generality is enforced, not only judged: a paper-shaped
   result, or one whose proof never uses some of its hypotheses, takes the general path (built without
-  them).
+  them). The curator picks from an index of the paper's declarations, proposing at most 30; a
+  declaration whose statement is proved identically in another of your papers, or that another
+  paper's Lean already uses, is always judged, outside that limit —
+  proposed, or skipped with its reason. A move rewrites the references in those papers as
+  in its own, and its gate builds the files it rewrote.
 
 **An entry.** The helpers proving a result go with it and are never their own entry. The bar an
 entry meets is stated under its title: Foundations (a standard, textbook result stated in the base
@@ -1222,7 +1356,8 @@ topic, or the curator's written judgement), with the graph's signal when it disa
 is given in words with Unicode math (the general statement only; how the paper's result relates to
 it is its own line, "In the paper"). Recurrence in the owner's other papers counts identical
 statements, and the same pattern over each paper's own definitions once the curator confirms it —
-the main evidence; "deferred before in …" when it returns. A duplicate of an existing declaration is
+the main evidence, with "already used by the Lean of …" for another paper's use; "deferred before
+in …" when it returns. A duplicate of an existing declaration is
 declined automatically (round A points the plan at it). Every toolkit declaration lives in its
 module's topic namespace, `<lib>.<Division>.<topic path>` (a name is put there automatically); a name
 already declared is refused. A toolkit module imports what it uses (a study-built header is trimmed
@@ -1239,14 +1374,19 @@ shows the user why on the page: an entry still undecided or a checklist that doe
 theirs to answer — tell them — and anything else (a lakefile, a batch that no longer matches the
 Lean) is yours to settle before the round is applied again. Moves and builds go
 through the toolkit gate (`lake build`, `#print axioms`, statement invariance, the layout lints, the
-index). A move that fails its gate is NOT undone: every file stays as the move wrote it, the apply
-stops with the failing step and its log, and it is yours to settle — repair the Lean by hand (the
-target toolkit module, the paper files that used the result; never weaken a statement: the gate
-compares them), then run `propose <slug> --round B --apply` again, which runs the gate on the files as
-they stand and goes on with the rest. A cause that will recur is fixed in the mover as well, with a
-test. To give a move up, put the files back from `runs/<slug>/proposals/move_journal.json` (each
-file's original bytes), delete it and `move_pending.json`, and take the entry back to the user for
-another decision. Statement invariance is Lean's own check that a promotion
+index). The moves are prepared and gated in the run's own promotion workspace and committed to the
+shared toolkit only once they pass: a move that fails its gate reaches nothing of the shared toolkit
+(its promotion workspace, `<local root>/ws/<slug>.promo`, keeps its files as the gate left them, for
+a look: "Lean workspaces"), the apply stops with the failing
+step and its log, and it is yours to settle — repair the paper's Lean (never weaken a statement: the
+gate compares them), or take the entry back to the user for another decision, then run
+`propose <slug> --round B --apply` again; the moves that passed before it are committed and
+recorded. A cause that will recur is fixed in the mover as well, with a test. Any hand edit of the
+toolkit's Lean — gardening, a git
+checkout or merge touching `Toolkit/` or `third_party/StatLean` — goes between `paperformalizer toolkit-flux on`
+(it waits for the builds running side by side, then opens a flux session and prints its id) and
+`toolkit-flux off --id <id>` (it closes the session; the last one closed builds the toolkit). The
+`docstrings` command opens and closes a session of its own. Statement invariance is Lean's own check that a promotion
 changes no claim: `candidate_scan` hashes what every declaration of the paper and the toolkit states
 (a theorem's type, a definition's type and value) before and after, under the move's new names, and
 the hashes must agree — a move renames, a rebuild in general form changes one proof, neither changes
@@ -1287,7 +1427,7 @@ declaration outside its topic namespace, an umbrella import, a module building o
 topic — one finding per module) go to the gardener (one Claude call; none when nothing changed and
 nothing is found) together with the main view and the full SOURCE of every module a finding names
 or that changed since the last list; it also raises what it reads there (a result in the wrong
-topic, one fact stated in two forms). The end of round B — or `paperformalizer garden` on demand —
+topic, one fact stated in two forms). `paperformalizer garden`, run on demand,
 writes `doc/proposals/garden-<stamp>.md`: per item what it shows, the change (relocate, merge,
 split, retire, remove, rename, trim_imports, cross_reference — a split or relocate extends an
 existing module of the target topic before it creates one) and a recommendation; findings left as
@@ -1300,7 +1440,7 @@ they are become one summary line. The procedure:
    why it would go — and waits for their decision. (`garden --dry-run` writes the list from the
    graph's findings with no gardener call, every item `decline`: a smoke test, not a round.)
 2. The toolkit must be clean and committed before any edit (`git status` in the toolkit; commit or
-   set aside unrelated changes first) — git is the undo.
+   set aside unrelated changes first) — git is the undo. Then `paperformalizer toolkit-flux on`.
 3. Carry out each ACCEPTED item yourself, by editing the Lean as the item describes (lean-lsp,
    `lake build` of the module and its users): move declarations with what they need, follow every
    rename in the toolkit and the papers, keep `omit … in` / attribute prefixes with their
@@ -1313,7 +1453,8 @@ they are become one summary line. The procedure:
    success it records the decisions, renames (`renamed_from`) and moves in the ledger.
 5. Fix what it reports and verify again; when an item cannot be made to pass, revert it with git
    and record it as declined with the reason. When it passes, commit the toolkit and tell the user in
-   a line or two what moved (topics and results in words, no Lean layout detail).
+   a line or two what moved (topics and results in words, no Lean layout detail). Last,
+   `paperformalizer toolkit-flux off --id <id>` (the id `on` printed).
 
 ### Render and contract checkpoints
 
@@ -1350,8 +1491,9 @@ Two checkpoints, never an owner waiver, both before any owner decision and F1:
 
 A re-entry never repeats work whose inputs did not change. `--from-stage V1` with the source
 unchanged and `discovery/core_refs.json` present materializes `core.json` from the reference core +
-`patches.json` with no agent call (`[verify] V1: entry: revise …`); only a changed source (or no
-reference core) extracts cold — to force that, move `core_refs.json` aside. V1.5 grades only nodes
+`patches.json` with no agent call (`[verify] V1: entry: revise …`); a changed source is read as a
+revision ("A revised paper", which lists when it is read afresh instead), and a run with no
+reference core extracts cold — to force that, move `core_refs.json` aside. V1.5 grades only nodes
 whose basis moved and carries the rest; `--fresh-review` (with `--from-stage V1` or `V1.5`) re-grades all (use it when you distrust an
 earlier pass, not by habit). So for a patch-only change — a missing hypothesis, a corrected
 statement — write or extend `discovery/patches.json` and `--from-stage V1.5`; never `--from-stage V1`
@@ -1406,6 +1548,73 @@ The fixer may also reject an F-stage finding in patch mode (`rejected`, pointing
 grants it); the next V1.5 pass rules: upheld → a note, and F continues; overruled → the fixer must
 patch it (a round). What halts at F2.5–F4 is Lean-side (a Lean declaration named,
 `redo-math` on a helper, laundering, strikes): handle it, then `--resume`.
+
+### A revised paper
+
+When the authors revise a paper after a run — the writing, a corrected statement, a proof
+rewritten — edit your own copy of the paper (the one the run was started on, or a copy of it; the
+run's copy is in `runs/<slug>/source/` if you need to start from it: copy it out first, since an edit
+there is a fix, below, not a revision) and run the revision under the same slug:
+
+    npx tsx bin/paperformalizer.ts verify <revised paper> --slug <s> --revise
+
+`--revise` may be left out: a plain `verify <paper> --slug <s>` on an existing run reads a paper that
+differs from the run's as its revision (the run's own paper is refused, as before, and so is the
+paper of an earlier version: give `--revise` to read that as the next version).
+
+A source edited in place (`runs/<slug>/source/`: a template or markup fix, not the authors'
+revision) and re-entered with `--from-stage V1` is a FIX, not a version: its transcription is
+re-pointed at it as a revision's is — what it left as it was keeps its verdicts, repairs and rulings
+— but the version number stays, nothing is frozen and the report gets no new "Changes from version
+n" (an earlier revision's stays). A fix is no correction by the authors: a repaired passage it
+changes is graded again as now printed, never taken as adopted (a correction of the mathematics
+belongs in a revision), and the owner's rulings on a node it changed stand, named in the log only.
+What it is re-pointed from is kept under `versions/.inplace/`; until V1 accepts it, `--revise` is
+refused, and afterwards the paper as it was before the fix is never read as a revision by a plain
+entry. It is read afresh instead when that transcription is not all on file or
+does not read, in a dry run, and when V1 is entered otherwise (a V1.5 round sending it back). A
+`--revise` of a run whose source was edited in place freezes its version without that source
+(`version.json`: `source_edited_in_place`).
+
+The version that stands is frozen under `runs/<slug>/versions/v<n>/` (its source, `report.md`, the
+annotated paper, the bundle with its `lean/` and page snapshot, the state; `version.json` says where
+it stood), so the two versions can be read side by side; the run becomes version n+1 and re-enters V1
+on the revised source. V1 does not transcribe the paper again: it re-points the transcription it has
+at the revision (environments by `\label`, an unlabeled one by its text; sentences by the ones left
+unchanged around them), keeping every node's id, and calls the agent only for what no longer
+points anywhere. From there every stage does only what the revision changed: V1.5 carries the verdict
+of every result whose text and dependencies are as they were (where it is printed is no part of a
+verdict), F1 re-plans the changed results only — and makes no call when none changed —, F2 keeps every
+proof whose Lean statement is unchanged, and the Lean reviews skip the results reviewed on the same
+text. The Lean of the paper (`Papers/<Slug>/`) is revised in place.
+
+A repair of version n stands on a result the revision left as it was; it is retired when the revised
+text already reads as repaired (the authors took the correction), and set aside on a result they
+changed otherwise — V1.5 checks it as now printed. The owner's readings all stand; those on a changed
+result are named in the log and the report, to confirm against the new wording (`--edit-reading`,
+`--remove-reading`). However much of the transcription no longer points anywhere, what still does is
+kept: V1's agent is given each node not located, with what it read, to point it at its revised text
+(keeping its id) or remove it. A revision that reads as under half the results of version n (of two
+or more) halts V1 once before the transcription is re-pointed — more likely a failed parse or
+segmentation than a revision that removed them: `discovery/segments.json` (re-pointed at the
+revision) is then kept as you leave it, and `--resume` goes on; one that reads as no result at all
+halts every time. The segmenter, asked to fill a revision's new gaps, adds to
+`discovery/segments.json` and may not drop what it holds. The report of version n+1 closes its plain part with "Changes
+from version n": what changed, the repairs adopted or set aside, and every result whose outcome moved.
+
+A verdict is carried only while what its referee reads is unchanged: the result, what it uses, the
+passages it references, and the paper's setup (its macros and the text before its first result).
+When the setup changed, one call (`prompts/V1/setup_change.txt`) names the nodes the change can
+affect, and only those are checked again, with every node whose text or proof uses a macro the
+revision redefined; when it says the change alters the setting of the whole paper, gives no usable
+answer, or the setup is too long to show it whole, every result is checked again.
+
+`--revise` does not combine with `--resume`, `--from-stage` or `--from-transcript`, and is refused
+when the revised source is the one the run has. A revision is read cold only when its version's
+transcription is not on file, and in a dry run. A pending halt of version n is set aside with it, as
+for `--from-stage V1`. Until V1 has read the revision, the run is entered at V1 only (`--resume`, or
+`--from-stage V1`); a V1 halted after re-pointing resumes on the re-pointed transcription. A revision sent again before V1 has accepted the first one replaces it: it is still
+version n+1, read against version n from the start.
 
 ### Patch caps
 
@@ -1719,13 +1928,14 @@ is not balanced TeX), or a use it could not take (no braces, an argument that do
 holds part of an environment). The note gives the macro, its definition, the number of such uses
 and the first one's file and line, and what to do: if it is a note macro, remove it by the
 smallest neutral edit in the run's copy of the source (`runs/<slug>/source/`), record the edit in
-`pipeline_issues.md`, and run it from V1 (a changed source is extracted cold).
+`pipeline_issues.md`, and run it with `--from-stage V1` (with a transcription on file, it is re-pointed as a fix, no new version: "A revised paper"; else read afresh).
 
 The reading is recorded in `envs.json` (`note_macros`, with its version) and replayed from there: a
 run on file from before it existed, or one started with `PAPERFORMALIZER_NOTE_MACROS=off`, stays
 read as written on every `--resume` and `--from-stage` (they revise the transcription against the
 text it was cut from); a run whose replay would give another flat text keeps the text it has, with
-a note. The reading takes effect when a paper is read cold: a new run, or a run whose source changed.
+a note. The reading takes effect when a paper is read cold (a new run, or one with no transcription to
+re-point); a revision keeps its version's reading.
 
 ### Parser gaps
 

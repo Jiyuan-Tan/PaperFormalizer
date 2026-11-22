@@ -32,7 +32,7 @@
  */
 import { createHash } from "node:crypto";
 import { existsSync } from "node:fs";
-import { mkdir, readFile, rename, rm, writeFile } from "node:fs/promises";
+import { copyFile, mkdir, readFile, rename, rm, writeFile } from "node:fs/promises";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
 import { z } from "zod";
@@ -47,10 +47,14 @@ import { expectStringJsonOutput, parseJsonWithEscapeRepair } from "../shared/cod
 import { writeJsonAtomic } from "../shared/json_atomic.js";
 import { saveState } from "../state.js";
 import { buildEnvsJson, recordedNoteMacros, writeEnvsArtifacts, type FlatTex } from "./tex_envs.js";
-import { SegmentsSchema, V1_SEGMENTS_FILE, applySegments, flatRangeOf, numberedFlat, segmentationGaps, truncationGaps } from "./segments.js";
+import { SegmentsSchema, V1_SEGMENTS_FILE, applySegments, segmentEntriesDropped, flatRangeOf, numberedFlat, segmentationGaps, truncationGaps } from "./segments.js";
 import { DriftFixSchema, applyDriftFixes, assertFixKeepsRefCoreValid, hasDriftFix } from "./directive_edits.js";
 import { openFindingKind, recordVerifyFinding } from "./findings.js";
-import { earlierFindingsBlock, readFixerHistory, withFindings, writeFixerHistory } from "./fixer_history.js";
+import { FIXER_HISTORY_FILE, earlierFindingsBlock, readFixerHistory, withFindings, writeFixerHistory } from "./fixer_history.js";
+import { changedMacros, lostNodeViolations, nodesUsingMacros, readSetupChangeAnswer, reanchorRefs, setupChangeNodes, setupExcerptCut, reanchorSegments, referencedContextChanged, setupChanged } from "./reanchor.js";
+import { paperIndex, setupExcerpt, type PaperIndex } from "./referee_slices.js";
+import { fillTemplate } from "../shared/template.js";
+import { closeInPlaceFix, inPlaceDir, reconcilePatches, revisionOpen, versionDir } from "./revision.js";
 import { NOTE_FIELDS_TEXT, nodeIdMentions, noteProblems, paperLabels, type PaperLabels } from "./owner_text.js";
 import { consequenceViolations, findingNodes, isConsequential, setAsideSuggestionConsequences } from "./consequential.js";
 import { hashSourceTree } from "./source_bundle.js";
@@ -102,6 +106,7 @@ import {
   type VerifyStage,
   type VerifyStageArgs,
   type VerifyStageResult,
+  type VerifyState,
 } from "./types.js";
 import { sha256File, writeCoreJson } from "./core_hash.js";
 
@@ -248,26 +253,70 @@ const ReviseDirectiveSchema = z.object({
 });
 type ReviseDirective = z.infer<typeof ReviseDirectiveSchema>;
 
-/** How V1 enters: `revise` the existing transcription, or extract it `cold`. */
+/** How V1 enters: `revise` the existing transcription, `reanchor` it on a revised source, or
+ * extract it `cold`. */
 export interface V1EntryMode {
-  mode: "revise" | "cold";
+  mode: "revise" | "reanchor" | "cold";
   /** For the log: why this path. */
   why: string;
   /** The source tree's hash now. */
   sourceSha: string;
+  /** `cold` because the source was edited in place (not as a `--revise`): a `--from-stage V1` reads
+   *  it as a fix in place instead (`startInPlaceFix`), when the run's transcription is on file
+   *  (`inPlaceRevisionRefusal`). */
+  editedInPlace?: true;
+}
+
+/** What a `reanchor` reads the revision against, in the frozen version before it
+ * (`versions/v<n>/`): its transcription and the parse it was cut from. */
+const REANCHOR_INPUTS = [V1_REFS_FILE, VERIFY_FILES.envsJson, VERIFY_FILES.flatTex, VERIFY_FILES.flatLineMap, VERIFY_FILES.coreTranscribed] as const;
+
+/** The frozen version an open revision is read against: until V1 accepted a transcription of the
+ * revision (`revision.transcribed`), whatever a checkpoint saved in between; null otherwise. */
+export function reanchorBase(runDir: string, verify: Pick<VerifyState, "revision" | "versions" | "source">): ReanchorBase | null {
+  const r = verify.revision;
+  // a fix in place is re-pointed from its snapshot, not from a version
+  if (r?.in_place && revisionOpen(verify)) return { dir: inPlaceDir(runDir), sha: r.in_place.sha, ...(r.reanchored_sha ? { reanchored: r.reanchored_sha } : {}) };
+  const v = r ? verify.versions?.find((x) => x.version === r.from_version) : undefined;
+  if (!r || !v || !revisionOpen(verify) || r.source_swap_pending) return null;
+  return { dir: versionDir(runDir, v.version), sha: v.source_sha256, ...(r.reanchored_sha ? { reanchored: r.reanchored_sha } : {}) };
+}
+
+/** The frozen version a revision is read against; `reanchored`: the revised source V1 already
+ * re-pointed at (`revision.reanchored_sha`). */
+export interface ReanchorBase {
+  dir: string;
+  sha: string;
+  reanchored?: string;
 }
 
 /**
  * The V1 entry rule. `revise` when the source tree hashes as recorded at seeding AND a reference
  * core exists (`core_refs.json`; a dry run, which writes no reference core, uses its
  * `core.transcribed.json`): the transcription is still a transcription of this paper, so it is
- * materialized, never re-extracted. `cold` when the source changed or nothing was transcribed.
+ * materialized, never re-extracted. `reanchor` when the source CHANGED (an author's revision,
+ * `--revise`) and the transcription of the source before it is on file with the parse it was cut
+ * from: it is re-pointed at the revised source (`reanchor.ts`), the node ids kept. `cold` when
+ * nothing was transcribed (or a dry run's source changed).
  */
-export async function v1EntryMode(runDir: string, recordedSha: string, dryRun: boolean): Promise<V1EntryMode> {
+export async function v1EntryMode(runDir: string, recordedSha: string, dryRun: boolean, open: ReanchorBase | null = null): Promise<V1EntryMode> {
   const sourceSha = await hashSourceTree(path.join(runDir, VERIFY_FILES.sourceDir));
   const short = (h: string): string => h.slice(0, 12);
+  // An open revision is re-pointed from its frozen version until V1 has re-pointed it at THIS source
+  // (`reanchored`) — the recorded hash may already be the revision's (a checkpoint saved it). From
+  // then on the entry revises the re-pointed transcription like any other: an agent's rounds, a
+  // segmenter's answer and a hand fix survive a halt.
+  const base = open && open.reanchored !== sourceSha ? open : null;
+  if (base) {
+    const changed = `the revision of ${path.basename(base.dir)} (sha ${short(base.sha)} → ${short(sourceSha)})`;
+    const missing = REANCHOR_INPUTS.filter((f) => !existsSync(path.join(base.dir, f)));
+    if (!dryRun && missing.length === 0) return { mode: "reanchor", sourceSha, why: `${changed}: its transcription is re-pointed at it` };
+    return { mode: "cold", sourceSha, why: dryRun ? `${changed} (dry run)` : `${changed}: ${missing.join(", ")} not in ${base.dir} to re-point` };
+  }
   if (sourceSha !== recordedSha) {
-    return { mode: "cold", sourceSha, why: `the source changed (sha ${short(recordedSha)} → ${short(sourceSha)})` };
+    // A source edited in place is re-pointed only as a fix (`startInPlaceFix`, from the pipeline's
+    // `--from-stage V1`), which snapshots the parse its transcription was cut from first; here, read cold.
+    return { mode: "cold", sourceSha, why: `the source changed (sha ${short(recordedSha)} → ${short(sourceSha)}), not as a revision (\`--revise\`)`, editedInPlace: true };
   }
   if (existsSync(path.join(runDir, V1_REFS_FILE))) {
     return { mode: "revise", sourceSha, why: `source unchanged (sha ${short(sourceSha)}) and ${V1_REFS_FILE} present` };
@@ -764,10 +813,23 @@ async function runSegmenter(
   currentEnvs: EnvsJson,
   flat: FlatTex,
   gaps: readonly string[],
+  /** The file on disk applies (its entries are in `currentEnvs`): the segmenter adds to it, never
+   *  dropping an entry (`segmentEntriesDropped`). False: it no longer applies and is rewritten. */
+  keep = true,
 ): Promise<{ envs: EnvsJson; notes: string[]; changed: boolean; halt?: VerifyStageResult }> {
   const { runDir, log } = args;
   const segPath = path.join(runDir, V1_SEGMENTS_FILE);
   log(`segments: ${gaps.length} gap(s) — asking the segmenter${existsSync(segPath) ? " (editing the existing file)" : ""}`);
+  /** The file the segmenter edits, as it stood and applies: its entries are kept. */
+  const priorText = keep && existsSync(segPath) ? await readFile(segPath, "utf8") : null;
+  const prior = priorText === null ? null : (() => {
+    try {
+      const p = SegmentsSchema.safeParse(JSON.parse(priorText));
+      return p.success ? p.data : null;
+    } catch {
+      return null;
+    }
+  })();
   const base = await readFile(SEGMENT_PROMPT_FILE, "utf8");
   await mkdir(path.join(runDir, "logs"), { recursive: true });
   let violations: string[] = [];
@@ -799,6 +861,13 @@ async function runSegmenter(
       continue;
     }
     const r = await applySegmentsFile(segPath, parsedEnvs, flat);
+    const now = prior ? SegmentsSchema.safeParse(JSON.parse(await readFile(segPath, "utf8"))) : null;
+    const dropped = prior && now?.success ? segmentEntriesDropped(prior, now.data) : [];
+    if (dropped.length > 0) {
+      r.violations.push(`(segment) the edit removed ${dropped.length} entr${dropped.length === 1 ? "y" : "ies"} the file already held (${dropped.slice(0, 8).join("; ")}${dropped.length > 8 ? "; …" : ""}): keep every entry it holds, and only add entries for the gaps listed`);
+      // the next round edits the file as it was, not the one that dropped them
+      await writeFile(segPath, priorText!, "utf8");
+    }
     if (r.violations.length === 0) {
       log(`segments round ${round}: accepted — ${r.notes.length} change(s)`);
       for (const n of r.notes) log(n);
@@ -813,11 +882,287 @@ async function runSegmenter(
     await writeFile(aside, await readFile(segPath, "utf8"), "utf8");
     await rm(segPath, { force: true });
   }
-  log(`segments: not clean after ${MAX_SEGMENT_ROUNDS} rounds; set aside, continuing on the parser's output`);
+  // the file it was asked to edit stands as it was (its entries are in `currentEnvs`)
+  if (priorText !== null) await writeFile(segPath, priorText, "utf8");
+  log(`segments: not clean after ${MAX_SEGMENT_ROUNDS} rounds; set aside, continuing on ${priorText !== null ? `${V1_SEGMENTS_FILE} as it was` : "the parser's output"}`);
   return { envs: currentEnvs, notes: [`segment: the segmenter's file was rejected (${violations[0]}); the gaps above stand`], changed: false };
 }
 
+/**
+ * A transcription made afresh: everything keyed on the old one's nodes is set aside — the reference
+ * core, the patch file and the rulings awaiting the owner's review (kept as `.prev`), the paper-error
+ * ledger, the carried verdicts, the fixer's history.
+ */
+export async function setAsideForColdTranscription(runDir: string, verify: VerifyState): Promise<void> {
+  verify.paper_errors = {};
+  verify.confirmed = {};
+  verify.confirmed_symbols = {};
+  for (const f of [V1_REFS_FILE, VERIFY_FILES.patches, "orch_decisions.json", "owner_objections.json"].map((n) => path.join(runDir, n))) {
+    if (existsSync(f)) await rename(f, `${f}.prev`);
+  }
+  await rm(path.join(runDir, FIXER_HISTORY_FILE), { force: true });
+}
+
+/** The version a revision is re-pointed from: its reference core, the parse it was cut from, its
+ * transcription and its core as repaired. */
+interface ReanchorInputs {
+  refs: RefCore;
+  envs: EnvsJson;
+  flat: string;
+  lineMap: FlatTex["lineMap"];
+  transcribed: Core;
+  patched: Core;
+  patches: PatchFile | null;
+  segments: z.infer<typeof SegmentsSchema> | null;
+  /** The parser's warnings on the version (`v1_lint_warnings.json`): what was a gap there already. */
+  parserWarnings: string[];
+}
+
+/**
+ * Put back the revision's starting point (`revision.ts` `writeRevisionBase`) before an open revision
+ * is read: the state's ledger and verdict caches, the patch file and the owner's open review items.
+ * Returns log lines.
+ */
+async function restoreRevisionBase(runDir: string, verify: VerifyState, frozenDir: string): Promise<string[]> {
+  const baseDir = path.join(frozenDir, "base");
+  const f = path.join(baseDir, "state.json");
+  if (!existsSync(f)) return [];
+  const base = (JSON.parse(await readFile(f, "utf8")) as { verify?: VerifyState }).verify;
+  if (!base) return [];
+  verify.paper_errors = base.paper_errors ?? {};
+  verify.confirmed = base.confirmed ?? {};
+  verify.confirmed_symbols = base.confirmed_symbols ?? {};
+  if (base.confirmed_scheme !== undefined) verify.confirmed_scheme = base.confirmed_scheme;
+  else delete verify.confirmed_scheme;
+  for (const rel of [VERIFY_FILES.patches, "orch_decisions.json", "owner_objections.json"]) {
+    const from = path.join(baseDir, rel);
+    const to = path.join(runDir, rel);
+    if (existsSync(from)) await copyFile(from, to);
+    else await rm(to, { force: true });
+  }
+  return ["revision: read from its starting point (the ledger, the verdict caches, the patch file and the owner's open items as the --revise re-entry left them)"];
+}
+
+/**
+ * A revision READ AFRESH (its version's transcription not on file): the one place it is recorded and its old transcription set
+ * aside (`setAsideForColdTranscription`) — called once per revision, from its starting point. What the
+ * owner had ruled on the old one goes to `.prev` with it, each named, to be given again where it still
+ * applies: the readings (`patches.json`), the withdrawn findings (the ledger), the open review items
+ * (`orch_decisions.json`, `owner_objections.json`).
+ */
+async function readRevisionCold(runDir: string, verify: VerifyState, reason: string): Promise<void> {
+  const r = verify.revision!;
+  const patchesFile = path.join(runDir, VERIFY_FILES.patches);
+  const file = existsSync(patchesFile) ? PatchFileSchema.parse(JSON.parse(await readFile(patchesFile, "utf8"))) : null;
+  const aside = (what: string): string => `${what} (set aside with the cold reading)`;
+  r.reanchor = { same: 0, changed: [], broken: [], renamed: {}, cold: true, cold_reason: reason };
+  r.rulings_to_recheck = [
+    ...(file?.owner_readings ?? []).map((o) => ({ id: aside(o.id), node: o.node })),
+    ...Object.entries(verify.paper_errors ?? {}).filter(([, e]) => isWithdrawn(e)).map(([id]) => ({ id: aside(`withdrawn finding on ${id}`), node: id })),
+    ...["orch_decisions.json", "owner_objections.json"].filter((f) => existsSync(path.join(runDir, f))).map((f) => ({ id: aside(`the open items of ${f}`), node: "(paper)" })),
+  ];
+  await setAsideForColdTranscription(runDir, verify);
+}
+
+/**
+ * Why a source edited in place cannot be re-pointed as a fix in place (null: it can, `startInPlaceFix`): its transcription and the parse it was cut from are not all on file, or do
+ * not read (a V1 cut short mid-round). Then it is read afresh, as before.
+ */
+export async function inPlaceRevisionRefusal(runDir: string, verify: VerifyState): Promise<string | null> {
+  if (revisionOpen(verify)) return "a revision is open";
+  const missing = REANCHOR_INPUTS.filter((f) => !existsSync(path.join(runDir, f)));
+  if (missing.length > 0) return `${missing.join(", ")} not on file`;
+  try {
+    await readReanchorInputs(runDir);
+  } catch (e) {
+    return `its transcription does not read: ${String((e as Error)?.message ?? e).split("\n")[0]!.slice(0, 160)}`;
+  }
+  return null;
+}
+
+/** The base's patch file, relative to the frozen version's directory. */
+const BASE_PATCHES = path.join("base", VERIFY_FILES.patches);
+
+async function readReanchorInputs(dir: string): Promise<ReanchorInputs> {
+  const read = (rel: string): Promise<string> => readFile(path.join(dir, rel), "utf8");
+  const has = (rel: string): boolean => existsSync(path.join(dir, rel));
+  const transcribed = parseTypedCore(await read(VERIFY_FILES.coreTranscribed), "the transcription before the revision");
+  const seg = has(V1_SEGMENTS_FILE) ? SegmentsSchema.safeParse(JSON.parse(await read(V1_SEGMENTS_FILE))) : null;
+  return {
+    refs: RefCoreSchema.parse(JSON.parse(normalizeRawModelJson(await read(V1_REFS_FILE)))),
+    envs: JSON.parse(await read(VERIFY_FILES.envsJson)) as EnvsJson,
+    flat: await read(VERIFY_FILES.flatTex),
+    lineMap: (JSON.parse(await read(VERIFY_FILES.flatLineMap)) as { lineMap: FlatTex["lineMap"] }).lineMap,
+    transcribed,
+    patched: has(VERIFY_FILES.coreJson) ? parseTypedCore(await read(VERIFY_FILES.coreJson), "the core before the revision") : transcribed,
+    // The patch file of the revision's starting point (`revision.ts` base: the re-entry voided its
+    // pending suggestions), read as stored: re-deriving the repairs' texts would cut them from the
+    // revised paper.
+    patches: has(BASE_PATCHES) ? PatchFileSchema.parse(JSON.parse(await read(BASE_PATCHES))) : null,
+    segments: seg?.success ? seg.data : null,
+    parserWarnings: has(V1_LINT_WARNINGS_FILE) ? ((JSON.parse(await read(V1_LINT_WARNINGS_FILE)) as { parser_warnings?: string[] }).parser_warnings ?? []) : [],
+  };
+}
+
+/** The parser's gap warnings on a revision that the version before it did not have (a warning's
+ * `file:line:` place aside: the revision moves it). Pure. */
+export function newParserGaps(gaps: readonly string[], before: readonly string[]): string[] {
+  const unplaced = (w: string): string => w.replace(/^[^\s:]+:\d+:\s*/u, "").replace(/\s+/g, " ").trim();
+  const left = new Map<string, number>();
+  for (const w of before) left.set(unplaced(w), (left.get(unplaced(w)) ?? 0) + 1);
+  return gaps.filter((g) => {
+    const k = unplaced(g);
+    const n = left.get(k) ?? 0;
+    if (n > 0) return void left.set(k, n - 1), false;
+    return true;
+  });
+}
+
+const SETUP_CHANGE_PROMPT_FILE = path.join(path.dirname(fileURLToPath(import.meta.url)), "prompts", "V1", "setup_change.txt");
+const SETUP_CHANGE_SCHEMA: Record<string, unknown> = {
+  type: "object",
+  additionalProperties: false,
+  required: ["all", "reason", "affected"],
+  properties: {
+    all: { type: "boolean" },
+    reason: { type: "string" },
+    affected: { type: "array", items: { type: "object", additionalProperties: false, required: ["id", "reason"], properties: { id: { type: "string" }, reason: { type: "string" } } } },
+  },
+};
+
+/** The nodes of `core` a change of the paper's setup can affect (`prompts/V1/setup_change.txt`), or
+ * null when the check gives no usable answer (a failed call, an id not in the core). */
+async function askSetupChange(args: VerifyStageArgs, before: PaperIndex, after: PaperIndex, core: Core, ids: ReadonlySet<string>): Promise<{ all: true } | { all: false; affected: string[] } | null> {
+  try {
+    const [a, b] = [setupExcerpt(before), setupExcerpt(after)];
+    const prompt = fillTemplate(await readFile(SETUP_CHANGE_PROMPT_FILE, "utf8"), {
+      setup_before: `${a.macros}\n\n${a.setup}`.trim(),
+      setup_after: `${b.macros}\n\n${b.setup}`.trim(),
+      nodes: setupChangeNodes(core, ids),
+    });
+    const out = await args.deps.runCodex({ prompt, cwd: args.runDir, sandboxMode: "read-only", model: MODELS.codexVerify, reasoningEffort: "high", leanLsp: false, webSearch: false, outputSchema: SETUP_CHANGE_SCHEMA });
+    await mkdir(path.join(args.runDir, "logs"), { recursive: true });
+    await writeFile(path.join(args.runDir, "logs", `v1_setup_change_${Date.now().toString(36)}.json`), JSON.stringify({ prompt_bytes: Buffer.byteLength(prompt), prompt, stdout: out.stdout }, null, 2), "utf8");
+    const answer = readSetupChangeAnswer(expectStringJsonOutput(out.stdout), ids);
+    if (!answer) args.log("reanchor: the setup-change check gave no usable answer: every result is checked again");
+    return answer;
+  } catch (e) {
+    args.log(`reanchor: the setup-change check failed (${String((e as Error)?.message ?? e).split("\n")[0]!.slice(0, 200)}): every result is checked again`);
+    return null;
+  }
+}
+
+/** Whether a revision reads as so many fewer results than the version before (under half, of two or
+ * more) that a failed parse is the likelier reading. Pure. */
+export function fewerResultsThanBefore(before: number, now: number): boolean {
+  return before >= 2 && now * 2 < before;
+}
+
+/**
+ * REANCHOR (`reanchor.ts`): re-point the reference core at the revised source and read the patch file
+ * against the revision (`revision.ts` `reconcilePatches`); V1's revise path then materializes it and
+ * hands the agent only what did not re-point (each node not located, `lostNodeViolations`). What
+ * re-points is kept, however much does not.
+ */
+async function reanchorTranscription(args: VerifyStageArgs, before: ReanchorInputs, envs: EnvsJson, flat: FlatTex, entry: V1EntryMode): Promise<{ entry: V1EntryMode; violations: string[] }> {
+  const { runDir, log } = args;
+  const verify = args.state.verify!;
+  const r = reanchorRefs(before.refs, { envs: before.envs, flat: before.flat }, { envs, flat: flat.text });
+  for (const n of r.notes) log(n);
+  log(`reanchor: ${r.same.length} node(s) unchanged, ${r.changed.length} changed, ${r.broken.length} to re-point`);
+  const revision = verify.revision!;
+  // (each entry records afresh: a V1 cut short re-points again from the same frozen inputs)
+  revision.reanchor = { same: r.same.length, changed: r.changed, broken: r.broken, renamed: r.renamed, cold: false };
+  delete revision.patches;
+  delete revision.rulings_to_recheck;
+  if ((verify.confirmed_scheme ?? 1) === 5) {
+    revision.lines_before = Object.fromEntries([...before.patched.assumptions, ...before.patched.definitions, ...before.patched.statements].flatMap((n) => (n.tex_locator ? [[n.id, n.tex_locator] as const] : [])));
+  }
+  // Whatever is located again is kept, however much is not (owner, 2026-11-21: reuse whenever
+  // possible): a node not located goes to V1's agent, to re-point it at its revised text or remove it.
+  await writeFile(path.join(runDir, V1_REFS_FILE), JSON.stringify(r.refs, null, 2), "utf8");
+  const now = materializeRefCore(r.refs, envs, flat.text).core;
+  // What a referee reads beyond a node's own record moved too? A passage its `\ref`s name outside the
+  // core, or the paper's setup (a formula, a macro): no verdict resting on it is carried.
+  const pxBefore = paperIndex(before.flat, { lineMap: before.lineMap }, before.envs);
+  const pxNow = paperIndex(flat.text, { lineMap: flat.lineMap }, envs);
+  const violations: string[] = lostNodeViolations(before.transcribed, r.broken);
+  if (r.broken.length > 0) log(`reanchor: ${r.broken.length} node(s) not located — V1's agent re-points or removes them`);
+  const confirmed = verify.confirmed ?? {};
+  if (setupChanged(pxBefore, pxNow)) {
+    verify.confirmed_symbols = {};
+    // One check names the nodes the change can affect (owner, 2026-11-21): only those are graded
+    // again, with every node that uses a macro the revision redefined and those graded again anyway;
+    // no usable answer, "all", or a setup cut short for the check (a change it would not see) carries
+    // no verdict, as before. Only the nodes a verdict would be carried for are asked about.
+    const context = referencedContextChanged({ px: pxBefore, core: before.patched }, { px: pxNow, core: now }, r.same.filter((id) => confirmed[id] !== undefined));
+    const macros = changedMacros(pxBefore, pxNow);
+    const forced = new Set([...context, ...r.broken, ...nodesUsingMacros(now, macros), ...nodesUsingMacros(before.patched, macros)]);
+    const carried = r.same.filter((id) => confirmed[id] !== undefined && !forced.has(id));
+    const cut = setupExcerptCut(pxBefore) || setupExcerptCut(pxNow);
+    const answer = carried.length === 0 ? { all: false as const, affected: [] } : args.dryRun || cut ? null : await askSetupChange(args, pxBefore, pxNow, now, new Set(carried));
+    if (cut && carried.length > 0) log("reanchor: the paper's setup is too long to show the check whole: every result is checked again");
+    if (answer && !answer.all) {
+      // only a verdict the check saw and did not name stands (a changed node's, an adopted repair's,
+      // a stale key's: none)
+      const kept = new Set(carried.filter((id) => !answer.affected.includes(id)));
+      const dropped = Object.keys(confirmed).filter((id) => !kept.has(id));
+      for (const id of dropped) delete confirmed[id];
+      log(`reanchor: the paper's setup changed (its macros or the text before its first result): ${kept.size} verdict(s) carried, ${dropped.length} graded again${answer.affected.length ? ` (the check names ${answer.affected.join(", ")})` : ""}${macros.length ? `; redefined: ${macros.map((m) => `\\${m}`).join(", ")}` : ""}`);
+    } else {
+      verify.confirmed = {};
+      log(`reanchor: the paper's setup changed (its macros or the text before its first result): no V1.5 verdict is carried${answer?.all ? " (the check: it alters the setting of the whole paper)" : ""}`);
+    }
+    violations.push("(reanchor) the revision changed the paper's setup (its macros or the text before its first result): check the symbol table, `sampling_model` and `target_estimand` of discovery/core_refs.json against the revised paper and update what it now says otherwise.");
+  } else {
+    const context = referencedContextChanged({ px: pxBefore, core: before.patched }, { px: pxNow, core: now }, r.same.filter((id) => confirmed[id] !== undefined));
+    // … and a node V1's agent re-points is graded again, whatever text it lands on.
+    for (const id of [...context, ...r.broken]) delete confirmed[id];
+    if (context.length > 0) log(`reanchor: ${context.join(", ")} — a passage they reference changed: graded again`);
+  }
+  const withdrawn: string[] = [];
+  if (before.patches) {
+    const unitsBefore = PaperUnits.parse(before.flat, before.envs, flatLineStart(before.flat, before.lineMap));
+    const unitsNow = PaperUnits.parse(flat.text, envs, flatLineStart(flat.text, flat.lineMap));
+    const out = reconcilePatches(before.patches, r, { transcribedBefore: before.transcribed, patchedBefore: before.patched, transcribedNow: now }, {
+      before: (u, t) => unitsBefore.textOfRun(u, t),
+      after: (u, t) => unitsNow.textOfRun(u, t),
+    }, { adopt: !revision.in_place });
+    // an operator's fix is no correction by the authors: a repaired passage it changed is graded again
+    if (revision.in_place && out.set_aside.length > 0) log(`reanchor: the fix in place changed ${out.set_aside.join(", ")}, which had a repair: V1.5 grades it as now printed (a correction of the paper's mathematics belongs in a revision, --revise)`);
+    await writeFile(path.join(runDir, VERIFY_FILES.patches), JSON.stringify(out.file, null, 2), "utf8");
+    // The owner's withdrawals of a finding on a changed node stand: named before the ledger is pruned.
+    const movedNow = new Set([...r.changed, ...r.broken, ...out.adopted, ...out.set_aside]);
+    withdrawn.push(...Object.entries(verify.paper_errors ?? {}).filter(([id, e]) => movedNow.has(id) && isWithdrawn(e)).map(([id]) => id));
+    // A retired repair's error is the author's to have fixed, a set-aside one's V1.5's to find again.
+    for (const id of [...out.adopted, ...out.set_aside]) delete verify.paper_errors?.[id];
+    revision.patches = { kept: out.kept, adopted: out.adopted, set_aside: out.set_aside };
+    revision.rulings_to_recheck = out.rulings_to_recheck;
+    if (out.adopted.length > 0) log(`reanchor: the revision adopts the repair of ${out.adopted.join(", ")} — retired`);
+    if (out.set_aside.length > 0) log(`reanchor: the repair of ${out.set_aside.join(", ")} is set aside (its text changed): V1.5 grades it as now printed`);
+  }
+  // The owner's withdrawals of a finding (the ledger) on a changed node stand too: to confirm.
+  const moved = new Set([...r.changed, ...r.broken]);
+  for (const [id, e] of Object.entries(verify.paper_errors ?? {})) if (moved.has(id) && isWithdrawn(e) && !withdrawn.includes(id)) withdrawn.push(id);
+  for (const id of withdrawn) (revision.rulings_to_recheck ??= []).push({ id: `withdrawn finding on ${id}`, node: id });
+  for (const x of revision.rulings_to_recheck ?? []) log(`reanchor: owner ruling ${x.id} on ${x.node} stands; the node changed — confirm it against the new wording`);
+  return { entry, violations };
+}
+
+/** V1 (`runV1`); a transcription it accepts of an open revision closes the revision's reading. */
 export const runStageV1: VerifyStage = async (args: VerifyStageArgs): Promise<VerifyStageResult> => {
+  const result = await runV1(args);
+  const r = args.state.verify?.revision;
+  if (result.status === "completed" && r && revisionOpen(args.state.verify) && !r.source_swap_pending) {
+    r.transcribed = true;
+    delete r.pending_violations;
+    // a fix in place leaves no revision on record: the run is the version it was
+    if (closeInPlaceFix(args.state.verify!)) args.log("the source fixed in place is re-pointed; the version is unchanged");
+  }
+  return result;
+};
+
+const runV1: VerifyStage = async (args: VerifyStageArgs): Promise<VerifyStageResult> => {
   const { runDir, state, log } = args;
   const verify = state.verify;
   if (!verify) throw new Error("V1: state has no `verify` block — this is not a verify run.");
@@ -835,8 +1180,11 @@ export const runStageV1: VerifyStage = async (args: VerifyStageArgs): Promise<Ve
   }
 
   // Revise or rebuild: the path, and why, are logged on every entry.
-  const entry = await v1EntryMode(runDir, verify.source.sha256, args.dryRun);
-  log(`entry: ${entry.mode === "revise" ? "revise the existing transcription" : "cold extraction"} — ${entry.why}`);
+  const frozen = reanchorBase(runDir, verify);
+  let entry = await v1EntryMode(runDir, verify.source.sha256, args.dryRun, frozen);
+  // (a source edited in place is re-pointed as a fix when V1 is re-entered by the pipeline's
+  // `--from-stage V1` (`startInPlaceFix`); entered otherwise, it is read afresh, as before)
+  log(`entry: ${entry.mode === "revise" ? "revise the existing transcription" : entry.mode === "reanchor" ? "re-point the existing transcription at the revised source" : "cold extraction"} — ${entry.why}`);
   // The transcription is rebuilt from the reference core: a hand edit of it would be lost (a dry run
   // revises the transcription itself; a changed source starts over).
   const transcribedPath = path.join(runDir, VERIFY_FILES.coreTranscribed);
@@ -846,26 +1194,38 @@ export const runStageV1: VerifyStage = async (args: VerifyStageArgs): Promise<Ve
       message: `${VERIFY_FILES.coreTranscribed} was edited by hand since V1 wrote it; V1 rebuilds it from ${V1_REFS_FILE}, so the edit would be lost. Undo the edit there (V1 reads the file it wrote to carry records across renamed nodes), make the fix in ${V1_REFS_FILE}, then --resume.`,
     };
   }
-  if (entry.sourceSha !== verify.source.sha256) {
-    // The paper changed: what was transcribed, and every verdict given on it, describe another
-    // text. The old reference core and any pending transcription directive are set aside.
+  /** The version a reanchor reads the revision against, read before the parse below replaces it. */
+  const before = entry.mode === "reanchor" && frozen ? await readReanchorInputs(frozen.dir) : null;
+  // An open revision is read from its starting point every time (`revision.ts` base): the ledger,
+  // the verdict caches and the owner's open review items as the `--revise` re-entry left them.
+  // (… until V1 has re-pointed it at THIS source, or read it afresh: the condition `v1EntryMode` reads)
+  const opening = frozen && revisionOpen(verify) && frozen.reanchored !== entry.sourceSha ? frozen : null;
+  if (opening) for (const l of await restoreRevisionBase(runDir, verify, opening.dir)) log(l);
+  if (entry.sourceSha !== verify.source.sha256 || entry.mode === "reanchor") {
+    // The paper changed (a revision: on every entry until V1 reads it). A pending transcription directive was about the text before it; on a cold
+    // extraction, what was transcribed and every verdict given on it describe another text too, and
+    // the old reference core is set aside. A reanchor keeps them: what the revision left unchanged
+    // keeps its basis, and V1.5 re-grades the rest.
     verify.source.sha256 = entry.sourceSha;
-    verify.confirmed = {};
-    const refsFile = path.join(runDir, V1_REFS_FILE);
-    if (existsSync(refsFile)) await rename(refsFile, `${refsFile}.prev`);
     const pending = path.join(runDir, VERIFY_FILES.v1ReviseDirective);
     if (existsSync(pending)) await rm(pending, { force: true });
     // the directive never reached an agent: the drift it carried was not "handed to a revise round"
     delete verify.last_drift;
-    log(`source changed: ${V1_REFS_FILE} set aside (.prev), carried V1.5 verdicts and any pending directive dropped`);
+    // (an open revision read afresh is set aside once, below: `readRevisionCold`)
+    if (entry.mode === "cold" && !opening) {
+      await setAsideForColdTranscription(runDir, verify);
+      log(`source changed: ${V1_REFS_FILE} set aside (.prev), carried V1.5 verdicts and any pending directive dropped`);
+    }
   }
 
   // 1. Mechanical extraction + scope.
   const sourceDir = path.join(runDir, VERIFY_FILES.sourceDir);
   // The authors' note macros are read away when a paper is read for the first time (a cold extraction);
   // a transcription on file is revised against the text it was cut from, read as its `envs.json` records.
-  const noteMacros = entry.mode === "revise" ? await recordedNoteMacros(runDir) : process.env.PAPERFORMALIZER_NOTE_MACROS !== "off";
-  const parsed = await buildEnvsJson(sourceDir, verify.source.main_file, noteMacros, runDir);
+  // (A revision is read as the version before it was.)
+  const noteMacros = entry.mode !== "cold" ? await recordedNoteMacros(entry.mode === "reanchor" && frozen ? frozen.dir : runDir) : process.env.PAPERFORMALIZER_NOTE_MACROS !== "off";
+  // (… and a revision is flattened as it now reads: the flat text on file is the version before it)
+  const parsed = await buildEnvsJson(sourceDir, verify.source.main_file, noteMacros, entry.mode === "reanchor" ? undefined : runDir);
   const { flat } = parsed;
   if (entry.mode === "cold" && noteMacros === false) log("parser: authors' note macros are read as written (PAPERFORMALIZER_NOTE_MACROS=off)");
   for (const m of flat.notes?.log ?? []) log(`parser: ${m}`);
@@ -875,21 +1235,43 @@ export const runStageV1: VerifyStage = async (args: VerifyStageArgs): Promise<Ve
     const byId = new Map(e.envs.map((x) => [x.id, x] as const));
     return { scope, theoremLike: scope.filter((id) => THEOREM_LIKE_KINDS.has(byId.get(id)?.kind ?? "other")) };
   };
-  // 1b. Segmentation fallback: the parser's gaps, filled by an agent that points at lines.
+  // 1b. Segmentation fallback: the parser's gaps, filled by an agent that points at lines. A revision
+  // moves them: the segmenter's file is re-pointed first (`reanchorSegments`).
+  /** Entries of the segmenter's file the revision lost: their gaps go to the segmenter again. */
+  let segmentsDropped = 0;
+  // (… except after V1 halted on a revision read as far fewer results: the file stands as the owner
+  // left it, fixed or not)
+  if (entry.mode === "reanchor" && before?.segments && verify.revision?.fewer_results_seen !== entry.sourceSha) {
+    // A binding names the environment it gives a proof to: kept only while that environment reads as
+    // in the version (an unlabeled one's ordinal may now name another).
+    const bodyBefore = new Map(before.envs.envs.map((e) => [e.id, norm(e.body)] as const));
+    const bodyNow = new Map(parsed.envs.envs.map((e) => [e.id, norm(e.body)] as const));
+    const out = reanchorSegments(before.segments, before.flat, flat.text, (id) => bodyBefore.has(id) && bodyBefore.get(id) === bodyNow.get(id));
+    segmentsDropped = out.dropped;
+    await writeFile(path.join(runDir, V1_SEGMENTS_FILE), JSON.stringify(out.seg, null, 2), "utf8");
+    log(`reanchor: ${V1_SEGMENTS_FILE} re-pointed at the revised text${out.dropped > 0 ? ` (${out.dropped} entr${out.dropped === 1 ? "y" : "ies"} whose lines are gone dropped)` : ""}`);
+  }
   let envs = parsed.envs;
   let segmentNotes: string[] = [];
+  /** The segmenter's file on disk applies: what it holds is kept by every segmenter call (`runSegmenter`). */
+  let segmentsApply = true;
   {
     const existing = await applyExistingSegments(args, parsed.envs, flat);
+    segmentsApply = existing.applied;
     envs = existing.envs;
     segmentNotes = existing.notes;
-    // A revise entry keeps the segmentation the reference core was written against.
-    if (!existing.applied && !args.dryRun && entry.mode === "cold") {
+    // A revise entry keeps the segmentation the reference core was written against (a revised
+    // source may need its own).
+    // (… and so may a revision: what its parse leaves unplaced that the version's did not)
+    const fresh = entry.mode === "reanchor" && before ? newParserGaps(segmentationGaps(parsed.warnings, envs, scopeOf(envs).theoremLike), before.parserWarnings).length : 0;
+    if ((!existing.applied || segmentsDropped > 0 || fresh > 0) && !args.dryRun && entry.mode !== "revise") {
       const gaps = segmentationGaps(parsed.warnings, envs, scopeOf(envs).theoremLike);
       if (gaps.length > 0) {
-        const r = await runSegmenter(args, parsed.envs, envs, flat, gaps);
+        const r = await runSegmenter(args, parsed.envs, envs, flat, gaps, existing.applied);
         if (r.halt) return r.halt;
         envs = r.envs;
         segmentNotes = r.notes;
+        if (r.changed) segmentsApply = true;
       }
     }
   }
@@ -898,6 +1280,36 @@ export const runStageV1: VerifyStage = async (args: VerifyStageArgs): Promise<Ve
   let parserWarnings = [...parsed.warnings, ...segmentNotes, ...uncut(envs)];
   await writeEnvsArtifacts(runDir, envs, flat);
   let { scope, theoremLike } = scopeOf(envs);
+  /** What the re-pointing leaves the V1 agent to settle, beyond what the core's own checks find. */
+  if (entry.mode === "reanchor" && before) {
+    // A revision read as far fewer results than its version is first taken for a failed parse (11-16:
+    // a segmentation lost, all 17 results "removed"): halted once, re-pointing nothing; the next entry
+    // goes on (what is not located goes to V1's agent), on discovery/segments.json as left. One read as no
+    // result at all halts every time: there is nothing to re-point at.
+    const resultsOf = (e: EnvsJson): number => e.envs.filter((x) => THEOREM_LIKE_KINDS.has(x.kind)).length;
+    const [was, is] = [resultsOf(before.envs), resultsOf(envs)];
+    if (theoremLike.length === 0 || (fewerResultsThanBefore(was, is) && verify.revision!.fewer_results_seen !== entry.sourceSha)) {
+      verify.revision!.fewer_results_seen = entry.sourceSha;
+      await saveState(args.repoRoot, args.qid, args.state);
+      const message = `the revised paper reads as ${theoremLike.length === 0 ? "no result" : `${is} result(s)`} against ${was} in version ${verify.revision!.from_version}: most likely its parse or segmentation failed, not a revision that removed them. Nothing was re-pointed. Fix ${V1_SEGMENTS_FILE} (it is kept as you leave it) or the source, then --resume: ${theoremLike.length === 0 ? "V1 halts again while no result is found" : "it re-points what it finds, and V1's agent re-points or removes the rest"}.`;
+      log(`reanchor: ${message}`);
+      return { status: "checkpoint", message: `V1: ${message}` };
+    }
+    const r = await reanchorTranscription(args, before, envs, flat, entry);
+    entry = r.entry;
+    // Re-pointed (or set aside for a cold reading): recorded at once, so a V1 halted from here on
+    // resumes on this transcription instead of re-pointing again.
+    verify.revision!.reanchored_sha = entry.sourceSha;
+    verify.revision!.pending_violations = r.violations;
+    await saveState(args.repoRoot, args.qid, args.state);
+  } else if (opening && entry.mode === "cold") {
+    // A revision read afresh: its version's transcription is not on file to re-point (or a dry run).
+    await readRevisionCold(runDir, verify, entry.why);
+    verify.revision!.reanchored_sha = entry.sourceSha;
+    await saveState(args.repoRoot, args.qid, args.state);
+  }
+  /** What the re-pointing left V1's agent to settle beyond the core's own checks (until V1 accepts). */
+  const reanchorViolations: string[] = revisionOpen(verify) ? (verify.revision?.pending_violations ?? []) : [];
   if (theoremLike.length === 0) {
     throw new Error(
       `V1: the extraction scope holds no theorem-like environment (scope: ${scope.join(", ") || "empty"}). ` +
@@ -980,7 +1392,7 @@ export const runStageV1: VerifyStage = async (args: VerifyStageArgs): Promise<Ve
   // findings without a fix (or whose fix could not be applied) go to the agent — and when
   // none are left, the round needs no agent at all: materialize, check, accept. A re-entry with
   // no directive is the same path with nothing to apply.
-  if (entry.mode === "revise") {
+  if (entry.mode !== "cold") {
     const reentry = directive === null;
     let d: ReviseDirective = directive ?? { mode: "transcribe", round: 0, findings: [] };
     const tag = reentry ? "re-entry" : `revise round ${d.round}`;
@@ -1040,7 +1452,7 @@ export const runStageV1: VerifyStage = async (args: VerifyStageArgs): Promise<Ve
       const refViolations = await materializeRefs(refsPath, corePath, envs, flat);
       if (refViolations.length === 0) {
         const checked = await validateRound(corePath, envs, scope, flat, await citationAccounting(refsPath, verify.citation_accounting === true));
-        if (checked.core && checked.violations.length === 0) {
+        if (checked.core && checked.violations.length === 0 && reanchorViolations.length === 0) {
           if (resolveProseLocators(checked.core, flat) > 0) await writeCoreJson(corePath, checked.core);
           await rm(directivePath, { force: true });
           await writeLintWarnings(runDir, checked.warnings, parserWarnings);
@@ -1054,9 +1466,9 @@ export const runStageV1: VerifyStage = async (args: VerifyStageArgs): Promise<Ve
           log(`${tag}: every finding was fixed mechanically — core accepted without an agent round (${counts(checked.core)})`);
           return { status: "completed", message: `core revised mechanically (no agent round): ${counts(checked.core)}` };
         }
-        violations = checked.violations;
+        violations = [...reanchorViolations, ...checked.violations];
       } else {
-        violations = refViolations;
+        violations = [...reanchorViolations, ...refViolations];
       }
       log(`${tag}: ${reentry ? "the materialized core" : "mechanical fixes applied but the core"} is not clean (${violations[0]}); handing the violations to the agent`);
       directive = null;
@@ -1183,8 +1595,9 @@ export const runStageV1: VerifyStage = async (args: VerifyStageArgs): Promise<Ve
         if (gaps.length > 0) {
           for (const g of gaps) truncationTried.add(g.split(" ")[0]!);
           log(`round ${round}: ${gaps.length} environment(s) look truncated — ${gaps[0]}`);
-          const r = await runSegmenter(args, parsed.envs, envs, flat, gaps);
+          const r = await runSegmenter(args, parsed.envs, envs, flat, gaps, segmentsApply);
           if (r.halt) return r.halt;
+          if (r.changed) segmentsApply = true;
           if (r.changed) {
             envs = r.envs;
             parserWarnings = [...parsed.warnings, ...r.notes, ...uncut(envs)];
@@ -1206,7 +1619,7 @@ export const runStageV1: VerifyStage = async (args: VerifyStageArgs): Promise<Ve
       verify.v1_rounds += round;
       if (directive) await rm(directivePath, { force: true });
       await writeLintWarnings(runDir, checked.warnings, parserWarnings);
-      if (entry.mode === "revise") for (const l of await carryOrphanedRecords(runDir, checked.core, verify, await readPatchFile(runDir))) log(l);
+      if (entry.mode !== "cold") for (const l of await carryOrphanedRecords(runDir, checked.core, verify, await readPatchFile(runDir))) log(l);
       const stale = await snapshotTranscribedCore(runDir, verify);
       if (stale) log(`WARNING: ${stale}`);
       log(
@@ -1738,6 +2151,7 @@ async function dryRunPatchMode(
     patches,
     unfixable: existing?.unfixable ?? [],
     ...(existing?.owner_readings?.length ? { owner_readings: existing.owner_readings } : {}),
+    ...(existing?.typo_fixes?.length ? { typo_fixes: existing.typo_fixes } : {}),
   };
   const violations = validatePatchFile(transcribed, file, required);
   if (violations.length > 0) {

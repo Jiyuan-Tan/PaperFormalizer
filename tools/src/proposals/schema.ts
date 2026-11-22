@@ -74,7 +74,7 @@ export const checkerNoteSchema = z.object({
   duplicate_of: z.string().nullable().optional(),
 });
 
-/** The same statement in another paper (`doc/statements.json`): `identical` = the normalized
+/** The same statement in another paper (`doc/statements/<slug>.json`): `identical` = the normalized
  *  statement hashes alike; `pattern` = the same shape over each paper's own definitions
  *  (`statementPattern`); `similar` = a lexical match over statement text and docstring. A pattern or
  *  similar match counts as recurrence only when the curator `confirmed` it is the same result. */
@@ -170,6 +170,8 @@ export const proposalSchema = z.object({
   dropped_hypotheses: z.array(z.string()).optional(),
   /** The same entry deferred before in another paper: it returns with the new evidence. */
   deferred_before: z.array(z.object({ slug: z.string(), proposal_id: z.string() })).optional(),
+  /** Other papers (`Papers.<Other>`) whose Lean already uses the declaration: reuse shown. */
+  imported_by: z.array(z.string()).optional(),
 }).superRefine((p, ctx) => {
   if (p.verdict !== "propose") return;
   for (const key of ["title", "reference", "content", "division", "target_module", "proposed_name", "reuse_evidence"] as const) {

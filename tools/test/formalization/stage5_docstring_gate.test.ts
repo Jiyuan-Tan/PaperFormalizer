@@ -5,7 +5,9 @@ import { mkdir, mkdtemp, readFile, rm, writeFile } from "node:fs/promises";
 import { existsSync } from "node:fs";
 import { tmpdir } from "node:os";
 import path from "node:path";
-import { documentModules, type DocstringTarget, type LakeRun } from "../../src/formalization/stage5_docstrings.js";
+import { docstringsLakeRun, documentModules, type DocstringTarget, type LakeRun } from "../../src/formalization/stage5_docstrings.js";
+import { lakeHoldMode } from "../../src/shared/build_mutex.js";
+import { cleanSharedToolkit, writeSkeleton } from "../toolkit/helpers.js";
 import { promptPath } from "../../src/paths.js";
 import type { StageDeps } from "../../src/pipeline_support.js";
 import type { PipelineContext } from "../../src/types.js";
@@ -227,3 +229,47 @@ describe("documentModules: text-checked passes, one confirming build", () => {
     expect(await readFile(path.join(root, FILE), "utf8")).toBe(documented(ORIGINAL));
   });
 });
+
+describe("docstringsLakeRun: the paper index under a shared hold", () => {
+  it("runs `paper_index` under a shared hold of the paper when it is up to date (`--no-build`), else exclusive; a paper build is shared", async () => {
+    const root = await mkdtemp(path.join(tmpdir(), "f5-index-shared-"));
+    try {
+      await writeSkeleton(root);
+      await mkdir(path.join(root, "Papers", "Toy"), { recursive: true });
+      await writeFile(path.join(root, "Papers", "Toy", "Main.lean"), "module\n");
+      const undo = await cleanSharedToolkit(root);
+      try {
+        const calls: string[] = [];
+        let fresh = 0;
+        let wouldBuild = false;
+        const ok = (exitCode: number) => ({ stdout: "", stderr: "", exitCode, killedDueToInactivity: false });
+        const runLake = docstringsLakeRun(root, "Papers.Toy", async (args) => {
+          calls.push(`${args.slice(0, 3).join(" ")} [${lakeHoldMode(root)}]`);
+          if (args[0] === "build" && args[1] === "--no-build") return ok(fresh);
+          if (args[0] === "--no-build" && wouldBuild) return ok(3);
+          return ok(0);
+        });
+        const index = ["exe", "paper_index", "--", "--prefix", "Papers.Toy"];
+        await runLake(["build", "Papers.Toy.Main"]);
+        await runLake(index);
+        expect(calls.splice(0)).toEqual(["build Papers.Toy.Main [shared]", "build --no-build paper_index [null]", "--no-build exe paper_index [shared]"]);
+        fresh = 1;
+        await runLake(index);
+        expect(calls.splice(0)).toEqual(["build --no-build paper_index [null]", "exe paper_index -- [exclusive]"]);
+        fresh = 0;
+        wouldBuild = true;
+        expect((await runLake(index)).exitCode).toBe(0);
+        expect(calls.splice(0)).toEqual(["build --no-build paper_index [null]", "--no-build exe paper_index [shared]", "exe paper_index -- [exclusive]"]);
+        // the toolkit's own docstrings (no paper's prefix): exclusive
+        const toolkitRun = docstringsLakeRun(root, "Toolkit", async (args) => { calls.push(`${args.slice(0, 3).join(" ")} [${lakeHoldMode(root)}]`); return ok(0); });
+        await toolkitRun(["exe", "paper_index", "--", "--prefix", "Toolkit"]);
+        expect(calls.at(-1)).toBe("exe paper_index -- [exclusive]");
+      } finally {
+        await undo();
+      }
+    } finally {
+      await rm(root, { recursive: true, force: true });
+    }
+  }, 30_000);
+});
+

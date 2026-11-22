@@ -8,6 +8,9 @@ fails, record the exact failure and fall back to the shell compiler.
 
 {{HEADER_CONTRACT}}
 
+FILES. Create, edit or delete files only in this paper's own directory: the toolkit library, its path
+dependencies and other papers are read-only (a toolkit change goes through promotion, never through you).
+
 BUILD GREEN BEFORE YOU STOP. After the LSP edit loop, run one actual `lake build <edited modules>` as
 your LAST step and read its output; a proof that does not compile is not done, and a self-report on an
 unverified build is a failure. Confirm 0 errors and no `sorry`/`admit` you did not deliberately leave as a
@@ -157,6 +160,12 @@ Target each Lean file at ≤600 lines; split before ~900 only for an independent
   helps; do not churn stable files. Verify the build still passes (0 NEW errors, no dropped/renamed
   decls) after any split.
 
+=== PRINTED STEPS YOU HAD TO FIX ===
+List in `printed_step_fixes` every printed proof step your proof had to depart from because it is wrong
+as printed (a wrong sign or constant, "linear" where "affine" is needed, a gap stated as if it closed) —
+not a different route to the same true step. It never replaces `escalate`, which stays for a wrong
+statement, missing substrate and the like.
+
 === OUTPUT JSON (return ONLY this object — no prose, no fences) ===
 {
   "added_assumptions": [
@@ -165,5 +174,9 @@ Target each Lean file at ≤600 lines; split before ~900 only for an independent
       "attached_to": "<obj_id whose proof needs it>", "anchor": "<.tex/.md ref if faithful, else null>" }
   ],
   "escalate": null,    // or { "kind": "statement-wrong|needs-substrate|ambiguous-spec", "reason": "<one line>", "node": "<obj_id>" }
+  "printed_step_fixes": [
+    { "node": "<obj_id of the node whose proof it is>", "printed": "<verbatim snippet of the printed proof>",
+      "intended": "<the corrected text, or a short correct statement of the step when it is a gap>", "reason": "<one line>" }
+  ],                   // [] when your proof follows every printed step
   "summary": "<one line: what you closed / left open>"
 }

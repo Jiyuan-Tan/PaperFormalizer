@@ -77,7 +77,7 @@ import {
 import { envImbalance } from "./tex_balance.js";
 import { balancedLikeUnit, bodyDefinitionList, readPaperText, texVerdictKey, texVerdicts, withLocalBodyDefinitions, type TexFragmentKind } from "./tex_fragment_check.js";
 import { SYMBOL_PIN_OF, conditionsOn, fullReadingText, pinsOn, splitCorollaryId, splitKind } from "./core_graph.js";
-import { PROOF_UNCHANGED, isProofOp, isStatementOp, splitDetails, materializeRepair, nodePassage as unitPassage, resolveOps, sliceOffsets, statementSpan, type PassageSources, type PatchOp } from "./ops.js";
+import { PROOF_UNCHANGED, isProofOp, isStatementOp, splitDetails, materializeRepair, nodePassage as unitPassage, resolveOps, sliceOffsets, statementSpan, typoOpsKept, type PassageSources, type PatchOp } from "./ops.js";
 import { PaperUnits, flatLineStart, isControlLine, type Unit } from "./units.js";
 import { BUILTIN_ENVS, FURTHER_PROOF_SEPARATOR, parseTheoremCounters } from "./tex_envs.js";
 import { blankTexComments } from "../shared/tex_text.js";
@@ -179,7 +179,9 @@ interface LoosePatch {
 }
 interface LooseSuggestion { corrected_statement: string | null; given_up?: string; given_up_by?: "referee"; proof_note?: string; ops?: PatchOp[]; corollaries?: LooseCorollary[]; umbrella?: boolean }
 interface LooseUnfixable { node: string; reason: string; suggested_repair?: LooseSuggestion | null; declined?: string; owner_explanation?: OwnerExplanationField }
-export interface LoosePatchFile { patches?: LoosePatch[]; unfixable?: LooseUnfixable[] }
+/** The typos of a result's proof the runner corrected (`patches.ts` `typo_fixes`): ops on its proof. */
+interface LooseTypoFix { node: string; ops?: PatchOp[]; typos?: Array<{ printed: string; intended: string; reason?: string; unit: string | null; source?: "lean" }> }
+export interface LoosePatchFile { patches?: LoosePatch[]; unfixable?: LooseUnfixable[]; typo_fixes?: LooseTypoFix[] }
 type LooseFinding = VerifyFinding & { suggested_repair?: string; suggestion_declined?: string; patch?: (VerifyFinding["patch"] & { narrowed?: string }) | null };
 type PaperErrors = Record<string, { detail: string; witness: string | null; kind?: "error" | "clarification"; undetermined?: boolean; owner_decision?: string }>;
 
@@ -913,14 +915,21 @@ export function planAnnotations(input: AnnotationInput): AnnotationPlan {
       }
       return { ...m, first, last };
     };
-    // As printed: spacing, punctuation, grouping braces, math delimiters and the order of a
-    // superscript and a subscript do not count.
-    const bare = (x: string): string =>
-      x
+    // As printed: spacing, punctuation, the braces of a group of at most one token, math delimiters
+    // and the order of a superscript and a subscript do not count. Any other group's braces do:
+    // `\frac{1}{2}c` is not `\frac{1}{2c}`.
+    const bare = (x: string): string => {
+      let t = x
         .replace(new RegExp(String.raw`\^${SCRIPT_ARG}_${SCRIPT_ARG}`, "gu"), "_$2^$1")
         .replace(/\\(le|ge|ne)q(?![A-Za-z])/gu, "\\$1")
         .replace(/\\vsLabel\s*\{[^{}]*\}/gu, "")
-        .replace(/\\(?:left|right|[Bb]igg?[lrm]?)(?![A-Za-z])|\\[,;:! ]|~|(?<!\\)[{}$]|[\s.,;:]/gu, "");
+        .replace(/\\(?:left|right|[Bb]igg?[lrm]?)(?![A-Za-z])|\\[,;:! ]|~|(?<!\\)\$|[\s.,;:]/gu, "");
+      for (let prev = ""; prev !== t; ) {
+        prev = t;
+        t = t.replace(/(?<!\\)\{(\\[A-Za-z]+|\\.|[^{}\\])?\}/gu, "$1");
+      }
+      return t;
+    };
     /** A run's red span and the result's text for it: the printed units it leaves, its ops' TeX in place. */
     const runText = (members: readonly RangeMark[]): { from: number; to: number; text: string | null } => {
       const a = Math.min(...members.map((m) => m.first));
@@ -1213,8 +1222,14 @@ export function planAnnotations(input: AnnotationInput): AnnotationPlan {
   // statement, naming the lemmas it rests on, or opening "(the paper's proof could not be located; the
   // corrected proof is given here)".
   {
-    type ProofItem = { s: CoreStatement; env: TexEnv; note: string; pending: boolean; proofOnly: boolean; ops: PatchOp[]; umbrella: boolean; fallback?: boolean };
+    // The typos of a proof the runner corrected (`typo_fixes`) are marked the same way, as steps of
+    // their own — never awaiting a decision, beside a repair's (whose text stands where both replace
+    // the same step): `\vsTypoStep` ("Corrected typo:") for the referee's, `\vsLeanStep` ("Corrected
+    // (Lean proof):") for a step the Lean proof had to depart from (`source: "lean"`).
+    type ProofItem = { s: CoreStatement; env: TexEnv; note: string; pending: boolean; proofOnly: boolean; ops: PatchOp[]; umbrella: boolean; fallback?: boolean; typos?: { text: string; macro: "vsTypoStep" | "vsLeanStep" } };
     const items: ProofItem[] = [];
+    const typoItems: ProofItem[] = [];
+    const typoFixOf = new Map((input.patches?.typo_fixes ?? []).map((t) => [t.node, t] as const));
     for (const st of transcribed.statements) {
       if (shadowed.has(st.id) || hostRevised.has(st.id)) continue;
       const w = pendingWeak.get(st.id);
@@ -1223,6 +1238,19 @@ export function planAnnotations(input: AnnotationInput): AnnotationPlan {
       const rep = w ? sug : !rejectedRepair(st.id) ? patch : undefined;
       const note = rep?.proof_note?.trim() === PROOF_UNCHANGED ? "" : rep?.proof_note?.trim();
       const ops = (w ? (w.ops ?? sug?.ops ?? []) : (rep?.ops ?? [])).filter(isProofOp);
+      const fix = w || rep?.umbrella ? undefined : typoFixOf.get(st.id);
+      const typoOps = fix?.ops?.length ? typoOpsKept(fix.ops, rep?.ops ?? [], { units, passage: unitPassage(passageSrc, st.id) }) : [];
+      if (typoOps.length > 0) {
+        const env = statementPassage(st)?.env ?? null;
+        // A step is the Lean proof's when every typo it corrects is; else the referee's.
+        const lean = (o: PatchOp): boolean => ((ts) => ts.length > 0 && ts.every((t) => t.source === "lean"))((fix!.typos ?? []).filter((t) => t.unit === o.unit));
+        for (const [macro, part] of [["vsTypoStep", typoOps.filter((o) => !lean(o))], ["vsLeanStep", typoOps.filter(lean)]] as const) {
+          if (part.length === 0) continue;
+          const text = (fix!.typos ?? []).filter((t) => t.unit && part.some((o) => o.unit === t.unit)).map((t) => `${t.printed} -> ${t.intended}`).join("; ");
+          if (env) typoItems.push({ s: st, env, note: "", pending: false, proofOnly: !patch?.corrected_statement && !(patch?.ops ?? []).some(isStatementOp), ops: [...part], umbrella: false, typos: { text, macro } });
+          else unlocated.push({ node: st.id, kind: "corrected proof", reason: "no environment of envs.json carries this statement (typos of its proof)", placed: null });
+        }
+      }
       if (!note && ops.length === 0) continue;
       const env = statementPassage(st)?.env ?? null;
       const kind: AnnotationKind = w ? "awaiting decision" : "corrected proof";
@@ -1236,6 +1264,7 @@ export function planAnnotations(input: AnnotationInput): AnnotationPlan {
         : !patch?.corrected_statement && !(patch?.ops ?? []).some(isStatementOp);
       items.push({ s: st, env, note: note ?? "", pending: !!w, proofOnly, ops, umbrella: !!rep?.umbrella });
     }
+    items.push(...typoItems);
     const toBlock: ProofItem[] = [];
     for (const it of items) {
       // An umbrella's printed proof is superseded whole (its blocks carry the proofs): the proof note
@@ -1256,16 +1285,21 @@ export function planAnnotations(input: AnnotationInput): AnnotationPlan {
       }
       const al = it.env.proof !== null && it.env.proofLines ? aligned(it.env, "proof") : null;
       const unresolved = resolveOps(it.ops, { units, passage: unitPassage(passageSrc, it.s.id) }, it.s.id).problems;
+      if ((!al?.map || unresolved.length > 0) && it.typos) {
+        log.push(`annotated paper: the typo fixes of ${it.s.id} could not be placed in its printed proof (${unresolved.length > 0 ? unresolved.join("; ") : "it did not align with the source"}); not marked`);
+        continue;
+      }
       if (!al?.map || unresolved.length > 0) {
         log.push(`annotated paper: the proof ops of ${it.s.id} could not be placed in its printed proof (${unresolved.length > 0 ? unresolved.join("; ") : "it did not align with the source"}); the corrected proof is given as one block`);
         toBlock.push({ ...it, ops: [], fallback: true });
         continue;
       }
       const status = it.pending ? "proposed" : "corrected";
-      const marks = opMarks(it.s.id, it.ops, "proof", (t, printed) => latex(it.s.id, `${status} step of the proof`, t, "fixer", "step", printed)).ranges;
-      const ops = regionOps(it.env, "proof", marks, { run: it.pending ? "vsProposedStep" : "vsCorrectedStep", red: "vsStep" }, "proof op");
+      const by = it.typos ? (it.typos.macro === "vsLeanStep" ? "other" : "referee") : "fixer";
+      const marks = opMarks(it.s.id, it.ops, "proof", (t, printed) => latex(it.s.id, `${status} step of the proof`, t, by, "step", printed)).ranges;
+      const ops = regionOps(it.env, "proof", marks, { run: it.typos?.macro ?? (it.pending ? "vsProposedStep" : "vsCorrectedStep"), red: "vsStep" }, "proof op");
       if (ops.length === 0) continue;
-      placeInEnv(it.env, "proof", ops, it.s.id, it.pending ? "awaiting decision" : "corrected proof", `${status} steps of the proof of ${it.s.id}`, []);
+      placeInEnv(it.env, "proof", ops, it.s.id, it.pending ? "awaiting decision" : "corrected proof", it.typos ? `${it.typos.macro === "vsLeanStep" ? "steps the Lean proof corrected" : "typos corrected"} in the proof of ${it.s.id}: ${it.typos.text}` : `${status} steps of the proof of ${it.s.id}`, []);
     }
     /**
      * "This result prints no proof; it follows from Lemmas …(their corrected proofs are marked in
@@ -1350,7 +1384,13 @@ export function planAnnotations(input: AnnotationInput): AnnotationPlan {
         continue;
       }
       const tags = envBounds(env);
-      if (!tags) {
+      // A prose-heading statement has no \end{…}. Its aligned body still gives an exact
+      // insertion point for a proof the paper did not print (never guess from line numbers).
+      const segment = env.envName === "segment" ? aligned(env, "body") : null;
+      const segmentEnd = segment?.map?.[env.body.length];
+      const endpoint = tags ? { file: tags.file, at: tags.endEnd }
+        : segmentEnd !== undefined && segment ? { file: segment.file, at: segmentEnd } : null;
+      if (!endpoint) {
         unlocated.push({ node: it.s.id, kind, reason: "neither its proof nor its environment was found (proof change)", placed: null });
         continue;
       }
@@ -1358,7 +1398,12 @@ export function planAnnotations(input: AnnotationInput): AnnotationPlan {
       // lemma it rests on when the paper prints none (user rule 2026-09-24), else saying so.
       const restsOn = env.proof === null ? restingLemmas(it.s.id, env) : null;
       const head = restsOn ? `${restsOn} \\vsLine ` : "\\textit{(the paper's proof could not be located; the corrected proof is given here)} \\vsLine ";
-      afterReadings.push(() => place(tags.file, tags.endEnd, `\n${block(head, restsOn ? "no printed proof" : "no proof located")}`, restsOn ? "after-env (no printed proof)" : "after-env (no proof located)"));
+      afterReadings.push(() => {
+        // a segment's readings and conditions go where its lines end (`proseEnd`): its proof after them
+        const lines = tags ? null : proseEnd(env);
+        const at = lines && lines.file === endpoint.file ? Math.max(endpoint.at, lines.endEnd) : endpoint.at;
+        place(endpoint.file, at, `\n${block(head, restsOn ? "no printed proof" : "no proof located")}`, restsOn ? "after-env (no printed proof)" : "after-env (no proof located)");
+      });
       log.push(`annotated paper: ${restsOn ? "the paper prints no proof of" : "no proof located for"} ${it.s.id}; the corrected proof follows the result`);
     }
   }
@@ -1890,7 +1935,7 @@ export function renderAnnotationsMd(slug: string, main: string, r: Omit<Annotate
     `# PaperFormalizer annotations — ${slug}`,
     "",
     `Annotated copy of \`source/\`; main file \`${main}\`. Red (\`\\vsOriginal\`, "Original:"): the paper's text that is wrong or ambiguous (kind \`not determined\`: it does not say enough to be checked, and nothing was shown false). ` +
-      "Blue (`\\vsCorrected` / `\\vsClarified`: \"Revised:\", \"Clarified statement:\"): the corrected text (a hypothesis a repair adds is written into it; the note says which). Proofs (kind `corrected proof`) are revised in place: each printed step a repair changes red (`\\vsStep`, \"Original:\") with its replacement right after (`\\vsCorrectedStep`, \"Revised:\"); a repair without step edits (or a result whose proof was not located) gets one block per result (`\\vsProof`, \"Revised proof (confirmed):\"; a pending one `\\vsProposedProof`) after the proof; when the paper prints none, right after the result, naming every lemma it uses and, by the paper's section numbers, where their corrections are marked; else right after the result, saying the proof could not be located. " +
+      "Blue (`\\vsCorrected` / `\\vsClarified`: \"Revised:\", \"Clarified statement:\"): the corrected text (a hypothesis a repair adds is written into it; the note says which). Proofs (kind `corrected proof`) are revised in place: each printed step a repair changes red (`\\vsStep`, \"Original:\") with its replacement right after (`\\vsCorrectedStep`, \"Revised:\"; a typo of the proof corrected, no repair: `\\vsTypoStep`, \"Corrected typo:\", or `\\vsLeanStep`, \"Corrected (Lean proof):\", for a printed step the Lean proof had to depart from); a repair without step edits (or a result whose proof was not located) gets one block per result (`\\vsProof`, \"Revised proof (confirmed):\"; a pending one `\\vsProposedProof`) after the proof; when the paper prints none, right after the result, naming every lemma it uses and, by the paper's section numbers, where their corrections are marked; else right after the result, saying the proof could not be located. " +
       "Red struck through (`\\vsStruck`; `\\vsStruckRed`, red alone, where a line cannot cross the text), kind `no longer used`: an assumption or definition no result uses after the repairs, with a note naming the results that now state the conditions they use. " +
       "Orange (`\\vsNote`, \"PaperFormalizer: …\"): what is wrong, the proposed fix, and whether the fix weakens the result; `\\vsReading` (\"Clarification:\", kind `clarification (reading)`): a reading pinned for formalization; `\\vsReadingOwner` (\"Clarification (author):\"): the owner's reading of a finding the owner withdrew; `\\vsReadingSymbol` (\"Clarification (symbol …):\"): the reading of a symbol; `\\vsCondition` (\"Bookkeeping condition:\", kind `condition added`; the owner's `\\vsConditionOwner`, \"Bookkeeping condition:\"): a condition the verified statement carries beyond the printed text, at the end of each result carrying it; `\\vsDetail` (\"Proof detail:\"): the fixer's detail of a corrected proof step, for the referee and the Lean proof, beside the step it completes. " +
       "Awaiting your decision (a halt only): `\\vsProposed` (blue, \"Proposed revision (awaiting your decision):\"), `\\vsProposedStep` / `\\vsProposedProof` (blue, \"Revised (for the proposed statement):\", \"Proof of the proposed statement:\" — the decision is on the statement, never on its proof), `\\vsRewind` (\"Proposed correction (awaiting your decision):\"), `\\vsCap` (\"Revision not settled (awaiting your decision):\"). " +

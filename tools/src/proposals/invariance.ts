@@ -29,17 +29,38 @@ export function fingerprintScanCmd(cfg: Pick<ToolkitConfig, "lib" | "papersLib">
   ].join(" ");
 }
 
+/** A companion Lean files under a `match` matcher (`f.match_1.splitter`, `f.match_1.eq_1`): the
+ *  scan already leaves matchers out as auxiliary (`match_<n>`), but not what sits under them. They
+ *  are generated where a proof first needs them (`split`), so a move can make one appear, vanish
+ *  or change while what `f` states stands — never compared, like the matcher itself. */
+const underMatcher = (name: string): boolean => /\.match_\d+\.(splitter|eq_\d+|eq_def|congr_eq_\d+)$/.test(name);
+
 /** Declaration → statement hash from a scan's JSON; null when the scan reports none (a toolkit
  *  whose `CandidateScan.lean` predates the hash). Pure. */
 export function parseFingerprints(text: string): Map<string, string> | null {
-  let decls: Array<{ name?: unknown; stmt_hash?: unknown }>;
+  let decls: Array<{ name?: unknown; module?: unknown; stmt_hash?: unknown }>;
   try {
-    decls = (JSON.parse(text) as { declarations?: Array<{ name?: unknown; stmt_hash?: unknown }> }).declarations ?? [];
+    decls = (JSON.parse(text) as { declarations?: Array<{ name?: unknown; module?: unknown; stmt_hash?: unknown }> }).declarations ?? [];
   } catch {
     return null;
   }
+  // Local syntax declarations may share a name across module environments. Keep every
+  // module/hash pair: choosing the last row makes iteration order look like statement drift
+  // and can hide a real change in an earlier row. Ordinary globally unique names retain their
+  // scalar hash so moves can still compare the renamed declaration across module boundaries.
+  const grouped = new Map<string, Array<[string, string]>>();
+  for (const d of decls) {
+    if (typeof d.name !== "string" || typeof d.stmt_hash !== "string") continue;
+    if (underMatcher(d.name)) continue;
+    const rows = grouped.get(d.name) ?? [];
+    rows.push([typeof d.module === "string" ? d.module : "", d.stmt_hash]);
+    grouped.set(d.name, rows);
+  }
   const out = new Map<string, string>();
-  for (const d of decls) if (typeof d.name === "string" && typeof d.stmt_hash === "string") out.set(d.name, d.stmt_hash);
+  for (const [name, rows] of grouped) {
+    out.set(name, rows.length === 1 ? rows[0][1] : JSON.stringify(rows.sort(([am, ah], [bm, bh]) =>
+      am < bm ? -1 : am > bm ? 1 : ah < bh ? -1 : ah > bh ? 1 : 0)));
+  }
   return out.size > 0 ? out : null;
 }
 
@@ -74,15 +95,18 @@ export function statementInvarianceFailure(before: ReadonlyMap<string, string>, 
   ].filter(Boolean).join("; ");
 }
 
-/** Run the scan and read its hashes; null when it fails or reports none. */
+/** Run the scan and read its hashes; null when it fails or reports none. The toolkit, the paper and
+ *  the exe are built first (in a promotion's workspace: `cfg` rebased to it, its own build lock). */
 export async function takeFingerprints(d: ApplyDeps, cfg: ToolkitConfig, paperModule: string, out: string, rename: readonly MovedName[] = []): Promise<Map<string, string> | null> {
+  const scan = fingerprintScanCmd(cfg, paperModule, out, rename);
+  const read = async (r: { code: number }) => (r.code !== 0 || !(await d.exists(out)) ? null : parseFingerprints(await d.readFile(out)));
   // the scan reads compiled modules: bring them (and the exe) up to date first
   const b = await d.run(`lake build ${shq(cfg.lib)} ${shq(paperModule)} candidate_scan`, cfg.toolkitRoot);
-  if (b.code !== 0) return null;
-  const r = await d.run(fingerprintScanCmd(cfg, paperModule, out, rename), cfg.toolkitRoot);
-  if (r.code !== 0 || !(await d.exists(out))) return null;
-  return parseFingerprints(await d.readFile(out));
+  return b.code !== 0 ? null : read(await d.run(scan, cfg.toolkitRoot));
 }
+
+// The signature of what a scan of the toolkit and one paper reads (`shared/build_inputs.ts`).
+export { sourceSignature } from "../shared/build_inputs.js";
 
 /** The closure fingerprints a scan file reports for the run in `leanDir`; null when it has none. */
 async function closuresIn(cfg: ToolkitConfig, leanDir: string, scanFile: string): Promise<StatementFingerprints | null> {

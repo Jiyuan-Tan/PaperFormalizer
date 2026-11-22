@@ -3,7 +3,7 @@ import { tmpdir } from "node:os";
 import path from "node:path";
 import { describe, expect, it } from "vitest";
 import { MODELS } from "../../src/models.js";
-import { candidateIndex, claudeAsker, curatorViolations, MAX_INDEX_PROPOSALS, unselectedItem, unshownItem, type CuratorItem, type ProposalCandidate } from "../../src/proposals/curator.js";
+import { candidateIndex, claudeAsker, curatorViolations, MAX_INDEX_PROPOSALS, missingMustJudge, mustJudge, askJson, unjudgedItem, unselectedItem, unshownItem, type CuratorItem, type ProposalCandidate } from "../../src/proposals/curator.js";
 import { TOKEN_USAGE_LEDGER, type ModelTokenUsage } from "../../src/token_usage.js";
 import type { ToolkitConfig } from "../../src/toolkit/config.js";
 import type { ClaudeRunInput } from "../../src/workers/claude.js";
@@ -39,13 +39,13 @@ describe("the curator's index of a paper with too many candidates to show in ful
     const propose = (c: ProposalCandidate): CuratorItem => ({ ...unselectedItem(c.candidate_id), verdict: "propose" });
     const cap = (items: CuratorItem[]) => curatorViolations(items, cs, cfg, undefined, undefined, { partial: true }).filter((v) => v.includes("at most"));
     expect(cap(cs.slice(0, MAX_INDEX_PROPOSALS).map(propose))).toEqual([]);
-    expect(cap(cs.map(propose))).toEqual([`${MAX_INDEX_PROPOSALS + 1} items proposed; an index round proposes at most ${MAX_INDEX_PROPOSALS} — keep the strongest.`]);
+    expect(cap(cs.map(propose))).toEqual([`${MAX_INDEX_PROPOSALS + 1} items proposed besides the must-judge ones; an index round proposes at most ${MAX_INDEX_PROPOSALS} of those — keep the strongest.`]);
   });
 
   it("the index is capped in bytes: the highest-ranked candidates stay, the text says how many were cut, and a cut one is set aside as not shown", () => {
     const cs = [
       cand("plain_a"),
-      cand("recurs", { recurrence: [{ slug: "bar", name: "Papers.Bar.x", kind: "identical" }] }),
+      cand("recurs", { recurrence: [{ slug: "bar", name: "Papers.Bar.x", kind: "pattern" }] }),
       cand("plain_b"),
       cand("deferred", { deferred_before: [{ slug: "baz", proposal_id: "b-x" }] }),
     ];
@@ -80,5 +80,69 @@ describe("the curator's Claude calls are recorded in the run's token ledger", ()
       expect.objectContaining({ provider: "claude", model: MODELS.claudeMain, stage: "garden", success: false, usage: null }),
     ]);
     expect(seen).toEqual(["p", "r"]);
+  });
+});
+
+describe("must-judge candidates: an identical recurrence, or use by another paper's Lean", () => {
+  const cfg = { lib: "Toolkit", divisions: ["Foundations", "Tricks"], toolkitRoot: "/nonexistent" } as unknown as ToolkitConfig;
+  const identical = cand("same", { recurrence: [{ slug: "bar", name: "Papers.Bar.same", kind: "identical" }] });
+  const imported = cand("api", { imported_by: ["Papers.Emp"] });
+  const pattern = cand("shape", { recurrence: [{ slug: "bar", name: "Papers.Bar.shape", kind: "pattern" }] });
+
+  it("are flagged, ranked first and never cut from the index, however small the cap", () => {
+    expect(mustJudge(identical)).toBe(true);
+    expect(mustJudge(imported)).toBe(true);
+    expect(mustJudge(pattern)).toBe(false);
+    const { text, cut } = candidateIndex([cand("plain"), pattern, identical, imported], 10);
+    expect(cut).toEqual(["Papers.Foo.shape", "Papers.Foo.plain"]);
+    expect(text).toContain("- same [must judge; recurs: bar]");
+    expect(text).toContain("- api [must judge; imported by: Papers.Emp]");
+  });
+
+  it("each needs an item — propose, or skip with its reason — and none counts toward the cap", () => {
+    const many = Array.from({ length: MAX_INDEX_PROPOSALS }, (_, i) => cand(`c${i}`));
+    const cs = [...many, identical, imported];
+    const propose = (c: ProposalCandidate): CuratorItem => ({ ...unselectedItem(c.candidate_id), verdict: "propose" });
+    const skip = (c: ProposalCandidate): CuratorItem => ({ ...unselectedItem(c.candidate_id), reuse_evidence: "helper of Papers.Foo.c0, proposed" });
+    const v = (items: CuratorItem[]) => curatorViolations(items, cs, cfg, undefined, undefined, { partial: true }).filter((x) => x.includes("must judge") || x.includes("at most"));
+    expect(v(many.map(propose))).toEqual([]);
+    expect(missingMustJudge(many.map(propose), cs)).toEqual([
+      'candidate Papers.Foo.same is marked "must judge" and has no item: propose it, or skip it with the reason in reuse_evidence.',
+      'candidate Papers.Foo.api is marked "must judge" and has no item: propose it, or skip it with the reason in reuse_evidence.',
+    ]);
+    expect(missingMustJudge([propose(identical), skip(imported)], cs)).toEqual([]);
+    expect(v([...many.map(propose), propose(identical), skip(imported)])).toEqual([]);
+    expect(v([...many.map(propose), propose(identical), propose(imported)])).toEqual([]);
+    const over = [...many, cand("one_more"), identical, imported];
+    expect(curatorViolations([...over.map(propose)], over, cfg, undefined, undefined, { partial: true }).filter((x) => x.includes("at most")))
+      .toEqual([`${MAX_INDEX_PROPOSALS + 1} items proposed besides the must-judge ones; an index round proposes at most ${MAX_INDEX_PROPOSALS} of those — keep the strongest.`]);
+  });
+});
+
+describe("a must-judge item the reply leaves out is asked for once more, then set aside — never a failed round", () => {
+  it("askJson: a soft problem is asked about once and then accepted; a hard one still fails twice", async () => {
+    const dir = mkdtempSync(path.join(tmpdir(), "tc-askjson-"));
+    const cfg = { toolkitRoot: dir, runsDir: path.join(dir, "runs") } as unknown as ToolkitConfig;
+    const prompts: string[] = [];
+    const asker = { model: "m", ask: async (p: string) => { prompts.push(p); return "{\"items\":[]}"; } };
+    const r = await askJson<{ items: unknown[] }>({ cfg, slug: "s", name: "curator", prompt: "P", schema: {}, asker, log: () => {}, violations: () => [], soft: () => ["candidate X is marked \"must judge\""] });
+    expect(r).toEqual({ items: [] });
+    expect(prompts).toHaveLength(2);
+    expect(prompts[1]).toContain("candidate X is marked \"must judge\"");
+    await expect(askJson({ cfg, slug: "s", name: "curator", prompt: "P", schema: {}, asker, log: () => {}, violations: () => ["bad"], soft: () => [] })).rejects.toThrow("broke the output contract twice");
+    expect(unjudgedItem("Papers.Foo.x")).toMatchObject({ candidate_id: "Papers.Foo.x", verdict: "skip" });
+    // a retry asked only for soft problems never loses the first reply to a broken second one
+    let n = 0;
+    const flaky = { model: "m", ask: async () => (++n === 1 ? "{\"items\":[1]}" : "{\"items\":[2]}") };
+    const logs: string[] = [];
+    const kept = await askJson<{ items: number[] }>({ cfg, slug: "s", name: "curator", prompt: "P", schema: {}, asker: flaky, log: (m) => logs.push(m),
+      violations: (r) => (r.items[0] === 2 ? ["hard"] : []), soft: (r) => (r.items[0] === 1 ? ["soft"] : []) });
+    expect(kept).toEqual({ items: [1] });
+    expect(logs.at(-1)).toMatch(/keeping the first, whose only problems were soft/);
+    // …nor to a second ask that fails outright
+    let m = 0;
+    const dying = { model: "m", ask: async () => { if (++m === 2) throw new Error("quota"); return "{\"items\":[1]}"; } };
+    expect(await askJson<{ items: number[] }>({ cfg, slug: "s", name: "curator", prompt: "P", schema: {}, asker: dying, log: (x) => logs.push(x), violations: () => [], soft: () => ["soft"] })).toEqual({ items: [1] });
+    await expect(askJson({ cfg, slug: "s", name: "curator", prompt: "P", schema: {}, asker: { model: "m", ask: async () => { throw new Error("quota"); } }, log: () => {}, violations: () => [] })).rejects.toThrow("quota");
   });
 });

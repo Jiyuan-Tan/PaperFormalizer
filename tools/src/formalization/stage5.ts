@@ -19,6 +19,7 @@ import { parseAnnotatedDecls } from "../graph/extractor.js";
 import { parseJsonWithEscapeRepair } from "../shared/codex_json.js";
 import { ensureDocstringCoverage, type StatementHooks } from "./stage5_docstrings.js";
 import { readLakefileTargets } from "../toolkit/lakefile.js";
+import { emitLeanProofEnglish } from "./lean_proof_english.js";
 import { emitNlLinks } from "./nl_links.js";
 import { recordVerifyFinding } from "../verify/findings.js";
 import { leanModulePrefix } from "../paths.js";
@@ -331,6 +332,14 @@ export async function runStage5(args: {
     // tex↔Lean crosswalk), once the build confirming the docstrings is green.
     const confirmBlock = await confirming;
     if (confirmBlock) return { stage: "5", status: "checkpoint", advance: false, message: confirmBlock };
+    // The Lean Proof in English, and the printed proofs checked against it, on the Lean as confirmed
+    // (advisory, as the links: its corrections of the paper go to patches.json for V6; a failure is
+    // logged and F5 goes on).
+    try {
+      console.log(`[paperformalizer] F5 Lean proof in English: ${await emitLeanProofEnglish(args)}`);
+    } catch (err) {
+      console.warn(`[paperformalizer] F5 Lean proof in English skipped: ${err instanceof Error ? err.message : String(err)}`);
+    }
     const paths = artifactPaths(args.ctx, args.state);
     const barrel = await registerInPapersBarrel(args.ctx, args.state, paths.leanDir);
     const baseMsg =

@@ -1,0 +1,28 @@
+You are auditing the Lean Proof in English: an account, in the language of a mathematics paper, of what machine-verified Lean proofs prove and how. A reader checks the paper's printed proofs against this account and trusts it to say what the LEAN does, so it must be faithful to the Lean — you judge it against the Lean alone (you are not shown the paper's proofs, and how the paper argues does not matter here).
+
+Each entry below comes with its Lean: its declaration and each helper listed with it, with line numbers; the paper's definitions they use are shown once. Read it in full, then check the English against it. You also have read access to the Lean sources and lean-lsp in the toolkit's root directory, for what is not shown: a definition or library lemma, or a goal state where a tactic does mathematical work you cannot see from the text. Read only Lean; never open the run directory (`runs/`) or any file of the paper. Each phrase marked [phrase](lean:A-B) claims to render lines A–B of the entry's own declaration's file, and [phrase](lean:FILE:A-B) lines A–B of FILE. An entry renders its declaration and the helper lemmas listed with it, which it proves inside its proof as claims. A ⟦A<n>⟧ that is another entry below is a shared lemma reviewed as its own entry; an entry citing it is judged with that lemma's statement as given there.
+
+FIRST AND ABOVE ALL, FAITHFULNESS. An entry is `faithful` only when all of these hold:
+- Every claim it makes is established by the Lean at the place it says (its anchors), with the same objects, quantifiers, cases, constants, signs, exponents and ranges. An anchor that is only off by some lines (the claim is established nearby, in the same proof) is a readability note, not a faithfulness defect.
+- It leaves out no step that carries mathematical content (a case split, an estimate, an induction, the choice of a witness or a constant); only pure type bookkeeping may be left out, and a convention the argument relies on is stated.
+- It adds no step, argument or route the Lean does not take — however natural — and does not present the Lean's route as a more familiar one.
+- Every helper listed with the entry is stated and proved inside it, faithfully, where the Lean uses it.
+- A shared lemma's statement says exactly what the declaration states (same hypotheses and conclusion).
+- What it cites is what the Lean uses: ⟦id⟧ for a paper node or a shared lemma the Lean invokes there, a theorem named by name only when the Lean uses that theorem (in the form said), an elementary fact only for a step that is elementary.
+For an entry that is not faithful, list in `issues` each defect in one line: where (the phrase, or the anchor), what the Lean does instead.
+
+THEN, READABILITY AND SELF-CONTAINMENT — never a reason to call a faithful entry unfaithful, and never to be bought with faithfulness. A mathematician who never opens the Lean must be able to read the entry and check every step from it and what it cites. List in `readability` each defect in one line, where it is and what a reader is missing:
+- Self-contained: every symbol, object and convention is defined before it is used, or is the paper's notation or a standard one; every step follows from what is written and cited, with no jump only the Lean explains; no Lean names, tactics, syntax or type ascriptions.
+- Anchors: each phrase points at the lines that establish it.
+- Readable: written as a paper writes a proof — the idea and structure first where the argument is long (its cases, its induction, what is being estimated), then the steps; proportionate (no narration of each tactic, no restatement of what was just said); notation consistent across the entry and with the paper nodes it cites.
+Do not report taste: a defect is something a reader would stumble on.
+
+Do not rewrite the entry.
+
+{{context}}
+
+ENTRIES:
+
+{{entries}}
+
+Reply with the JSON object of the output schema: `reviews`, one per entry id, `{ "id", "faithful", "issues", "readability" }` (`issues` empty when faithful; `readability` empty when a reader would not stumble).

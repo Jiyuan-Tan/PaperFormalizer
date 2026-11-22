@@ -58,7 +58,7 @@ export interface ProposalCandidate {
   moves_with?: string[];
   /** The Lean statement as proved. Copied onto the proposal. */
   lean_type?: string;
-  /** The same statement in other papers (`doc/statements.json`; round A: the same cited theorem).
+  /** The same statement in other papers (`doc/statements/<slug>.json`; round A: the same cited theorem).
    *  Copied onto the proposal, with the curator's confirmations. */
   recurrence?: Recurrence[];
   /** Round B: what ties the Lean to the paper (`paperShapedReasons`); set, the entry is built in
@@ -75,6 +75,16 @@ export interface ProposalCandidate {
   deferred_before?: Array<{ slug: string; proposal_id: string }>;
   /** Candidates whose proof uses this one: set, it is shown to the curator as one helper line. */
   helper_of?: string[];
+  /** Other papers (`Papers.<Other>`) whose Lean uses this declaration (`importedBy`). Copied onto
+   *  the proposal. */
+  imported_by?: string[];
+}
+
+/** A candidate an index round must judge — `propose`, or `skip` with its reason — outside the cap
+ *  on proposals and never cut from the index: the same statement is proved in another of the
+ *  owner's papers (an identical recurrence), or another paper's Lean already uses it. */
+export function mustJudge(c: Pick<ProposalCandidate, "recurrence" | "imported_by">): boolean {
+  return (c.recurrence ?? []).some((r) => r.kind === "identical") || (c.imported_by?.length ?? 0) > 0;
 }
 
 export interface SearchHit { name: string; library: string; module: string; statement: string; doc: string }
@@ -102,7 +112,8 @@ const HIT_TEXT = 140;
 const MAX_MODULES = 200;
 const MAX_HISTORY = 200;
 const HISTORY_TEXT = 140;
-/** An index round proposes at most this many entries (`round_b.txt` says so; the lint enforces it). */
+/** An index round proposes at most this many entries besides the must-judge ones (`mustJudge`;
+ *  `round_b.txt` says so; the lint enforces it). */
 export const MAX_INDEX_PROPOSALS = 30;
 
 /** Top lexical hits per candidate over every indexed source (base libraries + toolkit). */
@@ -358,10 +369,24 @@ export function curatorViolations(
   if (!opts.partial) {
     for (const id of ids) if (!seen.has(id)) v.push(`candidate ${id} was not judged.`);
   } else {
-    const proposed = items.filter((it) => it.verdict === "propose").length;
-    if (proposed > MAX_INDEX_PROPOSALS) v.push(`${proposed} items proposed; an index round proposes at most ${MAX_INDEX_PROPOSALS} — keep the strongest.`);
+    const forced = new Set(candidates.filter(mustJudge).map((c) => c.candidate_id));
+    const proposed = items.filter((it) => it.verdict === "propose" && !forced.has(it.candidate_id)).length;
+    if (proposed > MAX_INDEX_PROPOSALS) v.push(`${proposed} items proposed besides the must-judge ones; an index round proposes at most ${MAX_INDEX_PROPOSALS} of those — keep the strongest.`);
   }
   return v;
+}
+
+/** What an index round's reply leaves out of its must-judge candidates (`mustJudge`): asked for
+ *  once more, never a reason to fail the round (`askJson`'s `soft`). */
+export function missingMustJudge(items: readonly CuratorItem[], candidates: readonly ProposalCandidate[]): string[] {
+  const seen = new Set(items.map((it) => it.candidate_id));
+  return candidates.filter((c) => mustJudge(c) && !seen.has(c.candidate_id))
+    .map((c) => `candidate ${c.candidate_id} is marked "must judge" and has no item: propose it, or skip it with the reason in reuse_evidence.`);
+}
+
+/** The item of a must-judge candidate the reply still left out after the second ask. */
+export function unjudgedItem(candidate_id: string): CuratorItem {
+  return { ...unselectedItem(candidate_id), reuse_evidence: "must judge (it recurs identically in another paper, or another paper uses it), but the curator returned no item for it" };
 }
 
 /** The item of a candidate an index round's curator did not select. */
@@ -470,16 +495,34 @@ export function claudeAsker(cfg: ToolkitConfig, runClaude?: (o: ClaudeRunInput) 
 export async function askJson<T>(args: {
   cfg: ToolkitConfig; slug: string; name: string; prompt: string; schema: Record<string, unknown>;
   asker: JsonAsker; log: (m: string) => void; violations: (reply: T) => string[];
+  /** Problems asked about once more, then accepted (the caller fills what is still missing). */
+  soft?: (reply: T) => string[];
 }): Promise<T> {
   const runDir = proposalsRunDir(args.cfg, args.slug);
   let prompt = args.prompt;
+  // a first reply whose only problems were soft: kept, should the second ask break the contract
+  let fallback: T | null = null;
   for (let attempt = 1; attempt <= 2; attempt += 1) {
     await recordPrompt(args.cfg, args.slug, attempt === 1 ? args.name : `${args.name}.retry`, prompt, false, args.log, args.asker.model);
-    const stdout = await args.asker.ask(prompt, args.schema);
-    await persistCodexRaw(runDir, `${args.name}_${attempt}`, stdout);
-    const reply = expectStringJsonOutput(stdout) as T;
-    const v = args.violations(reply);
-    if (v.length === 0) return reply;
+    let reply: T;
+    try {
+      const stdout = await args.asker.ask(prompt, args.schema);
+      await persistCodexRaw(runDir, `${args.name}_${attempt}`, stdout);
+      reply = expectStringJsonOutput(stdout) as T;
+    } catch (err) {
+      if (fallback === null) throw err;
+      args.log(`${args.name}: the second ask failed (${err instanceof Error ? err.message : String(err)}); keeping the first reply, whose only problems were soft`);
+      return fallback;
+    }
+    const hard = args.violations(reply);
+    const soft = args.soft?.(reply) ?? [];
+    if (hard.length === 0 && (soft.length === 0 || attempt === 2)) return reply;
+    if (attempt === 2 && fallback !== null) {
+      args.log(`${args.name}: the second reply broke the contract (${hard.join(" ")}); keeping the first, whose only problems were soft`);
+      return fallback;
+    }
+    if (hard.length === 0) fallback = reply;
+    const v = [...hard, ...soft];
     args.log(`${args.name}: reply broke the contract (${v.length}): ${v.join(" ")}`);
     if (attempt === 2) throw new Error(`${args.name} broke the output contract twice: ${v.join(" ")}`);
     prompt = [args.prompt, section("CONTRACT VIOLATIONS IN YOUR PREVIOUS REPLY", `Fix every point and emit the full corrected JSON:\n${v.map((x) => `- ${x}`).join("\n")}`)].join("\n\n");
@@ -560,11 +603,12 @@ const INDEX_STATEMENT = 110;
 /** Bytes of index the curator is shown at most: beyond it the lowest-ranked candidates are cut. */
 export const INDEX_BYTES = 120_000;
 
-/** How much the scan says for a candidate: recurrence in other papers first, then an earlier
- *  deferral, then how many proofs use it. A cap on the index keeps the highest. */
+/** How much the scan says for a candidate: a must-judge one first (`mustJudge`), then recurrence
+ *  in other papers and use by them, then an earlier deferral, then how many proofs use it. A cap on
+ *  the index keeps the highest. */
 function indexRank(c: ProposalCandidate): number {
-  const papers = new Set((c.recurrence ?? []).filter((r) => r.kind !== "similar").map((r) => r.slug)).size;
-  return papers * 100 + (c.deferred_before?.length ? 50 : 0) + Math.min(c.helper_of?.length ?? 0, 49);
+  const papers = new Set([...(c.recurrence ?? []).filter((r) => r.kind !== "similar").map((r) => r.slug), ...(c.imported_by ?? [])]).size;
+  return (mustJudge(c) ? 1_000_000 : 0) + papers * 100 + (c.deferred_before?.length ? 50 : 0) + Math.min(c.helper_of?.length ?? 0, 49);
 }
 
 /** The longest dotted prefix every name shares (`Papers.Foo.`), or "". */
@@ -600,7 +644,8 @@ export function candidateIndex(candidates: readonly ProposalCandidate[], cap = I
   const kept = new Set<number>();
   for (const { c, i } of ranked) {
     const line = indexLine(c, prefix);
-    if (used + line.length > cap) { cut.push(c.candidate_id); continue; }
+    // a must-judge candidate is always shown: the reply must judge it
+    if (!mustJudge(c) && used + line.length > cap) { cut.push(c.candidate_id); continue; }
     used += line.length;
     kept.add(i);
   }
@@ -610,7 +655,7 @@ export function candidateIndex(candidates: readonly ProposalCandidate[], cap = I
     const file = module ? `${module.replace(/\./g, "/")}.lean` : "(module unknown)";
     byFile.set(file, [...(byFile.get(file) ?? []), indexLine(c, prefix)]);
   }
-  const tail = cut.length ? [`${cut.length} candidate(s) not shown: the index is capped at ${cap} bytes, and the ones shown rank highest by recurrence, earlier deferral and use.`] : [];
+  const tail = cut.length ? [`${cut.length} candidate(s) not shown: the index is capped at ${cap} bytes, and the ones shown rank highest by recurrence, use by other papers, earlier deferral and use.`] : [];
   return { prefix, text: [...[...byFile].map(([file, lines]) => `## ${file}\n${lines.join("\n")}`), ...tail].join("\n\n"), cut };
 }
 
@@ -619,9 +664,11 @@ function indexLine(c: ProposalCandidate, prefix: string): string {
   // a lexically `similar` statement is no evidence of recurrence (most declarations have one)
   const papers = [...new Set((c.recurrence ?? []).filter((r) => r.kind !== "similar").map((r) => r.slug))];
   const flags = [
+    mustJudge(c) ? "must judge" : "",
     c.division_signal === "Tricks" ? "T" : c.division_signal === "Foundations" ? "F" : "",
     c.helper_of?.length ? `used by ${c.helper_of.length}` : "",
     papers.length ? `recurs: ${papers.join(", ")}` : "",
+    c.imported_by?.length ? `imported by: ${c.imported_by.join(", ")}` : "",
     c.deferred_before?.length ? "deferred before" : "",
     c.paper_shaped?.length ? "paper-shaped" : "",
     c.dropped_hypotheses?.length ? `unused: ${c.dropped_hypotheses.join(", ")}` : "",
@@ -660,8 +707,15 @@ export async function runCurator(args: CuratorArgs): Promise<Proposal[]> {
     const reply = await askJson<{ items: CuratorItem[] }>({
       cfg, slug, name, prompt, schema: CURATOR_REPLY, asker: claudeAsker(cfg, args.runClaude, ledger), log: args.log,
       violations: (r) => curatorViolations(full(r), args.candidates, cfg, names, taxonomy, { partial: indexed }),
+      ...(indexed ? { soft: (r: { items: CuratorItem[] }) => missingMustJudge(full(r), args.candidates) } : {}),
     });
     items = full(reply);
+    const unjudged = indexed ? missingMustJudge(items, args.candidates).length : 0;
+    if (unjudged) {
+      args.log(`${name}: ${unjudged} must-judge candidate(s) still have no item after the second ask — set aside, each with that reason`);
+      const named = new Set(items.map((it) => it.candidate_id));
+      items = [...items, ...args.candidates.filter((c) => mustJudge(c) && !named.has(c.candidate_id)).map((c) => unjudgedItem(c.candidate_id))];
+    }
   }
   if (indexed) {
     const named = new Set(items.map((it) => it.candidate_id));
@@ -699,6 +753,7 @@ export async function runCurator(args: CuratorArgs): Promise<Proposal[]> {
       ...(c.division_signal ? { division_signal: c.division_signal } : {}),
       ...(c.dropped_hypotheses?.length ? { dropped_hypotheses: c.dropped_hypotheses } : {}),
       ...(c.deferred_before?.length ? { deferred_before: c.deferred_before } : {}),
+      ...(c.imported_by?.length ? { imported_by: c.imported_by } : {}),
       ...(c.moves_with ? { moves_with: c.moves_with } : {}),
       ...(c.lean_type ? { lean_type: c.lean_type } : {}),
       ...(recurrence ? { recurrence } : {}),

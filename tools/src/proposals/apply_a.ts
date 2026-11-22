@@ -94,7 +94,11 @@ export async function applyRoundA(args: {
     decided_at: decidedAt, batch_created: batch.created, promoted: [], ...(dryRun ? { dry_run: true } : {}),
   });
 
-  const graphOf = args.graph ?? (dryRun ? async () => null : () => refreshToolkitGraph({ toolkit: cfg, log }));
+  // The toolkit's graph alone, before and after the builds: no paper uses a result just built, so
+  // what a build can make worse (`healthRegressions`) is in it. Each in the run's promotion workspace
+  // pinned to CURRENT then (`withScanRoot`) — advisory, so another run's commit between the two is
+  // noise; the log names both generations.
+  const graphOf = args.graph ?? (dryRun ? async () => null : () => refreshToolkitGraph({ toolkit: cfg, log, scope: { qid, papers: [] } }));
   const proposed = batch.proposals.filter((p) => p.verdict === "propose");
   const accepted = proposed.filter((p) => isMoveDecision(owner[p.id]!));
   const before = accepted.length ? await graphOf().catch(() => null) : null;

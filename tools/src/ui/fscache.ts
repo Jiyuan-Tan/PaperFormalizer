@@ -42,21 +42,25 @@ export async function readJsonCached<T = unknown>(file: string): Promise<T | nul
 }
 
 const derived = new Map<string, { key: string; value: unknown }>();
+/** The key `derive` computes a value from `files` (and `extra`) under. Cheap (one stat a file). */
+export const deriveKey = (files: string[], extra: string): string => `${extra}|${files.map(signature).join("|")}`;
+/** Let go of the value `derive` holds for `name` (computed again when next asked). */
+export function forget(name: string): void { derived.delete(name); }
 const deriving = new Map<string, Promise<unknown>>();
 
 /**
  * A value computed from `files`: recomputed only when one of their signatures changed (or `extra`
- * did). Returns the value and the key it was computed under (usable as an ETag). Two callers that
+ * did); `compute` is given that key. Returns the value and the key it was computed under (usable as an ETag). Two callers that
  * ask while it is being computed share the one computation.
  */
-export async function derive<T>(name: string, files: string[], extra: string, compute: () => Promise<T>): Promise<{ value: T; key: string }> {
-  const key = `${extra}|${files.map(signature).join("|")}`;
+export async function derive<T>(name: string, files: string[], extra: string, compute: (key: string) => Promise<T>): Promise<{ value: T; key: string }> {
+  const key = deriveKey(files, extra);
   const hit = derived.get(name);
   if (hit && hit.key === key) return { value: hit.value as T, key };
   const id = `${name}\n${key}`;
   let run = deriving.get(id) as Promise<T> | undefined;
   if (!run) {
-    run = compute().then((value) => { derived.set(name, { key, value }); return value; }).finally(() => deriving.delete(id));
+    run = compute(key).then((value) => { derived.set(name, { key, value }); return value; }).finally(() => deriving.delete(id));
     deriving.set(id, run);
   }
   return { value: await run, key };

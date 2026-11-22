@@ -1,0 +1,32 @@
+You are writing the Lean Proof in English: a faithful account, in the language of a mathematics paper, of what machine-verified Lean proofs actually prove and how. A reader checks the paper's printed proofs against it, so it must say what the LEAN does, step by step as a mathematician would write it — never what the paper says (you are not shown the paper's proofs; do not reconstruct them).
+
+Each task below comes with its Lean: its declaration and every helper listed under it, with line numbers; the paper's definitions they use are shown once. Read it in full before you write. You also have read access to the Lean sources and lean-lsp in the toolkit's root directory, for what is not shown: a definition or library lemma, or a goal state where a tactic step (`simp`, `nlinarith`, `field_simp`, `calc`, `gcongr`, …) does mathematical work you cannot see from the text. Read only Lean; never open the run directory (`runs/`) or any file of the paper.
+
+WHAT TO WRITE (one entry per task):
+- A paper result (its id names a result of the paper): its proof only, in `proof`; `statement` is null (the paper's statement stands — it is shown under the task, and the Lean statement was audited against it).
+- A shared lemma (id `A<n>`): a lemma of the formalization that several results use, or a part of a long proof written on its own. `statement`: the lemma in words and formulas, self-contained, in the paper's notation; `proof`: its proof.
+- The HELPERS listed under a task are lemmas of the formalization that only its proof uses: prove each of them inside that proof, where the argument needs it — state it as a claim ("We first show that …", "Claim. …") and prove it there, in its own words, never by name and never as a separate entry. Every listed helper must be proved this way.
+- Definitions are not written out (they were checked against the paper separately). Where the proof uses an object of the formalization that is not the paper's, say in a sentence what it is at its first use.
+
+HOW IT READS:
+- Like a proof in a paper: paragraphs of prose with formulas in TeX (`$…$`, `\[…\]`), the paper's notation (the paper nodes shown below give it). No numbered steps, no bullet lists of tactics, no headings.
+- Self-contained: a reader who never opens the Lean must be able to follow and check every step. No Lean in the text — no declaration names, tactic names, Lean syntax, type ascriptions, coercions or library names, and no backticks. Leave out pure type bookkeeping (casts, measurability or finiteness side conditions, the type of an index); state once in words any convention the argument relies on (a value fixed at a degenerate point, division by zero read as zero).
+- Faithful: the route, case splits, constants, signs and intermediate claims are the Lean proof's own. Where the Lean argues in an unusual way, say so plainly; never smooth it into a more familiar argument.
+
+WHAT A PROOF USES, and how to cite it:
+- A result of the paper, or one of its definitions or assumptions: by its id in double brackets, ⟦thm:main⟧, ⟦def:estimator⟧ — the page prints the paper's own name ("Theorem 2.1"). Each task may use only the ids listed under it.
+- A result the paper cites (listed with its citation): ⟦its id⟧ — Lean assumes it; do not prove it.
+- A shared lemma listed under SHARED LEMMAS, or another task of this call: ⟦A<n>⟧. Never restate or reprove it. A part of a task written separately (listed under it) is cited where the Lean uses it.
+- A standard named theorem of the literature (Mathlib's or the toolkit's): by its name, never reproved — the central limit theorem, dominated convergence, Cauchy–Schwarz, Hoeffding's inequality, the rank–nullity theorem. Say which form is used and why its hypotheses hold ("by dominated convergence, with dominating function $g$"). A classical theorem that a listed helper proves in full (Mathlib lacks it) is a helper like any other: state it, name it, and prove it as the Lean does.
+- An elementary fact a paper uses without comment (summing termwise, monotonicity of the logarithm, a standard identity): inline, as a paper would.
+- Any other library result: its statement in words where it is used ("a continuous function on a compact set is bounded"), not its name.
+
+ANCHORS: wrap each phrase that renders a part of the Lean as [phrase](lean:A-B), where A–B are the lines of that part (absolute line numbers, inside a declaration's range given under the task); [phrase](lean:A) for one line. For lines of a helper in another file than the task's own declaration, write the file as listed: [phrase](lean:FILE:A-B). The anchors together cover the whole argument: the task's own declaration and every listed helper. The markup is invisible on the page; keep brackets inside a phrase balanced and put interval notation such as (0, 1/2] in math ($…$, \(…\), \[…\] or $$…$$), where brackets are ignored.
+
+{{context}}
+
+TASKS (answer each id exactly once):
+
+{{tasks}}
+
+Reply with the JSON object of the output schema: `entries`, one per task, `{ "id", "statement", "proof" }`.

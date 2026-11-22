@@ -8,7 +8,7 @@ import {
   stageOutputSchema,
   type ReviewResult,
 } from "./judgment.js";
-import { appendReviewLog } from "./log.js";
+import { appendPipelineLog, appendReviewLog } from "./log.js";
 import type { ReviewLogEntry } from "./log.js";
 import {
   crosswalkFullJsonPath,
@@ -172,47 +172,50 @@ export function defaultDeps(ctx: PipelineContext, currentStage?: Stage, state?: 
         "- This tmp/ directory is excluded from the paper's build/review inventory. Write intended paper source only to the explicit production paths named in the task.",
       ].join("\n")
     : "";
+  // Wrap both agents so EVERY stage's call is transcribed (raw output logged on return, before
+  // any caller parses it). Logging never throws into the call path (best-effort append).
+  const codexCall: StageDeps["runCodex"] = async (input) => {
+    const t0 = Date.now();
+    let usage: ModelTokenUsage | null = null;
+    const effectiveInput = {
+      ...input,
+      reasoningEffort: resolveCodexReasoningEffort(input.reasoningEffort),
+    };
+    try {
+      const out = await runCodex({
+        ...effectiveInput,
+        prompt: effectiveInput.prompt + scratchInstruction,
+        cwd: resolveCodexWorkingDirectory({
+          requestedCwd: input.cwd,
+          paperTmp,
+          usePaperTmpAsCwd,
+          productionWrite: input.productionWrite,
+        }),
+        leanProjectPath: usePaperTmpAsCwd ? ctx.repoRoot : input.leanProjectPath,
+        // Summed across the runner's transient-retry attempts: each was paid for.
+        onUsage: (u) => {
+          usage = addTokenUsage(usage, u);
+          input.onUsage?.(u);
+        },
+      });
+      const duration = Date.now() - t0;
+      await logAgentCall(ctx, stageId, "codex", effectiveInput.prompt, effectiveInput.model ?? "?", effectiveInput.reasoningEffort, duration, out.stdout);
+      await logTokenCall(ctx, stageId, effectiveInput.prompt, "codex", effectiveInput.model ?? "?", duration, true, usage);
+      return out;
+    } catch (err) {
+      // "Not lost": a crashed/timed-out call still gets a log entry (with any
+      // partial stdout the error carries) before the throw propagates.
+      const partial = (err as { stdout?: string })?.stdout ?? "";
+      const duration = Date.now() - t0;
+      await logAgentCall(ctx, stageId, "codex", effectiveInput.prompt, effectiveInput.model ?? "?", effectiveInput.reasoningEffort, duration, `[CALL THREW: ${err instanceof Error ? err.message : String(err)}]\n${partial}`);
+      await logTokenCall(ctx, stageId, effectiveInput.prompt, "codex", effectiveInput.model ?? "?", duration, false, usage);
+      throw err;
+    }
+  };
   return {
-    // Wrap both agents so EVERY stage's call is transcribed (raw output logged on return, before
-    // any caller parses it). Logging never throws into the call path (best-effort append).
-    runCodex: async (input) => {
-      const t0 = Date.now();
-      let usage: ModelTokenUsage | null = null;
-      const effectiveInput = {
-        ...input,
-        reasoningEffort: resolveCodexReasoningEffort(input.reasoningEffort),
-      };
-      try {
-        const out = await runCodex({
-          ...effectiveInput,
-          prompt: effectiveInput.prompt + scratchInstruction,
-          cwd: resolveCodexWorkingDirectory({
-            requestedCwd: input.cwd,
-            paperTmp,
-            usePaperTmpAsCwd,
-            productionWrite: input.productionWrite,
-          }),
-          leanProjectPath: usePaperTmpAsCwd ? ctx.repoRoot : input.leanProjectPath,
-          // Summed across the runner's transient-retry attempts: each was paid for.
-          onUsage: (u) => {
-            usage = addTokenUsage(usage, u);
-            input.onUsage?.(u);
-          },
-        });
-        const duration = Date.now() - t0;
-        await logAgentCall(ctx, stageId, "codex", effectiveInput.prompt, effectiveInput.model ?? "?", effectiveInput.reasoningEffort, duration, out.stdout);
-        await logTokenCall(ctx, stageId, effectiveInput.prompt, "codex", effectiveInput.model ?? "?", duration, true, usage);
-        return out;
-      } catch (err) {
-        // "Not lost": a crashed/timed-out call still gets a log entry (with any
-        // partial stdout the error carries) before the throw propagates.
-        const partial = (err as { stdout?: string })?.stdout ?? "";
-        const duration = Date.now() - t0;
-        await logAgentCall(ctx, stageId, "codex", effectiveInput.prompt, effectiveInput.model ?? "?", effectiveInput.reasoningEffort, duration, `[CALL THREW: ${err instanceof Error ? err.message : String(err)}]\n${partial}`);
-        await logTokenCall(ctx, stageId, effectiveInput.prompt, "codex", effectiveInput.model ?? "?", duration, false, usage);
-        throw err;
-      }
-    },
+    // A formalization worker may write (its sandbox is the machine's): the toolkit's sources are
+    // watched across the call (`watchToolkitSources`).
+    runCodex: async (input) => (formalizationScratch ? watchToolkitSources(ctx, currentStage!, () => codexCall(input)) : codexCall(input)),
     runClaude: async (input) => {
       const t0 = Date.now();
       // The runner the role really runs on (`claude_roles.ts`), so the transcript and the ledger name it.
@@ -250,6 +253,40 @@ export function defaultDeps(ctx: PipelineContext, currentStage?: Stage, state?: 
       }
     },
   };
+}
+
+/**
+ * Run a worker call `fn`, the toolkit's sources (`build_inputs.toolkitSources`: its library, path
+ * dependencies, lakefiles, toolchain file) read before and after. A worker may only write this
+ * paper's files; one that changed a toolkit source (or another process did while it ran) is
+ * reported loudly — on the console, in the run's pipeline log and in its
+ * `orchestrator_notes.md` — and the stage goes on: the toolkit's signature no longer matches its
+ * clean stamp, so shared builds stay off until the next stamp. Never throws but what `fn` throws.
+ */
+export async function watchToolkitSources<T>(ctx: Pick<PipelineContext, "repoRoot" | "qid">, stage: Stage, fn: () => Promise<T>): Promise<T> {
+  // Only while shared builds may run (with the switch off one Lake build runs at a time, and an
+  // unlocked toolkit write races nothing).
+  const { lakeSharedModeOn } = await import("./shared/build_mutex.js");
+  if (!(await lakeSharedModeOn(ctx.repoRoot).catch(() => false))) return fn();
+  const { changedSources, toolkitLayout, toolkitSources } = await import("./shared/build_inputs.js");
+  const snapshot = async () => {
+    try { return await toolkitSources(await toolkitLayout(ctx.repoRoot)); } catch { return null; }
+  };
+  const before = await snapshot();
+  try {
+    return await fn();
+  } finally {
+    const after = before ? await snapshot() : null;
+    const changed = before && after ? changedSources(before, after) : [];
+    if (changed.length > 0) {
+      const files = changed.slice(0, 8).map((f) => path.relative(ctx.repoRoot, f)).join(", ") + (changed.length > 8 ? `, … (${changed.length} in all)` : "");
+      // A promotion or study apply of another run changes the toolkit too (under its own exclusive
+      // hold): what changed during the call is recorded, not attributed — nothing to undo.
+      const message = `toolkit sources changed during this worker call: ${files} (by a promotion or study apply, or by the worker; shared builds stay off until the next stamp)`;
+      console.warn(`[paperformalizer] (${formatStageLabel(stage)}): ${message}`);
+      await appendPipelineLog(ctx, { stage, status: "toolkit-sources-changed", duration_ms: 0, message }).catch(() => {});
+    }
+  }
 }
 
 /** Resolve the Codex sandbox root for an F-stage call.

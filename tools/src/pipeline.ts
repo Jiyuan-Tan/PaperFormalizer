@@ -23,6 +23,7 @@ import { withRunHeartbeat } from "./shared/run_heartbeat.js";
 import { coreJsonPath } from "./core/core_io.js";
 import type { PipelineContext, Stage, StateJson } from "./types.js";
 import { dryRunRefusal } from "./verify/dry_run.js";
+import { refreshRunWorkspace } from "./shared/workspace.js";
 
 /** The cursor stage after `stage` (`null` after `"V6"`). */
 export function nextStage(stage: Stage): Stage | null {
@@ -223,6 +224,8 @@ async function runPipelineInner(
     // pre-F marker); this runner has no stage there, so stop fail-closed with the state saved.
     if (!isFStage(stage)) refuseNonFStage(stage, `next stage after ${formatStageLabel(state.stage_completed)}`);
     await assertFStageEntryCoherence(ctx, state, stage);
+    // a stage's start is a safe point of a run with a workspace: re-pinned to the current toolkit
+    await refreshRunWorkspace((l) => console.log(`[paperformalizer] ${l}`));
     const started = performance.now();
     let result;
     try {

@@ -20,13 +20,13 @@
 // Proposals are made for candidate THEOREMS; each carries its closure (`moves_with`), the paper
 // declarations that move with it.
 import { createHash } from "node:crypto";
-import { existsSync } from "node:fs";
+import { existsSync, readFileSync } from "node:fs";
 import { mkdir, readdir, readFile } from "node:fs/promises";
 import path from "node:path";
 import { z } from "zod";
 import type { Core } from "../core/schema.js";
 import { crosswalkFullJsonPath, leanModulePrefix, leanTheoremDir, PAPER_TMP_DIR, paperBarrelPath } from "../paths.js";
-import { writeJsonAtomic } from "../shared/json_atomic.js";
+import { writeJsonAtomic, writeTextAtomic } from "../shared/json_atomic.js";
 import type { ToolkitConfig } from "../toolkit/config.js";
 import { CLEAN_AXIOMS, type LeanExec } from "../verify/lean_evidence.js";
 import { VERIFY_FILES } from "../verify/types.js";
@@ -62,7 +62,7 @@ export const candidateScanSchema = z.object({
   toolkit_prefix: z.string(),
   papers_prefix: z.string(),
   toolchain: z.string().optional(),
-  /** A `--graph` scan: every toolkit and paper declaration (`toolkit_graph.ts`). */
+  /** False here: a `--graph` scan has its own form (`graphScanSchema`). */
   graph: z.boolean().optional(),
   modules: z.array(z.string()),
   declarations: z.array(scanDeclSchema),
@@ -71,8 +71,42 @@ export const candidateScanSchema = z.object({
   /** sha256 over the paper's Lean sources when the scan ran (`paperSourceHash`), added by the TS
    *  runner so a later step reuses the scan only while the sources are unchanged. */
   source_sha256: z.string().optional(),
+  /** The toolkit generation of the workspace it ran in (`withScanRoot`); added by the TS runner. */
+  generation: z.number().int().optional(),
 });
 export type CandidateScan = z.infer<typeof candidateScanSchema>;
+
+/** One declaration of a `--graph` scan (`CandidateScan.lean` `graphDecl`): what the toolkit graph
+ *  reads. `uses`: the toolkit and paper declarations its type or body mentions (by owner); `base`
+ *  and `doc` for toolkit declarations only; `type` for toolkit declarations and those of the papers
+ *  the scan was asked for (`--types-of`). */
+export const graphScanDeclSchema = z.object({
+  name: z.string().min(1),
+  kind: z.string().min(1),
+  module: z.string(),
+  type: z.string().optional(),
+  uses: z.array(z.string()),
+  base: z.array(z.object({ name: z.string(), module: z.string() })).optional(),
+  doc: z.string().nullable().optional(),
+});
+export type GraphScanDecl = z.infer<typeof graphScanDeclSchema>;
+
+/** A `--graph` scan: every toolkit and paper declaration, compact (`toolkit_graph.ts`). */
+export const graphScanSchema = z.object({
+  schema: z.literal(1),
+  graph: z.literal(true),
+  toolkit_prefix: z.string(),
+  papers_prefix: z.string(),
+  toolchain: z.string().optional(),
+  modules: z.array(z.string()),
+  declarations: z.array(graphScanDeclSchema),
+  /** The whole library's scan in a workspace (`wholeLibraryInWorkspace`): the papers
+   *  (`Papers.<Pascal>`) left out because their modules did not build there, and the toolkit
+   *  generation the workspace was pinned to. Added by the TS runner, never by the exe. */
+  excluded_papers: z.array(z.string()).optional(),
+  generation: z.number().int().optional(),
+});
+export type GraphScan = z.infer<typeof graphScanSchema>;
 
 /** Declaration kinds that travel with the theorems that need them (never proposed alone). */
 export const DEFINITION_KINDS: ReadonlySet<string> = new Set(["def", "instance", "structure", "class", "inductive", "opaque", "abbrev"]);
@@ -341,31 +375,302 @@ async function assertCandidateScanExe(cfg: ToolkitConfig): Promise<void> {
   );
 }
 
+/** A scan's two Lake turns: the build, and the scan (null when the build failed). */
+type ScanTurns = { build: Awaited<ReturnType<LeanExec>>; r: Awaited<ReturnType<LeanExec>> | null; built: string };
+
+/** The lake shim's exit when it would not build in a workspace (the toolkit in flux or not stamped
+ *  clean for 25 min): nothing was checked, so no paper is judged by it. */
+const SHIM_HELD_OFF_EXIT = 75;
+
+// compat 2026-11-11: remove after the processes started before this merge have exited (≤2 days)
+// (`cli.ts` and `apply_b.ts` loaded before the merge ask for the switch: always on now)
+export const localScansSwitch = (cfg: Pick<ToolkitConfig, "toolkitRoot">) => path.join(cfg.toolkitRoot, ".lake", "paperformalizer", "local-scans");
+export function localScansOn(_cfg: Pick<ToolkitConfig, "toolkitRoot">): boolean {
+  return true;
+}
+
+/** The generation workspace `ws` is pinned to (`.pf-gen`), or undefined. */
+async function pinnedGeneration(ws: string): Promise<number | undefined> {
+  const pin = await readFile(path.join(ws, ".pf-gen"), "utf8").then((t) => JSON.parse(t) as { gen?: unknown }, () => null);
+  return typeof pin?.gen === "number" && Number.isInteger(pin.gen) ? pin.gen : undefined;
+}
+
+/**
+ * Where a scan of run `qid` reading `papers` (`Papers.<Pascal>`; none: the toolkit alone) runs
+ * (2026-11-10: an apply's scans held the shared tree 13–40 min, every exclusive hold behind them):
+ *   (a) `cfg` is a workspace already (`.pf-gen`: a promotion's `P`, `cfgAt`): there;
+ *   (b) this call chain's run workspace `W`: there, through the lake shim (`cfg` kept);
+ *   (c) else (an apply, an opted-out run, a CLI call): the run's promotion workspace `P`, prepared
+ *       now (`withPromoWorkspace`: pinned to CURRENT, seeded from `W`), held through `fn` — never
+ *       while another user of `P` (its moves, another scan) holds it: a prepare resets it.
+ * Null: the shared tree — with `local` false (the gardener's graph after its carry-out), or where no
+ * workspace can be made (`ensureGenerations`' why: a scan only reads). `ws`:
+ * the workspace, whose generation the scan records.
+ * `fn`: the scan, given where it runs.
+ */
+export async function withScanRoot<T>(cfg: ToolkitConfig, qid: string, papers: readonly string[], log: (m: string) => void, local: boolean | undefined, fn: (at: { cfg: ToolkitConfig; ws: string } | null) => Promise<T>): Promise<T> {
+  if (existsSync(path.join(cfg.toolkitRoot, ".pf-gen"))) return fn({ cfg, ws: cfg.toolkitRoot });
+  if (local === false) return fn(null);
+  const { leanWorkspaceFor } = await import("../shared/build_mutex.js");
+  const W = leanWorkspaceFor(cfg.toolkitRoot);
+  if (W) return fn({ cfg, ws: W });
+  // no workspace can be made here (Windows, a missing tool, a switch off): a scan only reads, so the shared tree
+  const { ensureGenerations } = await import("../shared/workspace.js");
+  const generation = await ensureGenerations(cfg.toolkitRoot, log);
+  if ("why" in generation) {
+    log(`scan of ${qid}: in the shared tree (${generation.why})`);
+    return fn(null);
+  }
+  const { cfgAt } = await import("./local_moves.js");
+  const { withPromoWorkspace } = await import("../shared/commit.js");
+  return withPromoWorkspace(cfg.toolkitRoot, qid, papers, { log }, (w) => {
+    log(`scan of ${qid}${papers.length ? ` (${papers.join(", ")})` : " (the toolkit)"}: in ${w.path}, generation ${w.gen}${papers.length && !w.seeded.length ? " — not seeded: its papers build there from scratch" : ""}`);
+    return fn({ cfg: cfgAt(cfg, w.path), ws: w.path });
+  });
+}
+
+/** A scan's two Lake turns in a workspace (`withScanRoot`), in one hold of that root's own build lock
+ *  (none in the run's workspace: `withLakeBuildLock`): `build` built (the libraries scanned and the
+ *  exe), then the exe. No shared-tree lock. */
+async function scanTurnsIn(root: string, exec: LeanExec, build: readonly string[], scanArgs: readonly string[], what: string, log: (m: string) => void): Promise<ScanTurns> {
+  const { withLakeBuildLock } = await import("../shared/build_mutex.js");
+  const cwd = { cwd: root };
+  const built = `lake build ${build.join(" ")}`;
+  return withLakeBuildLock(root, async () => {
+    const b = await exec("lake", ["build", ...build], cwd);
+    if (b.code !== 0) return { build: b, r: null, built };
+    log(`${what}: lake ${scanArgs.join(" ")} (in ${root})`);
+    return { build: b, built, r: await exec("lake", [...scanArgs], cwd) };
+  }, `${what}: ${built}, then the exe`, log);
+}
+
+/**
+ * Every paper of the library: `barrel`, the papers the papers' barrel (`Papers.lean`) imports (one
+ * `Papers.<Pascal>` each); `others`, the papers with a barrel of their own (`Papers/<Pascal>.lean`)
+ * it does not import yet (a run in progress joins it at its stage 5); `noBarrel`, the directories
+ * `Papers/<Pascal>/` holding Lean but no barrel (no module to build or scan). Each list sorted.
+ */
+export async function libraryPapers(cfg: Pick<ToolkitConfig, "toolkitRoot" | "papersLib" | "papersDir">): Promise<{ barrel: string[]; others: string[]; noBarrel: string[] }> {
+  const text = await readFile(path.join(cfg.toolkitRoot, `${cfg.papersLib}.lean`), "utf8").catch(() => "");
+  const { leanImports } = await import("../toolkit/lean_source.js");
+  const barrel = new Set<string>();
+  for (const imp of leanImports(text)) {
+    const segs = imp.module.split(".");
+    if (segs[0] === cfg.papersLib && segs.length >= 2) barrel.add(segs.slice(0, 2).join("."));
+  }
+  const others = new Set<string>();
+  const noBarrel = new Set<string>();
+  const hasLean = async (dir: string): Promise<boolean> => {
+    for (const e of await readdir(dir, { withFileTypes: true }).catch(() => [])) {
+      if (e.isFile() && e.name.endsWith(".lean")) return true;
+      if (e.isDirectory() && e.name !== ".lake" && e.name !== PAPER_TMP_DIR && (await hasLean(path.join(dir, e.name)))) return true;
+    }
+    return false;
+  };
+  const entries = await readdir(cfg.papersDir, { withFileTypes: true }).catch(() => []);
+  const names = new Set(entries.map((e) => e.name));
+  for (const e of entries) {
+    const stem = e.isFile() && e.name.endsWith(".lean") ? e.name.slice(0, -5) : e.isDirectory() ? e.name : null;
+    if (!stem || !/^[A-Z][A-Za-z0-9_]*$/.test(stem)) continue;
+    const p = `${cfg.papersLib}.${stem}`;
+    if (barrel.has(p)) continue;
+    if (names.has(`${stem}.lean`)) others.add(p);
+    else if (await hasLean(path.join(cfg.papersDir, stem))) noBarrel.add(p);
+  }
+  const sorted = (x: Set<string>) => [...x].sort();
+  return { barrel: sorted(barrel), others: sorted(others), noBarrel: sorted(noBarrel) };
+}
+
+/**
+ * The whole library's scan in a run workspace `ws` (the daily library check's, which has just built
+ * the papers' barrel there): never the shared tree's build. Each lake command goes to `ws` through
+ * the lake shim (`spawnWithInactivityTimeout` adds it), and no shared-tree lock is taken. The toolkit
+ * and the exe are built (a failure is fatal); the barrel's papers are only checked (`lake build
+ * --no-build`: built by the library check); a paper the barrel does not import yet is built on its
+ * own; a paper whose modules are not up to date then is left out and named (`excluded_papers`), as
+ * is a paper directory without a barrel. The exe writes inside `ws`, and the scan is put in place in
+ * the shared toolkit atomically (temp + rename), so it never races a shared-tree scan writing it.
+ */
+async function wholeLibraryInWorkspace(args: { cfg: ToolkitConfig; ws: string; exec: LeanExec; out: string; log: (m: string) => void }): Promise<GraphScan> {
+  const { cfg, ws, exec, out } = args;
+  const cwd = { cwd: cfg.toolkitRoot };
+  const tail = (s: string) => s.split("\n").filter((l) => l.trim()).slice(-30).join("\n");
+  const fail = (what: string, r: Awaited<ReturnType<LeanExec>>) => new Error(`toolkit graph: \`${what}\` failed:\n${tail(`${r.stdout}\n${r.stderr}`)}`);
+  const build = await exec("lake", ["build", cfg.lib, "candidate_scan"], cwd);
+  if (build.code !== 0) throw fail(`lake build ${cfg.lib} candidate_scan`, build);
+  const papers = await libraryPapers(cfg);
+  const included: string[] = [];
+  const excluded: string[] = [];
+  const judge = async (p: string, argv: string[]): Promise<void> => {
+    const r = await exec("lake", argv, cwd);
+    if (r.code === SHIM_HELD_OFF_EXIT) throw fail(`lake ${argv.join(" ")}`, r);
+    (r.code === 0 ? included : excluded).push(p);
+  };
+  if (papers.barrel.length) {
+    const all = await exec("lake", ["build", "--no-build", cfg.papersLib], cwd);
+    if (all.code === SHIM_HELD_OFF_EXIT) throw fail(`lake build --no-build ${cfg.papersLib}`, all);
+    if (all.code === 0) included.push(...papers.barrel);
+    else for (const p of papers.barrel) await judge(p, ["build", "--no-build", p]);
+  }
+  for (const p of papers.others) await judge(p, ["build", p]);
+  excluded.push(...papers.noBarrel);
+  included.sort();
+  excluded.sort();
+  if (excluded.length) args.log(`toolkit graph: ${excluded.length} paper(s) left out — their modules do not build in the workspace: ${excluded.join(", ")}`);
+  const wsOut = path.join(ws, ".lake", "build", "paperformalizer", "graph_scan.json");
+  await mkdir(path.dirname(wsOut), { recursive: true });
+  const scanArgs = [
+    "exe", "candidate_scan", "--", "--graph", "--toolkit-prefix", cfg.lib, "--papers-prefix", cfg.papersLib,
+    "--modules", [cfg.lib, ...included].join(","), "--out", wsOut,
+  ];
+  args.log(`toolkit graph: lake ${scanArgs.join(" ")} (in ${ws})`);
+  const r = await exec("lake", scanArgs, cwd);
+  if (r.code !== 0 || !existsSync(wsOut)) throw fail(`lake ${scanArgs.join(" ")}`, r);
+  const parsed = graphScanSchema.safeParse(JSON.parse(await readFile(wsOut, "utf8")));
+  if (!parsed.success) throw new Error(`toolkit graph: ${wsOut} does not match the graph scan schema: ${parsed.error.message}`);
+  const generation = await pinnedGeneration(ws);
+  const scan: GraphScan = { ...parsed.data, excluded_papers: excluded, ...(generation !== undefined ? { generation } : {}) };
+  await writeTextAtomic(out, JSON.stringify(scan));
+  return scan;
+}
+
 /** Where the `--graph` scan is written: machine-local build output, never committed. */
 export function graphScanPath(cfg: ToolkitConfig): string {
   return path.join(cfg.toolkitRoot, ".lake", "build", "paperformalizer", "graph_scan.json");
 }
 
-/** Build the toolkit and papers libraries and the exe, then scan every toolkit and paper
- *  declaration (`candidate_scan --graph`), under the toolkit's lake-build lock. */
-export async function runGraphScan(args: { toolkit: ToolkitConfig; exec?: LeanExec; log: (m: string) => void }): Promise<CandidateScan> {
-  const { toolkit: cfg } = args;
-  await assertCandidateScanExe(cfg);
+/** Whether the toolkit's `CandidateScan.lean` writes the compact `--graph` scan (`graphDecl`, with
+ *  `--types-of`). An older one writes every constant of every paper declaration — gigabytes, too
+ *  large to read — so the scan is not run with it. */
+export function graphScanSupported(toolkitRoot: string): boolean {
+  const src = path.join(toolkitRoot, "CandidateScan.lean");
+  return existsSync(src) && readFileSync(src, "utf8").includes(`get "--types-of"`);
+}
+
+/** The graph scan of a run's applies (`runGraphScan` `scope`): the run's own file, as several runs
+ *  apply at once. */
+export function scopedGraphScanPath(cfg: ToolkitConfig, qid: string): string {
+  return path.join(cfg.runsDir, qid, "proposals", "graph_scan.json");
+}
+
+/** Build the libraries scanned and the exe, then scan their declarations (`candidate_scan --graph`),
+ *  under the toolkit's lake-build lock. Without `scope`: the toolkit and every paper (the whole
+ *  library's graph; in a run workspace only — the papers that build there, `wholeLibraryInWorkspace`). With `scope`: the toolkit and `scope.papers` only (`Papers.<Pascal>` modules, none
+ *  for the toolkit alone), their declarations' types reported too — an apply's graph, written to the
+ *  run's own file. The toolkit's types are always reported. */
+export async function runGraphScan(args: { toolkit: ToolkitConfig; scope?: { qid: string; papers: readonly string[] }; exec?: LeanExec; log: (m: string) => void; local?: boolean }): Promise<GraphScan> {
+  await assertCandidateScanExe(args.toolkit);
+  if (!graphScanSupported(args.toolkit.toolkitRoot)) {
+    const { toolkitTemplateDir } = await import("../toolkit/lakefile.js");
+    throw new Error(
+      `toolkit graph: ${path.join(args.toolkit.toolkitRoot, "CandidateScan.lean")} predates the compact \`--graph\` scan (its output over every paper is too large to read); ` +
+        `copy ${path.join(toolkitTemplateDir(), "CandidateScan.lean")} into ${args.toolkit.toolkitRoot} (the next graph refresh rebuilds the exe)`,
+    );
+  }
   const exec = args.exec ?? defaultExec;
-  const { withLakeBuildLock } = await import("../shared/build_mutex.js");
-  const out = graphScanPath(cfg);
+  // a scoped scan: in a workspace (`withScanRoot`), or (null, `local` false) the shared tree
+  return args.scope ? withScanRoot(args.toolkit, args.scope.qid, args.scope.papers, args.log, args.local, (at) => graphScanAt(args, exec, at)) : graphScanAt(args, exec, null);
+}
+
+/** `runGraphScan` where it runs (`at`; null: the shared tree). */
+async function graphScanAt(args: Parameters<typeof runGraphScan>[0], exec: LeanExec, at: { cfg: ToolkitConfig; ws: string } | null): Promise<GraphScan> {
+  const { LAKE_NO_BUILD_EXIT, WOULD_BUILD, leanWorkspaceFor, withLakeBuildLock, withScannerHold } = await import("../shared/build_mutex.js");
+  const cfg = at?.cfg ?? args.toolkit;
+  const out = args.scope ? scopedGraphScanPath(cfg, args.scope.qid) : graphScanPath(cfg);
   await mkdir(path.dirname(out), { recursive: true });
+  // The whole library's scan: in a workspace only (the daily library check's) — never a build of
+  // every paper in the shared tree (2026-11-10; outside a workspace the graph on file is read).
+  if (!args.scope) {
+    const ws = leanWorkspaceFor(cfg.toolkitRoot);
+    if (!ws) throw new Error("toolkit graph: the whole library's graph is built in a workspace only (the daily library check's); outside one, read the graph on file (`--no-rebuild`)");
+    return wholeLibraryInWorkspace({ cfg, ws, exec, out, log: args.log });
+  }
+  const { scope } = args;
   const tail = (s: string) => s.split("\n").filter((l) => l.trim()).slice(-30).join("\n");
-  const libs = [cfg.lib, ...(existsSync(path.join(cfg.toolkitRoot, `${cfg.papersLib}.lean`)) ? [cfg.papersLib] : [])];
-  const build = await withLakeBuildLock(cfg.toolkitRoot, () => exec("lake", ["build", ...libs, "candidate_scan"], { cwd: cfg.toolkitRoot }));
-  if (build.code !== 0) throw new Error(`toolkit graph: \`lake build ${libs.join(" ")} candidate_scan\` failed:\n${tail(`${build.stdout}\n${build.stderr}`)}`);
-  const scanArgs = ["exe", "candidate_scan", "--", "--graph", "--toolkit-prefix", cfg.lib, "--papers-prefix", cfg.papersLib, "--modules", libs.join(","), "--out", out];
-  args.log(`toolkit graph: lake ${scanArgs.join(" ")}`);
-  const r = await withLakeBuildLock(cfg.toolkitRoot, () => exec("lake", scanArgs, { cwd: cfg.toolkitRoot }));
+  const libs = [cfg.lib, ...scope.papers];
+  // A scoped scan (an apply's: the toolkit and its own papers) whose sources are what they were when
+  // it was last taken is that scan: reused, both Lake turns skipped (every apply scans at its start).
+  // The signature is taken before the scan, so a source changed during it makes the next one rescan.
+  const { recordScan, scanCurrent } = await import("../shared/build_inputs.js");
+  const sig = await graphScanSignature(cfg, scope.papers).catch(() => null);
+  if (sig && (await scanCurrent(out, libs, sig))) {
+    const prior = graphScanSchema.safeParse(JSON.parse(await readFile(out, "utf8")));
+    if (prior.success) {
+      args.log(`toolkit graph: reusing ${out} (the toolkit and ${scope.papers.join(", ") || "no paper"} unchanged since it was taken)`);
+      return prior.data;
+    }
+  }
+  await recordScan(out, null);
+  const cwd = { cwd: cfg.toolkitRoot };
+  const scanArgs = [
+    "exe", "candidate_scan", "--", "--graph", "--toolkit-prefix", cfg.lib, "--papers-prefix", cfg.papersLib, "--modules", libs.join(","),
+    ...(scope.papers.length ? ["--types-of", scope.papers.join(",")] : []), "--out", out,
+  ];
+  // In a workspace: built and scanned there, under its own lock. Else (the shared tree: `local`
+  // false) it runs under a shared hold when it can (`withScannerHold`): its papers' modules built
+  // (the toolkit and the exe are, the hold vouches), then the exe that only reads oleans; the
+  // toolkit alone is a shared hold of no paper.
+  const { build, r, built } = at ? await scanTurnsIn(cfg.toolkitRoot, exec, [...libs, "candidate_scan"], scanArgs, "toolkit graph", args.log) : await withScannerHold<ScanTurns>(cfg.toolkitRoot, scope.papers, "toolkit graph", {
+    exeFresh: async () => (await exec("lake", ["build", "--no-build", "candidate_scan"], cwd)).code === 0,
+    shared: async () => {
+      // the toolkit alone: nothing to build (the hold vouches for the toolkit's build); never a bare `lake build`
+      const papers = scope.papers;
+      const built = papers.length ? `lake build ${papers.join(" ")}` : "(the toolkit's clean build)";
+      const build = papers.length ? await exec("lake", ["build", ...papers], cwd) : { code: 0, stdout: "", stderr: "" };
+      if (build.code !== 0) return { build, r: null, built };
+      args.log(`toolkit graph: lake --no-build ${scanArgs.join(" ")}`);
+      const r = await exec("lake", ["--no-build", ...scanArgs], cwd);
+      return r.code === LAKE_NO_BUILD_EXIT ? WOULD_BUILD : { build, r, built };
+    },
+    exclusive: async () => {
+      const built = `lake build ${libs.join(" ")} candidate_scan`;
+      const build = await withLakeBuildLock(cfg.toolkitRoot, () => exec("lake", ["build", ...libs, "candidate_scan"], cwd), `toolkit graph: ${built}`);
+      if (build.code !== 0) return { build, r: null, built };
+      args.log(`toolkit graph: lake ${scanArgs.join(" ")}`);
+      return { build, built, r: await withLakeBuildLock(cfg.toolkitRoot, () => exec("lake", scanArgs, cwd), "toolkit graph: lake exe candidate_scan --graph") };
+    },
+  }, args.log);
+  if (build.code !== 0 || !r) throw new Error(`toolkit graph: \`${built}\` failed:\n${tail(`${build.stdout}\n${build.stderr}`)}`);
   if (r.code !== 0 || !existsSync(out)) throw new Error(`toolkit graph: \`lake ${scanArgs.join(" ")}\` failed:\n${tail(`${r.stdout}\n${r.stderr}`)}`);
-  const parsed = candidateScanSchema.safeParse(JSON.parse(await readFile(out, "utf8")));
-  if (!parsed.success) throw new Error(`toolkit graph: ${out} does not match the scan schema: ${parsed.error.message}`);
-  return parsed.data;
+  const parsed = graphScanSchema.safeParse(JSON.parse(await readFile(out, "utf8")));
+  if (!parsed.success) throw new Error(`toolkit graph: ${out} does not match the graph scan schema: ${parsed.error.message}`);
+  const generation = at ? await pinnedGeneration(at.ws) : undefined;
+  const scan: GraphScan = { ...parsed.data, ...(generation !== undefined ? { generation } : {}) };
+  if (generation !== undefined) await writeTextAtomic(out, JSON.stringify(scan));
+  if (sig) await recordScan(out, { sig, modules: libs });
+  return scan;
+}
+
+/**
+ * What a scoped graph scan reads, as one signature: the toolkit library and its path dependencies
+ * (`toolkitSignature`: metadata, Staging aside — a scan's modules never import Staging), the content
+ * of each scanned paper and of every paper they import (`paperImports`, `paperSourceHash`) and the
+ * scanner (`CandidateScan.lean` and its `PaperFormalizerIndexCore.lean`); a paper importing a Staging
+ * module is never reused. A `doubt:` part
+ * makes the whole a doubt, which `scanCurrent` never matches.
+ */
+async function graphScanSignature(cfg: ToolkitConfig, papers: readonly string[]): Promise<string | null> {
+  const { isDoubt, paperImports, toolkitLayout, toolkitSignature } = await import("../shared/build_inputs.js");
+  const layout = await toolkitLayout(cfg.toolkitRoot);
+  const toolkit = await toolkitSignature(layout);
+  if (isDoubt(toolkit)) return null;
+  // the scanned papers and every paper they import (its declarations are read through them)
+  const closure = await paperImports(layout, papers);
+  if (closure.why) return null;
+  // a Staging import is outside the toolkit signature: such a paper is scanned afresh
+  if (closure.imports.some((m) => m === `${cfg.lib}.Staging` || m.startsWith(`${cfg.lib}.Staging.`))) return null;
+  const h = createHash("sha256");
+  h.update(`toolkit=${toolkit}\n`);
+  for (const p of [...new Set([...papers, ...closure.papers])].sort()) {
+    const subdir = p.split(".").join("/");
+    if (!existsSync(path.join(cfg.toolkitRoot, subdir))) return null;
+    h.update(`${p}=${await paperSourceHash(cfg.toolkitRoot, subdir)}\n`);
+  }
+  for (const f of ["CandidateScan.lean", "PaperFormalizerIndexCore.lean"]) {
+    const text = await readFile(path.join(cfg.toolkitRoot, f), "utf8").catch(() => "(none)");
+    h.update(`${f}=${createHash("sha256").update(text).digest("hex")}\n`);
+  }
+  return h.digest("hex");
 }
 
 /**
@@ -379,27 +684,56 @@ export async function runCandidateScan(args: {
   leanSubdir: string;
   exec?: LeanExec;
   log: (m: string) => void;
+  /** false: a scan outside a workspace runs in the shared tree (`withScanRoot`); default in a workspace. */
+  local?: boolean;
 }): Promise<CandidateScan> {
-  const { toolkit: cfg, qid } = args;
-  if (!args.exec) await assertCandidateScanExe(cfg);
+  const { qid } = args;
+  if (!args.exec) await assertCandidateScanExe(args.toolkit);
   const exec = args.exec ?? defaultExec;
-  const { withLakeBuildLock } = await import("../shared/build_mutex.js");
   const prefix = paperModulePrefix(args.leanSubdir);
-  if (!existsSync(paperBarrelPath(cfg.toolkitRoot, args.leanSubdir))) {
-    throw new Error(`candidate scan: the run barrel ${paperBarrelPath(cfg.toolkitRoot, args.leanSubdir)} does not exist; F5 writes it.`);
+  if (!existsSync(paperBarrelPath(args.toolkit.toolkitRoot, args.leanSubdir))) {
+    throw new Error(`candidate scan: the run barrel ${paperBarrelPath(args.toolkit.toolkitRoot, args.leanSubdir)} does not exist; F5 writes it.`);
   }
+  // in a workspace (`withScanRoot`), or (null, `local` false) the shared tree
+  return withScanRoot(args.toolkit, qid, [prefix], args.log, args.local, (at) => candidateScanAt(args, exec, prefix, at));
+}
+
+/** `runCandidateScan` where it runs (`at`; null: the shared tree). */
+async function candidateScanAt(args: Parameters<typeof runCandidateScan>[0], exec: LeanExec, prefix: string, at: { cfg: ToolkitConfig; ws: string } | null): Promise<CandidateScan> {
+  const { qid } = args;
+  const { LAKE_NO_BUILD_EXIT, WOULD_BUILD, withLakeBuildLock, withScannerHold } = await import("../shared/build_mutex.js");
+  const cfg = at?.cfg ?? args.toolkit;
   const out = candidateScanPath(cfg, qid);
   await mkdir(path.dirname(out), { recursive: true });
   const tail = (s: string) => s.split("\n").filter((l) => l.trim()).slice(-30).join("\n");
-  const build = await withLakeBuildLock(cfg.toolkitRoot, () => exec("lake", ["build", prefix, "candidate_scan"], { cwd: cfg.toolkitRoot }));
-  if (build.code !== 0) throw new Error(`candidate scan: \`lake build ${prefix} candidate_scan\` failed:\n${tail(`${build.stdout}\n${build.stderr}`)}`);
+  const cwd = { cwd: cfg.toolkitRoot };
   const scanArgs = ["exe", "candidate_scan", "--", "--paper", prefix, "--toolkit-prefix", cfg.lib, "--papers-prefix", cfg.papersLib, "--modules", prefix, "--out", out];
-  args.log(`candidate scan: lake ${scanArgs.join(" ")}`);
-  const r = await withLakeBuildLock(cfg.toolkitRoot, () => exec("lake", scanArgs, { cwd: cfg.toolkitRoot }));
+  // in a workspace: built and scanned there; else under a shared hold of the paper when it can
+  // (`withScannerHold`), else exclusive as before
+  const { build, r, built } = at ? await scanTurnsIn(cfg.toolkitRoot, exec, [prefix, "candidate_scan"], scanArgs, `candidate scan ${prefix}`, args.log) : await withScannerHold<ScanTurns>(cfg.toolkitRoot, [prefix], `candidate scan ${prefix}`, {
+    exeFresh: async () => (await exec("lake", ["build", "--no-build", "candidate_scan"], cwd)).code === 0,
+    shared: async () => {
+      const built = `lake build ${prefix}`;
+      const build = await exec("lake", ["build", prefix], cwd);
+      if (build.code !== 0) return { build, r: null, built };
+      args.log(`candidate scan: lake --no-build ${scanArgs.join(" ")}`);
+      const r = await exec("lake", ["--no-build", ...scanArgs], cwd);
+      return r.code === LAKE_NO_BUILD_EXIT ? WOULD_BUILD : { build, r, built };
+    },
+    exclusive: async () => {
+      const built = `lake build ${prefix} candidate_scan`;
+      const build = await withLakeBuildLock(cfg.toolkitRoot, () => exec("lake", ["build", prefix, "candidate_scan"], cwd), `candidate scan: ${built}`);
+      if (build.code !== 0) return { build, r: null, built };
+      args.log(`candidate scan: lake ${scanArgs.join(" ")}`);
+      return { build, built, r: await withLakeBuildLock(cfg.toolkitRoot, () => exec("lake", scanArgs, cwd), `candidate scan: lake exe candidate_scan --paper ${prefix}`) };
+    },
+  }, args.log);
+  if (build.code !== 0 || !r) throw new Error(`candidate scan: \`${built}\` failed:\n${tail(`${build.stdout}\n${build.stderr}`)}`);
   if (r.code !== 0 || !existsSync(out)) throw new Error(`candidate scan: \`lake ${scanArgs.join(" ")}\` failed:\n${tail(`${r.stdout}\n${r.stderr}`)}`);
   const parsed = candidateScanSchema.safeParse(JSON.parse(await readFile(out, "utf8")));
   if (!parsed.success) throw new Error(`candidate scan: ${out} does not match the scan schema: ${parsed.error.message}`);
-  return parsed.data;
+  const generation = at ? await pinnedGeneration(at.ws) : undefined;
+  return { ...parsed.data, ...(generation !== undefined ? { generation } : {}) };
 }
 
 /** sha256 over the paper's Lean sources (every `.lean` under its directory except the disposable

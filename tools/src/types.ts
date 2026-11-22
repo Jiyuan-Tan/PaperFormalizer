@@ -148,6 +148,9 @@ export interface FormalizationFlags {
    *  (`runStage1_5`), and a halt at F1 / F1.5 prints the blocked-F1 reminder. Cleared by the F1
    *  pass that completes. */
   f1_blocked?: { message: string; review?: unknown } | null;
+  /** Set by an explicit `--from-stage F1` (a ruling on the plan): the next F1 plans even when nothing
+   *  in the core moved. Cleared by that F1. */
+  f1_replan_asked?: boolean | null;
 }
 
 /** Cross-phase fields: stage cursor, target Lean directory, run block. */

@@ -6,10 +6,10 @@ import { applyWorkerEnv } from "../src/local_config.js";
 import { applyAuthEnv, authSummary } from "../src/auth.js";
 import { installStopHandlers } from "../src/shared/child_registry.js";
 
-export type PaperFormalizerMode = "doctor" | "init" | "demo" | "ui" | "verify" | "propose" | "study" | "toolkit-health" | "garden" | "docstrings" | "annotate" | "lint-annotated" | "report" | "seal" | "share" | "relink";
+export type PaperFormalizerMode = "doctor" | "init" | "demo" | "ui" | "verify" | "propose" | "study" | "toolkit-health" | "garden" | "docstrings" | "annotate" | "lint-annotated" | "report" | "seal" | "share" | "relink" | "explain-proofs" | "toolkit-flux" | "toolkit-gen" | "toolkit-commit" | "statements";
 
 export const PAPERFORMALIZER_USAGE =
-  "Usage: paperformalizer <doctor|init|demo|ui|verify|propose|study|toolkit-health|garden|docstrings|annotate|lint-annotated|report|seal|share|relink> <args...>\n" +
+  "Usage: paperformalizer <doctor|init|demo|ui|verify|propose|study|toolkit-health|garden|docstrings|annotate|lint-annotated|report|seal|share|relink|explain-proofs|toolkit-flux|toolkit-gen|toolkit-commit|statements> <args...>\n" +
   "  paperformalizer doctor\n" +
   "      check this machine's prerequisites (programs, versions, logins) and print how to get what is missing\n" +
   "  paperformalizer init <dir> [--domains id,id] [--libraries name,name] [--owner \"Name\"] [--email e] [--no-build]\n" +
@@ -19,8 +19,8 @@ export const PAPERFORMALIZER_USAGE =
   "  paperformalizer ui [--toolkit <path>] [--port N] [--open] [--new]\n" +
   "      the local web UI (127.0.0.1 only): toolkit, library, and each paper's run, live; decisions run the CLI\n" +
   "  paperformalizer verify <paper.tex|dir|archive> [--toolkit <path>] [--slug s] [--main relpath]\n" +
-  "                        [--targets label,label] [--resume] [--from-stage <stage>] [--fresh-review] [--from-transcript]\n" +
-  "                        [--stop-after <stage>] [--clear-gate <flag>]... [--defer-proposals] [--debug | --full-auto] [--dry-run]\n" +
+  "                        [--targets label,label] [--resume] [--from-stage <stage>] [--fresh-review] [--from-transcript] [--revise]\n" +
+  "                        [--stop-after <stage>] [--clear-gate <flag>]... [--defer-proposals] [--debug | --full-auto] [--persist | --no-persist] [--dry-run]\n" +
   "                        answering a halt (each with --resume): [--reject-rewind \"<reason>\"] [--clear-patch-cap] [--accept-cap]\n" +
   "                        [--accept-repair [<node>,…]] [--decline-repair \"[<node>,…: ]<reason>\"] [--redo-repair \"<node>: <guidance>\"]...\n" +
   "                        [--reject-finding \"[<node>: [bookkeeping: ]]<reading>\"]... [--add-condition \"<node>: <condition>\"]...\n" +
@@ -38,6 +38,18 @@ export const PAPERFORMALIZER_USAGE =
   "      re-derive doc/toolkit_graph.json from the Lean and report the toolkit's health and reuse trend\n" +
   "  paperformalizer garden [--toolkit <path>] [--no-rebuild] [--dry-run] [--verify <garden-….md> [--items g-1,…]]\n" +
   "      gardening suggestions from the toolkit's graph (the orchestrator decides each), or --verify the accepted items carried out by hand\n" +
+  "  paperformalizer toolkit-flux on|off [--id <id>] [--toolkit <path>]\n" +
+  "      bracket hand edits of the toolkit's Lean: `on` waits for shared builds and opens a flux session, `off` closes it (the last builds the toolkit clean)\n" +
+  "  paperformalizer toolkit-gen publish|status [--toolkit <path>]\n" +
+  "  paperformalizer toolkit-gen ensure|release <slug> [--toolkit <path>]\n" +
+  "      the per-run Lake workspaces' generations: publish the clean toolkit as a generation, show the current one,\n" +
+  "      make or re-pin a run's workspace on this machine, or remove its workspaces here (and its paper's tmp/)\n" +
+  "  paperformalizer toolkit-commit workspace <slug> [--papers A,B]|prepare <slug>|commit <id>|clear <id>|status|recover|undo [--toolkit <path>]\n" +
+  "      change the toolkit by a commit: edit and build in a private workspace, then install it as the next generation in a short lock;\n" +
+  "      status shows where commits stand; recover, undo and clear <id> settle an interrupted or stopped one\n" +
+  "  paperformalizer statements split [--retire-monolith] [--toolkit <path>]\n" +
+  "      copy (then merge, daily) the single-file statement store doc/statements.json into one shard per paper, doc/statements/<slug>.json;\n" +
+  "      the file is kept for older processes until --retire-monolith\n" +
   "  paperformalizer docstrings [--toolkit <path>] [--modules M1,M2]\n" +
   "      bring the toolkit's docstrings to the docstring contract (NL translation + crosslinks); docstring edits only\n" +
   "  paperformalizer annotate <slug> [--toolkit <path>] [--compile-record <path>]\n" +
@@ -48,6 +60,8 @@ export const PAPERFORMALIZER_USAGE =
   "      write the run's report and corrected-paper bundle again from its records (no stage, no model call, no lake)\n" +
   "  paperformalizer relink <slug> [--toolkit <path>] [--only <node>,…] [--fresh]\n" +
   "      link the run's results to their Lean statements row by row again (F5's link step alone; calls its model)\n" +
+  "  paperformalizer explain-proofs <slug> [--toolkit <path>] [--only <node>,…]\n" +
+  "      write the run's Lean Proof in English again and check the printed proofs against it (F5's step alone; calls its model)\n" +
   "  paperformalizer seal <bundle dir | f4_seal.json>\n" +
   "      check a bundle's F4 seal: its code is its own, and both reviewers passed every statement target, the files beside it are the ones it was written with (no toolkit, no model call, no lake)\n" +
   "  paperformalizer share <slug> [--toolkit <path>] [--dry-run]\n" +
@@ -58,7 +72,7 @@ export const PAPERFORMALIZER_USAGE =
 
 export function parsePaperFormalizerCommand(argv: string[]): { mode: PaperFormalizerMode; args: string[] } {
   const [mode, ...args] = argv;
-  if (mode === "doctor" || mode === "init" || mode === "demo" || mode === "ui" || mode === "verify" || mode === "propose" || mode === "study" || mode === "toolkit-health" || mode === "garden" || mode === "docstrings" || mode === "annotate" || mode === "lint-annotated" || mode === "report" || mode === "seal" || mode === "share" || mode === "relink") {
+  if (mode === "doctor" || mode === "init" || mode === "demo" || mode === "ui" || mode === "verify" || mode === "propose" || mode === "study" || mode === "toolkit-health" || mode === "garden" || mode === "docstrings" || mode === "annotate" || mode === "lint-annotated" || mode === "report" || mode === "seal" || mode === "share" || mode === "relink" || mode === "explain-proofs" || mode === "toolkit-flux" || mode === "toolkit-gen" || mode === "toolkit-commit" || mode === "statements") {
     return { mode, args };
   }
   throw new Error(PAPERFORMALIZER_USAGE);
@@ -86,6 +100,11 @@ export async function helpText(argv: string[]): Promise<string | null> {
     case "seal": return (await import("../src/verify/f4_seal.js")).SEAL_USAGE;
     case "share": return (await import("../src/verify/share.js")).SHARE_USAGE;
     case "relink": return (await import("../src/formalization/relink_cli.js")).RELINK_USAGE;
+    case "explain-proofs": return (await import("../src/formalization/explain_proofs_cli.js")).EXPLAIN_PROOFS_USAGE;
+    case "toolkit-flux": return (await import("../src/proposals/cli.js")).TOOLKIT_FLUX_USAGE;
+    case "toolkit-gen": return (await import("../src/shared/workspace.js")).TOOLKIT_GEN_USAGE;
+    case "toolkit-commit": return (await import("../src/shared/commit.js")).TOOLKIT_COMMIT_USAGE;
+    case "statements": return (await import("../src/proposals/statements_split.js")).STATEMENTS_USAGE;
   }
 }
 
@@ -138,6 +157,30 @@ async function main(argv: string[]): Promise<void> {
   // Machine env + billing path resolved ONCE here, before any mode-specific import, so a
   // misconfigured api mode fails before a run starts rather than mid-dispatch.
   applyWorkerEnv();
+  // A toolkit generation, or a run's workspace: no model, no login.
+  if (mode === "toolkit-gen") {
+    const { runToolkitGenCli } = await import("../src/shared/workspace.js");
+    await runToolkitGenCli(args);
+    return;
+  }
+  // A toolkit commit (by hand): its workspace, its builds, the two locks for a moment; no model, no login.
+  if (mode === "toolkit-commit") {
+    const { runToolkitCommitCli } = await import("../src/shared/commit.js");
+    await runToolkitCommitCli(args);
+    return;
+  }
+  // Splitting the statement store: files only, under the store's lock; no model, no login.
+  if (mode === "statements") {
+    const { runStatementsCli } = await import("../src/proposals/statements_split.js");
+    await runStatementsCli(args);
+    return;
+  }
+  // Marking the toolkit in flux takes the Lake lock and may build it: no model, no login.
+  if (mode === "toolkit-flux") {
+    const { runToolkitFluxCli } = await import("../src/proposals/cli.js");
+    await runToolkitFluxCli(args);
+    return;
+  }
   applyAuthEnv();
   console.log(`[paperformalizer] auth: ${authSummary()}`);
   if (mode === "toolkit-health") {
@@ -170,6 +213,9 @@ async function main(argv: string[]): Promise<void> {
   } else if (mode === "relink") {
     const { runRelinkCli } = await import("../src/formalization/relink_cli.js");
     await runRelinkCli(args);
+  } else if (mode === "explain-proofs") {
+    const { runExplainProofsCli } = await import("../src/formalization/explain_proofs_cli.js");
+    await runExplainProofsCli(args);
   } else if (mode === "report") {
     const { runReportCli } = await import("../src/verify/report_cli.js");
     await runReportCli(args);

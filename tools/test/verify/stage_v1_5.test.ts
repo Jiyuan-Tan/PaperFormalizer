@@ -280,8 +280,9 @@ function paperFindings(state: StateJson) {
 async function retranscribe(h: Harness, id: string): Promise<void> {
   const p = path.join(h.runDir, VERIFY_FILES.coreTranscribed);
   const core = JSON.parse(await readFile(p, "utf8")) as Core;
-  const node = [...core.statements, ...core.assumptions, ...core.definitions].find((n) => n.id === id)! as { tex_locator?: { to: number } };
-  node.tex_locator = { ...(node.tex_locator as object), to: (node.tex_locator?.to ?? 0) + 1 } as never;
+  // (its record, not where it is printed: a node's lines are in no basis)
+  const node = [...core.statements, ...core.assumptions, ...core.definitions].find((n) => n.id === id)! as { free_symbols?: string[] };
+  node.free_symbols = [...(node.free_symbols ?? []), "\\zeta"];
   await writeFile(p, JSON.stringify(core, null, 2), "utf8");
 }
 

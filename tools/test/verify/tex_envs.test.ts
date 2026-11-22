@@ -916,3 +916,50 @@ describe("etoolbox toggles", () => {
     expect(blankInactiveToggles("\\iftoggle{a}{x\\}y}{z}", { a: false })).not.toContain("y");
   });
 });
+
+describe("the paper's own proof environments", () => {
+  const doc = (preamble: string, body: string) => `\\documentclass{article}\n${preamble}\n\\begin{document}\n${body}\n\\end{document}\n`;
+  const lemmaWith = (proofEnv: string) =>
+    `\\begin{lemma2}\nThe restricted problem is hard.\n\\label{th2:hard}\n\\end{lemma2}\n\\begin{${proofEnv}}\n  We use the same reduction as before.\n\\end{${proofEnv}}\n`;
+
+  it("binds a proof in an environment whose opening typesets \"Proof\" to the result before it", () => {
+    const tex = doc(
+      "\\newtheorem{lemma2}{Modified Lemma}\n\\def\\SkipSpace{\\vspace{0.25\\baselineskip}}\n\\newenvironment{proof1}{\\SkipSpace\\par\\noindent{\\bf Proof}:}{\\quad\\vrule width 1ex height 1ex depth 0pt}",
+      lemmaWith("proof1"),
+    );
+    const { envs } = extractEnvs(tex, lineMapFor(tex), parseNewtheorems(tex));
+    const lemma = envs.find((e) => e.label === "th2:hard")!;
+    expect(lemma.proof).toContain("We use the same reduction as before.");
+    expect(lemma.proofLines).not.toBeNull();
+  });
+
+  it("reads wrappers around proof and environments using \\proofname as proofs too", () => {
+    for (const def of [
+      "\\newenvironment{prf}{\\begin{proof}}{\\end{proof}}",
+      "\\newenvironment{cpf}{\\noindent\\textit{\\proofname.}}{\\hfill$\\square$}",
+      "\\newenvironment{pf}[1][]{\\noindent\\textbf{Proof #1.}}{\\qed}",
+    ]) {
+      const name = /\{(\w+)\}/.exec(def)![1]!;
+      const tex = doc(`\\newtheorem{lemma2}{Modified Lemma}\n${def}`, lemmaWith(name));
+      const lemma = extractEnvs(tex, lineMapFor(tex), parseNewtheorems(tex)).envs.find((e) => e.label === "th2:hard")!;
+      expect(lemma.proof, def).toContain("We use the same reduction as before.");
+    }
+  });
+
+  it("does not take an environment that only mentions proofs in a command or label for a proof", () => {
+    const tex = doc(
+      "\\newtheorem{lemma2}{Modified Lemma}\n\\newenvironment{note}{\\par\\noindent\\textit{Note}: see \\ref{Proof-sketch}.\\label{Proof-x}}{\\par}\n\\newenvironment{boxed}{\\begin{center}\\proofsymbolx}{\\end{center}}",
+      lemmaWith("note"),
+    );
+    const lemma = extractEnvs(tex, lineMapFor(tex), parseNewtheorems(tex)).envs.find((e) => e.label === "th2:hard")!;
+    expect(lemma.proof).toBeNull();
+  });
+});
+
+describe("a proof environment that names its result in a mandatory argument", () => {
+  it("is not read as a proof, so it is never bound to the wrong result by position", () => {
+    const tex = `\\documentclass{article}\n\\newtheorem{theorem}{Theorem}\n\\newtheorem{lemma}{Lemma}\n\\newenvironment{proofof}[1]{\\noindent\\textbf{Proof of #1:}}{\\qed}\n\\begin{document}\n\\begin{theorem}B holds.\\label{thm:B}\\end{theorem}\n\\begin{lemma}A holds.\\label{lem:A}\\end{lemma}\n\\begin{proofof}{Theorem~\\ref{thm:B}}\nThe argument for B.\n\\end{proofof}\n\\end{document}\n`;
+    const { envs } = extractEnvs(tex, lineMapFor(tex), parseNewtheorems(tex));
+    expect(envs.find((e) => e.label === "lem:A")!.proof).toBeNull();
+  });
+});

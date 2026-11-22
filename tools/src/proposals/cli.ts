@@ -33,7 +33,7 @@ import {
   type ProposalDecisionRecord,
   type ProposalRound,
 } from "./schema.js";
-import { healthSummary, readToolkitGraph, toolkitHealth } from "./toolkit_graph.js";
+import { healthSummary, readToolkitGraph, toolkitHealth, type ToolkitGraph } from "./toolkit_graph.js";
 
 export const PROPOSE_USAGE =
   "Usage: paperformalizer propose <slug> [--round A|B] [--apply [--recommended] | --reopen-deferred] [--toolkit <path>] [--dry-run]\n" +
@@ -95,8 +95,8 @@ export interface ProposeDeps {
   resumeVerify?: (argv: string[]) => Promise<void>;
   log?: (msg: string) => void;
   now?: () => Date;
-  /** Apply overrides (gate commands, scan, lock, graph) for tests. */
-  applyB?: Partial<Pick<import("./apply_b.js").ApplyRoundBArgs, "deps" | "scan" | "toolsDir" | "indexStep" | "withLock" | "graph" | "runStudy" | "corollary">>;
+  /** Apply overrides (gate commands, scan, graph) for tests. */
+  applyB?: Partial<Pick<import("./apply_b.js").ApplyRoundBArgs, "deps" | "scan" | "toolsDir" | "indexStep" | "graph" | "runStudy" | "corollary">>;
   /** Round-A apply overrides (tests). */
   applyA?: Partial<Pick<Parameters<typeof import("./apply_a.js").applyRoundA>[0], "runStudy" | "graph">>;
   /** `--reopen-deferred` overrides (tests: scan, graph, models). */
@@ -284,15 +284,22 @@ async function propose(parsed: ReturnType<typeof parseProposeArgs>, deps: Propos
   try {
   if (round === "A") {
     const { applyRoundA } = await import("./apply_a.js");
-    const result = await applyRoundA({ toolkit: cfg, qid: slug, batchFile: rec.batch_path, dryRun: parsed.dryRun, log, ...(deps.now ? { now: deps.now } : {}), ...(deps.applyA ?? {}) });
+    // an apply writes the shared tree: never a run's workspace (`withSharedTree`)
+    const { withSharedTree } = await import("../shared/build_mutex.js");
+    const batchFile = rec.batch_path;
+    const result = await withSharedTree(() => applyRoundA({ toolkit: cfg, qid: slug, batchFile, dryRun: parsed.dryRun, log, ...(deps.now ? { now: deps.now } : {}), ...(deps.applyA ?? {}) }));
     const after = await loadState(cfg.toolkitRoot, slug);
     after.verify!.promotion_a = { ...rec, status: "applied", applied_at: result.decisions.decided_at, promoted: result.promoted };
     await saveState(cfg.toolkitRoot, slug, after);
     summary = { decisions: result.decisions.decisions, promoted: result.promoted, regressions: result.regressions };
   } else {
-    const result = await applyRoundB({ toolkit: cfg, qid: slug, batchFile: rec.batch_path, dryRun: parsed.dryRun, log, ...(deps.now ? { now: deps.now } : {}), ...(deps.applyB ?? {}) });
+    const { withSharedTree } = await import("../shared/build_mutex.js");
+    const batchFile = rec.batch_path;
+    const result = await withSharedTree(() => applyRoundB({ toolkit: cfg, qid: slug, batchFile, dryRun: parsed.dryRun, log, ...(deps.now ? { now: deps.now } : {}), ...(deps.applyB ?? {}) }));
     const after = await loadState(cfg.toolkitRoot, slug);
-    after.verify!.promotion = { ...rec, status: "applied", applied_at: result.decisions.decided_at, promoted: result.promoted, moves: result.moves };
+    after.verify!.promotion = {
+      ...rec, status: "applied", applied_at: result.decisions.decided_at, promoted: result.promoted, moves: result.moves,
+    };
     await saveState(cfg.toolkitRoot, slug, after);
     summary = { decisions: result.decisions.decisions, promoted: result.promoted, regressions: result.regressions };
   }
@@ -313,6 +320,24 @@ async function propose(parsed: ReturnType<typeof parseProposeArgs>, deps: Propos
   await resume(resumeArgv);
 }
 
+/** The whole library's graph: re-derived in a workspace (`--no-rebuild`: the one on file); outside
+ *  one, the one on file (2026-11-10: the whole library's scan is the daily library check's, in its
+ *  own workspace; never a build of every paper in the shared tree). */
+async function libraryGraph(cfg: ToolkitConfig, argv: readonly string[], log: (m: string) => void): Promise<ToolkitGraph | null> {
+  const { leanWorkspaceFor } = await import("../shared/build_mutex.js");
+  const onFile = !argv.includes("--no-rebuild") && !leanWorkspaceFor(cfg.toolkitRoot);
+  if (argv.includes("--no-rebuild") || onFile) {
+    const graph = await readToolkitGraph(cfg);
+    if (graph) {
+      const hours = Math.round((Date.now() - Date.parse(graph.built_at)) / 360_000) / 10;
+      log(`toolkit graph: the one on file (generation ${graph.generation ?? "unknown"}, built ${hours} h ago)${onFile ? " — not rebuilt outside a workspace" : ""}`);
+    }
+    return graph;
+  }
+  const { refreshToolkitGraph } = await import("./toolkit_graph.js");
+  return refreshToolkitGraph({ toolkit: cfg, log });
+}
+
 export const TOOLKIT_HEALTH_USAGE =
   "Usage: paperformalizer toolkit-health [--toolkit <path>] [--all] [--json] [--no-rebuild]\n" +
   "  re-derive <toolkit>/doc/toolkit_graph.json from the Lean (one `lake exe candidate_scan -- --graph` pass)\n" +
@@ -322,15 +347,43 @@ export const TOOLKIT_HEALTH_USAGE =
 export async function runToolkitHealthCli(argv: string[], log: (m: string) => void = (m) => console.log(m)): Promise<void> {
   const i = argv.indexOf("--toolkit");
   const cfg = loadToolkitConfig({ explicit: i >= 0 ? argv[i + 1] ?? null : null });
-  const { refreshToolkitGraph } = await import("./toolkit_graph.js");
-  const graph = argv.includes("--no-rebuild")
-    ? await readToolkitGraph(cfg)
-    : await refreshToolkitGraph({ toolkit: cfg, log });
+  const graph = await libraryGraph(cfg, argv, log);
   if (!graph) throw new Error(`no toolkit graph on file; run without --no-rebuild\n${TOOLKIT_HEALTH_USAGE}`);
   const health = toolkitHealth(graph, { view: argv.includes("--all") ? "full" : "main" });
   const { readReuseHistory, reuseTrendText } = await import("./garden.js");
   const history = await readReuseHistory(cfg);
   log(argv.includes("--json") ? JSON.stringify({ ...health, reuse_history: history }, null, 2) : `${healthSummary(health)}\n${reuseTrendText(history)}`);
+}
+
+export const TOOLKIT_FLUX_USAGE =
+  "Usage: paperformalizer toolkit-flux on|off [--id <id>] [--toolkit <path>]\n" +
+  "  hand edits of the toolkit's Lean (gardening, a git checkout or merge\n" +
+  "  touching the library or third_party/StatLean) go between `on` and `off`. `on` waits for the papers' shared\n" +
+  "  builds to end, opens a flux session and prints its id (every Lake command then runs exclusive); `off` closes\n" +
+  "  one (--id; without it the only one open) and, once none is open, builds the toolkit clean";
+
+/** `paperformalizer toolkit-flux on|off`: bracket hand edits of the toolkit's Lean (`toolkitFluxOn` / `toolkitFluxOff`). */
+export async function runToolkitFluxCli(argv: string[], log: (m: string) => void = (m) => console.log(`[toolkit-flux] ${m}`)): Promise<void> {
+  const value = (flag: string): string | null => {
+    const i = argv.indexOf(flag);
+    if (i < 0) return null;
+    const v = argv[i + 1];
+    if (!v || v.startsWith("--")) throw new Error(`${flag} needs a value\n${TOOLKIT_FLUX_USAGE}`);
+    return v;
+  };
+  const which = argv.find((a, j) => (a === "on" || a === "off") && argv[j - 1] !== "--toolkit" && argv[j - 1] !== "--id");
+  if (!which) throw new Error(TOOLKIT_FLUX_USAGE);
+  const cfg = loadToolkitConfig({ explicit: value("--toolkit") });
+  const { toolkitFluxOff, toolkitFluxOn } = await import("../shared/build_mutex.js");
+  if (which === "on") {
+    const id = await toolkitFluxOn(cfg.toolkitRoot, "toolkit-flux on", log);
+    log(`flux session ${id} open: no shared build runs; hand edits may start. Close it with \`paperformalizer toolkit-flux off --id ${id}\` when they are done.`);
+    return;
+  }
+  const r = await toolkitFluxOff(cfg.toolkitRoot, value("--id"), log);
+  if (r.remaining.length > 0) log(`flux session ${r.closed} closed; still in flux: ${r.remaining.join(", ")} (nothing built until the last is closed).`);
+  else log(r.clean?.clean ? `${r.closed ? `flux session ${r.closed} closed; ` : ""}the toolkit is built clean: shared builds may run again.`
+    : `${r.closed ? `flux session ${r.closed} closed; ` : ""}the toolkit is not stamped clean (${r.clean && !r.clean.clean ? r.clean.why : "?"}): every Lake command runs exclusive until it is.`);
 }
 
 export const GARDEN_USAGE =
@@ -364,6 +417,7 @@ export async function runGardenCli(argv: string[], log: (m: string) => void = (m
     const r = await verifyGarden({ toolkit: cfg, md: path.resolve(verify), log, ...(items ? { items } : {}) });
     for (const p of r.problems) log(`FAIL ${p}`);
     for (const g of r.regressions) log(`toolkit graph: ${g}`);
+    for (const x of r.reported) log(`reported (not a failure): ${x}`);
     if (r.renames.size) log(`renamed: ${[...r.renames].map(([a, b]) => `${a} → ${b}`).join(", ")}`);
     if (r.moved.size) log(`moved: ${[...r.moved].map(([a, m]) => `${a} → ${m}`).join(", ")}`);
     log(r.ok
@@ -372,8 +426,7 @@ export async function runGardenCli(argv: string[], log: (m: string) => void = (m
     if (!r.ok) process.exitCode = 1;
     return;
   }
-  const { refreshToolkitGraph } = await import("./toolkit_graph.js");
-  const graph = argv.includes("--no-rebuild") ? await readToolkitGraph(cfg) : await refreshToolkitGraph({ toolkit: cfg, log });
+  const graph = await libraryGraph(cfg, argv, log);
   if (!graph) throw new Error(`no toolkit graph on file; run without --no-rebuild\n${GARDEN_USAGE}`);
   const out = await garden.runGardenRound({ toolkit: cfg, graph, log, dryRun: argv.includes("--dry-run") });
   if (out) log(`decide each item in ${out.path} (retire/remove items go to the owner); carry out the accepted ones by hand, then: paperformalizer garden --verify ${out.path} --toolkit ${cfg.toolkitRoot}`);

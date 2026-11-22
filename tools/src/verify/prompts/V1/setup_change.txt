@@ -1,0 +1,21 @@
+You are checking an author's revision of a mathematical paper. The revision changed the paper's
+setup: its macro definitions, or the text before its first result. Every result was checked against
+the old setup. Say which of them the change can affect, so only those are checked again.
+
+A node is affected when the change can alter what it says or what it may assume: a standing
+assumption added, removed or changed; a symbol, space or convention redefined; a macro it uses
+redefined. A change of wording only (an added explanation, a typo, a reordered paragraph) affects
+no node. If you are unsure about a node, list it. If the change alters the setting of the whole
+paper, answer "all".
+
+SETUP BEFORE:
+{{setup_before}}
+
+SETUP AFTER:
+{{setup_after}}
+
+NODES (id: text):
+{{nodes}}
+
+Answer JSON only: {"all": false, "reason": "", "affected": [{"id": "<node id>", "reason": "<one sentence>"}]}
+or {"all": true, "reason": "<one sentence>", "affected": []}.

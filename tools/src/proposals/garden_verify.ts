@@ -3,8 +3,12 @@
 // Nothing here edits Lean. The toolkit must have been committed before the edits: the check is the
 // working tree against `HEAD`, and an unfixable failure is reverted with git by the orchestrator.
 //
-// It checks: only the toolkit library, the papers, their barrels and `doc/` changed; the toolkit and
-// the papers build; `#print axioms` of every toolkit declaration and every paper theorem/lemma of a
+// It checks: only the toolkit library, the papers, their barrels and `doc/` changed; the toolkit
+// builds, and every paper the edits reach builds (its Lean changed, or it imports a changed toolkit
+// module: `papersReached`) — but an unchanged one that fails against the toolkit as it was before
+// the edits too (built in a workspace pinned to the generation of `HEAD`'s toolkit, checked by
+// content: `realBaselineWorkspace`); the other papers are built too, a failure reported, never fatal
+// (the edits cannot reach them); `#print axioms` of every toolkit declaration and every paper theorem/lemma of a
 // changed paper file is standard (propext, Classical.choice, Quot.sound); no sorry/admit/axiom in
 // the toolkit or a changed paper file; every paper theorem/lemma STATEMENT is unchanged (references
 // to toolkit declarations the edits renamed are followed); the module-header and layout lints; the
@@ -12,31 +16,47 @@
 // reported). Every step's full log is kept under `runs/_garden/verify/<stamp>/`. When everything
 // holds, the ledger records the decisions (`garden_decision`, one per item: re-running updates it),
 // and every renamed (`renamed_from`) or moved declaration.
+//
+// ON THE LIVE TREE verify needs a committed baseline: it checks the working tree against git `HEAD`,
+// and judges a paper failing after the edits by building it against a published generation that is
+// `HEAD`'s toolkit. A live toolkit whose `HEAD` lags its working tree (uncommitted changes) has no
+// such generation, so every such paper fails safe ("cannot be told"). Carrying out gardening items
+// is to go through a commit workspace instead — prepared in a workspace pinned to the current
+// generation and committed there.
+//
+// Always in the shared tree (`withSharedTree`), never in a run workspace: a workspace builds its
+// pinned generation of the toolkit, never the edits (only the baseline build runs in one, on purpose).
 import { spawnSync } from "node:child_process";
 import { existsSync } from "node:fs";
-import { mkdir, readFile, writeFile } from "node:fs/promises";
+import { mkdir, readdir, readFile, rm, writeFile } from "node:fs/promises";
 import path from "node:path";
 import { statementText } from "../formalization/crosswalk_parse.js";
 import { maskLeanCommentsAndStrings } from "../shared/lean_mask.js";
 import { paperFormalizerToolsDir, type ToolkitConfig } from "../toolkit/config.js";
-import { declarationSpans, forbiddenLeanTokens, identifierTokens } from "../toolkit/lean_source.js";
-import { loadLedger, serializeLedger } from "../toolkit/ledger.js";
+import { declarationSpans, forbiddenLeanTokens, identifierTokens, leanImports } from "../toolkit/lean_source.js";
+import { LAKE_LOCK_HELD_ENV, LAKE_SHIM_DIR, LEAN_WS_ENV, withSharedTree } from "../shared/build_mutex.js";
+import { libraryPapers } from "./candidate_scan.js";
+import { updateLedger } from "../toolkit/ledger.js";
 import { parseGardenChecklist, type GardenBatch } from "./garden.js";
 import { axiomsProbeFailure, axiomsProbeText, detectToolkitIndexStep, realApplyDeps, shq, toolkitGateChain, type GateStep } from "./gate.js";
 import { rewriteReferences } from "./move.js";
-import { healthRegressions, refreshToolkitGraph, toolkitHealth, type ToolkitGraph } from "./toolkit_graph.js";
+import { healthRegressions, refreshToolkitGraph, toolkitHealth, toolkitOnly, type ToolkitGraph } from "./toolkit_graph.js";
 
 export interface VerifyDeps {
   /** A shell command (lake, the lints): exit code and its full output. */
   run: (cmd: string, cwd: string) => Promise<{ code: number; log: string; timedOut?: boolean }>;
   /** `git <args>` in the toolkit: exit code and stdout. */
   git: (args: string[], cwd: string) => { code: number; stdout: string };
+  /** A workspace of the toolkit as it was at `rev` (`realBaselineWorkspace`), for a paper that fails
+   *  after the edits: built there, does it fail before them too? */
+  baselineWorkspace?: (cfg: ToolkitConfig, rev: string, slug: string, log: (m: string) => void) => Promise<BaselineWorkspace | { why: string }>;
 }
 
 export const realVerifyDeps: VerifyDeps = {
   run: realApplyDeps.run,
   git: (args, cwd) => {
-    const r = spawnSync("git", args, { cwd, encoding: "utf8", maxBuffer: 256 * 1024 * 1024 });
+    // The committed doc/toolkit_graph.json is read through here: ~300 MB over a hundred papers.
+    const r = spawnSync("git", args, { cwd, encoding: "utf8", maxBuffer: 1024 * 1024 * 1024 });
     return { code: r.status ?? 1, stdout: r.stdout ?? "" };
   },
 };
@@ -47,6 +67,8 @@ export interface VerifyGardenResult {
   problems: string[];
   /** What the edits made worse in the toolkit graph (main view): reported, not a failure. */
   regressions: string[];
+  /** Papers that do not build for a reason not the edits' (reported, not a failure). */
+  reported: string[];
   /** Toolkit declarations whose name changed (old → new), and whose module changed (name → module). */
   renames: Map<string, string>;
   moved: Map<string, string>;
@@ -112,7 +134,147 @@ export function changedStatements(before: string, after: string, renames: Readon
   return out;
 }
 
-export async function verifyGarden(args: {
+/**
+ * The papers (`Papers.<Pascal>`) gardening edits can reach: those with a changed module
+ * (`changedPapers`), and those with a module importing — through any chain of the working tree's
+ * imports, the toolkit's barrel included — a toolkit module in `changedToolkit` (changed or removed).
+ */
+export async function papersReached(cfg: Pick<ToolkitConfig, "toolkitRoot" | "lib" | "papersLib" | "toolkitLibDir" | "papersDir">, changedToolkit: readonly string[], changedPapers: readonly string[]): Promise<Set<string>> {
+  const importers = new Map<string, string[]>();
+  const add = (file: string, text: string) => {
+    const module = path.relative(cfg.toolkitRoot, file).replace(/\.lean$/, "").split(path.sep).join(".");
+    for (const imp of leanImports(text)) importers.set(imp.module, [...(importers.get(imp.module) ?? []), module]);
+  };
+  const walk = async (dir: string): Promise<void> => {
+    for (const e of await readdir(dir, { withFileTypes: true }).catch(() => [])) {
+      const abs = path.join(dir, e.name);
+      if (e.isDirectory()) { if (e.name !== ".lake" && e.name !== "tmp") await walk(abs); }
+      else if (e.isFile() && e.name.endsWith(".lean")) add(abs, await readFile(abs, "utf8"));
+    }
+  };
+  await walk(cfg.toolkitLibDir);
+  await walk(cfg.papersDir);
+  const barrel = path.join(cfg.toolkitRoot, `${cfg.lib}.lean`);
+  if (existsSync(barrel)) add(barrel, await readFile(barrel, "utf8"));
+  const seen = new Set<string>(changedToolkit);
+  const queue = [...changedToolkit];
+  while (queue.length) {
+    for (const m of importers.get(queue.pop()!) ?? []) if (!seen.has(m)) { seen.add(m); queue.push(m); }
+  }
+  const paperOf = (m: string) => {
+    const segs = m.split(".");
+    return segs[0] === cfg.papersLib && segs.length >= 2 ? segs.slice(0, 2).join(".") : null;
+  };
+  return new Set([...seen, ...changedPapers].map(paperOf).filter((p): p is string => p !== null));
+}
+
+/** The slug of the workspace a verify builds the toolkit as it was before the edits in: its own
+ *  (two verifies never re-pin each other's), removed when it ends. */
+export const baselineSlug = (stamp: string) => `garden-baseline-${stamp.replace(/[^0-9A-Za-z]/g, "")}-${process.pid}`;
+
+/** A baseline workspace: its directory, the generation pinned, and its removal. */
+export interface BaselineWorkspace { path: string; gen: number; remove: () => Promise<void> }
+
+/** Why workspace `ws` cannot be trusted to build against generation `gen` of `toolkitRoot` (its
+ *  `.pf-toolkit` not naming the toolkit, its `.pf-gen` not that generation: the shim would build
+ *  elsewhere, the shared tree's edited toolkit included), or null. */
+export async function baselinePinProblem(ws: string, toolkitRoot: string, gen: number): Promise<string | null> {
+  const roots = (await readFile(path.join(ws, ".pf-toolkit"), "utf8").catch(() => "")).split("\n").filter(Boolean);
+  if (!roots.includes(path.resolve(toolkitRoot))) return `${ws}/.pf-toolkit does not name ${toolkitRoot}`;
+  const pin = await readFile(path.join(ws, ".pf-gen"), "utf8").then((t) => JSON.parse(t) as { gen?: unknown }, () => null);
+  if (pin?.gen !== gen) return `${ws}/.pf-gen is not generation ${gen} (${pin ? `generation ${String(pin.gen)}` : "none"})`;
+  return null;
+}
+
+/** The toolkit's files at `rev` a baseline workspace must hold as they were: the library's Lean
+ *  (its staging tree aside), its barrel, the lakefile, manifest and toolchain file. */
+function baselineFiles(cfg: Pick<ToolkitConfig, "lib" | "toolkitRoot">, rev: string, git: VerifyDeps["git"]): Map<string, string> {
+  const root = cfg.toolkitRoot;
+  const lib = git(["ls-tree", "-r", "--name-only", rev, "--", `${cfg.lib}/`], root).stdout.split("\n")
+    .filter((f) => f.endsWith(".lean") && !f.startsWith(`${cfg.lib}/Staging/`));
+  const out = new Map<string, string>();
+  for (const f of [...lib, `${cfg.lib}.lean`, "lakefile.toml", "lake-manifest.json", "lean-toolchain"]) {
+    const r = git(["show", `${rev}:${f}`], root);
+    if (r.code === 0) out.set(f, r.stdout);
+  }
+  return out;
+}
+
+/** How workspace `ws`'s pinned toolkit differs from `want` (`baselineFiles`), or null when it holds
+ *  exactly those files with exactly that content. */
+export async function baselineDiffers(ws: string, lib: string, want: ReadonlyMap<string, string>): Promise<string | null> {
+  for (const [rel, text] of want) {
+    const got = await readFile(path.join(ws, rel), "utf8").catch(() => null);
+    if (got === null) return `${rel} is missing`;
+    if (got !== text) return `${rel} differs`;
+  }
+  const extra: string[] = [];
+  const walk = async (dir: string): Promise<void> => {
+    for (const e of await readdir(dir, { withFileTypes: true }).catch(() => [])) {
+      const abs = path.join(dir, e.name);
+      const rel = path.relative(ws, abs).split(path.sep).join("/");
+      if (e.isDirectory() && rel !== `${lib}/Staging`) await walk(abs);
+      else if (e.isFile() && e.name.endsWith(".lean") && !want.has(rel)) extra.push(rel);
+    }
+  };
+  await walk(path.join(ws, lib));
+  return extra.length ? `${extra.sort()[0]} is not in the toolkit at the baseline` : null;
+}
+
+/**
+ * A workspace of the toolkit exactly as it was at `rev` (the commit the edits are checked against):
+ * pinned to a published generation (the current one first, then older archives) whose toolkit
+ * files are `rev`'s (`baselineDiffers`, by content); `{ why }` when none is.
+ */
+export async function realBaselineWorkspace(cfg: ToolkitConfig, rev: string, git: VerifyDeps["git"], slug: string, log: (m: string) => void): Promise<BaselineWorkspace | { why: string }> {
+  const { ensureWorkspace, localLeanRoot, publishedGenerations } = await import("../shared/workspace.js");
+  const want = baselineFiles(cfg, rev, git);
+  const gens = await publishedGenerations(cfg.toolkitRoot);
+  if (gens.length === 0) return { why: "no toolkit generation is published" };
+  const whys: string[] = [];
+  let local: string;
+  try { local = localLeanRoot(cfg.toolkitRoot); } catch (err) { return { why: err instanceof Error ? err.message : String(err) }; }
+  // the slug's whole directory (`workspacePath`: <local>/ws/<slug>/<the toolkit's last components>)
+  const remove = () => rm(path.join(local, "ws", slug), { recursive: true, force: true });
+  for (const gen of gens) {
+    try {
+      const ws = await ensureWorkspace(cfg.toolkitRoot, slug, { gen, log, localRoot: local });
+      const diff = await baselineDiffers(ws.path, cfg.lib, want);
+      if (!diff) return { path: ws.path, gen, remove };
+      whys.push(`generation ${gen}: ${diff}`);
+    } catch (err) {
+      whys.push(`generation ${gen}: ${err instanceof Error ? err.message.split("\n")[0] : String(err)}`);
+    }
+  }
+  await remove().catch(() => {});
+  return { why: `no published generation is the toolkit at ${rev.slice(0, 7)} (${whys.join("; ")})` };
+}
+
+/** The `lake build` targets of a paper: its barrel, else (a directory without one) its modules. */
+async function paperTargets(cfg: Pick<ToolkitConfig, "toolkitRoot" | "papersDir">, paper: string): Promise<string[]> {
+  const stem = paper.split(".")[1] ?? "";
+  if (existsSync(path.join(cfg.papersDir, `${stem}.lean`))) return [paper];
+  const out: string[] = [];
+  const walk = async (dir: string): Promise<void> => {
+    for (const e of await readdir(dir, { withFileTypes: true }).catch(() => [])) {
+      const abs = path.join(dir, e.name);
+      if (e.isDirectory()) { if (e.name !== ".lake" && e.name !== "tmp") await walk(abs); }
+      else if (e.isFile() && e.name.endsWith(".lean")) out.push(path.relative(cfg.toolkitRoot, abs).replace(/\.lean$/, "").split(path.sep).join("."));
+    }
+  };
+  await walk(path.join(cfg.papersDir, stem));
+  return out.sort();
+}
+
+/** What a baseline build's command prints when the lake shim would not build in the workspace. */
+const HELD_OFF_MARK = "PF_LAKE_SHIM_HELD_OFF";
+
+/** `verifyGarden`, always in the shared tree (a workspace never builds the edits). */
+export function verifyGarden(args: Parameters<typeof verifyGardenHere>[0]): Promise<VerifyGardenResult> {
+  return withSharedTree(() => verifyGardenHere(args));
+}
+
+async function verifyGardenHere(args: {
   toolkit: ToolkitConfig;
   md: string;
   log: (m: string) => void;
@@ -189,11 +351,12 @@ export async function verifyGarden(args: {
   }
 
   // Paper theorem/lemma statements: unchanged (only proofs and imports may change).
-  const paperDecls: string[] = [];
+  const paperDecls: Array<{ name: string; paper: string }> = [];
   for (const p of changedPapers) {
     const old = d.git(["show", `${baseline}:${p}`], root);
     const nowText = existsSync(path.join(root, p)) ? await readFile(path.join(root, p), "utf8") : "";
-    for (const s of declarationSpans(nowText)) if (THEOREM_KINDS.has(s.kind)) paperDecls.push(s.name);
+    const paper = moduleOf(p).split(".").slice(0, 2).join(".");
+    for (const s of declarationSpans(nowText)) if (THEOREM_KINDS.has(s.kind)) paperDecls.push({ name: s.name, paper });
     if (old.code !== 0) continue;
     for (const c of changedStatements(old.stdout, nowText, renames)) {
       problems.push(c.after === null
@@ -202,28 +365,106 @@ export async function verifyGarden(args: {
     }
   }
 
-  // The commands: toolkit build, papers build, axioms, lints, index — each log kept in full.
+  // The papers the edits reach must build; the others are built too, a failure only reported.
+  const changedToolkit = [...new Set([
+    ...lean.filter((p) => p.startsWith(`${cfg.lib}/`) || p === `${cfg.lib}.lean`).map(moduleOf),
+    ...[...textsBefore.keys()].filter((m) => !textsAfter.has(m)),
+  ])];
+  const library = await libraryPapers(cfg);
+  const reached = await papersReached(cfg, changedToolkit, changedPapers.map(moduleOf));
+  const required = [...library.barrel, ...library.others].filter((p) => reached.has(p));
+  const others = library.barrel.filter((p) => !reached.has(p));
+  const reported: string[] = [];
+  const unbuilt = new Set<string>();
+  const changedPaperSet = new Set(changedPapers.map((p) => moduleOf(p).split(".").slice(0, 2).join(".")));
+  const reachedAll = [...required, ...library.noBarrel.filter((p) => reached.has(p))].sort();
+  const targetsOf = new Map<string, string[]>();
+  for (const p of reachedAll) targetsOf.set(p, await paperTargets(cfg, p));
+  const reachedTargets = [...targetsOf.values()].flat();
+  // A reached paper that does not build after the edits: fatal when the edits changed it, or when it
+  // builds against the toolkit as it was before them (a workspace pinned to the generation of the
+  // commit checked against, `baselineWorkspace`) — or when that cannot be told. Only a paper failing
+  // there too is reported.
+  let baselineWs: BaselineWorkspace | { why: string } | null = null;
+  const judgeFailing = async (failing: readonly string[], logFile: string): Promise<string[]> => {
+    const fatal: string[] = [];
+    for (const p of failing) {
+      if (changedPaperSet.has(p)) { fatal.push(`${p}: changed by the edits and does not build`); continue; }
+      baselineWs ??= await (d.baselineWorkspace ?? ((c, rev, slug, l) => realBaselineWorkspace(c, rev, d.git, slug, l)))(cfg, baseline, baselineSlug(stamp), args.log);
+      if ("why" in baselineWs) { fatal.push(`${p}: does not build, and whether it did before the edits cannot be told — ${baselineWs.why}`); continue; }
+      const unpinned = await baselinePinProblem(baselineWs.path, root, baselineWs.gen);
+      if (unpinned) { fatal.push(`${p}: does not build, and whether it did before the edits cannot be told — ${unpinned}`); continue; }
+      const shim = path.join(LAKE_SHIM_DIR, "lake");
+      const cmd = `env -u ${LAKE_LOCK_HELD_ENV} PAPERFORMALIZER_LAKE_SHIM=1 ${LEAN_WS_ENV}=${shq(baselineWs.path)} ${shq(shim)} build ${targetsOf.get(p)!.join(" ")}; c=$?; [ $c -eq 75 ] && echo ${HELD_OFF_MARK}; exit $c`;
+      const r = await d.run(cmd, root);
+      const blog = logFile.replace(/\.log$/, `-baseline-${p.replace(/\W+/g, "_")}.log`);
+      await writeFile(blog, `$ (${root}) ${cmd}\n${r.log}`, "utf8");
+      if (r.code === 0) fatal.push(`${p}: builds against the toolkit before the edits (generation ${baselineWs.gen}) but not after — log: ${blog}`);
+      else if (r.timedOut || r.log.includes(HELD_OFF_MARK)) fatal.push(`${p}: does not build, and its baseline build did not run to an end — log: ${blog}`);
+      else {
+        unbuilt.add(p);
+        reported.push(`${p} does not build, before the edits too (generation ${baselineWs.gen}) — not counted against them; logs: ${logFile}, ${blog}`);
+      }
+    }
+    return fatal;
+  };
+
+  // The commands: toolkit build, papers builds, axioms, lints, index — each log kept in full.
   const toolsDir = args.toolsDir ?? paperFormalizerToolsDir();
   const indexStep = args.indexStep !== undefined ? args.indexStep : await detectToolkitIndexStep(cfg, realApplyDeps);
-  const axiomDecls = [...after.keys(), ...paperDecls];
   const probe = path.join(logDir, "axioms.lean");
-  await writeFile(probe, axiomsProbeText([cfg.lib, ...changedPapers.map(moduleOf)], axiomDecls), "utf8");
   const axiomsStep: GateStep = { label: "axioms", cmd: `lake env lean ${shq(probe)}`, cwd: root };
+  const REQUIRED = "lake build papers the edits reach";
+  const OTHERS = "papers the edits do not reach";
   const chain = toolkitGateChain(cfg, toolsDir, indexStep, axiomsStep);
-  chain.splice(1, 0, { label: "lake build papers", cmd: `lake build ${cfg.papersLib}`, cwd: root });
+  chain.splice(1, 0,
+    ...(reachedTargets.length ? [{ label: REQUIRED, cmd: `lake build ${reachedTargets.join(" ")}`, cwd: root }] : []),
+    ...(others.length ? [{ label: OTHERS, cmd: `lake build ${others.join(" ")}`, cwd: root }] : []));
+  let axiomDecls: string[] = [];
   let built = true;
-  for (const [i, step] of chain.entries()) {
-    const r = await d.run(step.cmd, step.cwd);
-    const logFile = path.join(logDir, `${String(i + 1).padStart(2, "0")}-${step.label.replace(/\W+/g, "_")}.log`);
-    await writeFile(logFile, `$ (${step.cwd}) ${step.cmd}\n${r.log}`, "utf8");
-    const axiomsBad = step.label === "axioms" && r.code === 0 ? axiomsProbeFailure(r.log, axiomDecls) : null;
-    if (r.code !== 0 || r.timedOut || axiomsBad) {
-      problems.push(`${step.label} failed${axiomsBad ? `: ${axiomsBad}` : ""} — full log: ${logFile}`);
-      if (step.label.startsWith("lake build")) { built = false; break; }
+  try {
+    for (const [i, step] of chain.entries()) {
+      if (step === axiomsStep) {
+        // every toolkit declaration, and the theorems of each changed paper that builds
+        axiomDecls = [...after.keys(), ...paperDecls.filter((x) => !unbuilt.has(x.paper)).map((x) => x.name)];
+        const imports = [cfg.lib, ...changedPapers.map(moduleOf).filter((m) => !unbuilt.has(m.split(".").slice(0, 2).join(".")))];
+        await writeFile(probe, axiomsProbeText(imports, axiomDecls), "utf8");
+      }
+      const r = await d.run(step.cmd, step.cwd);
+      const logFile = path.join(logDir, `${String(i + 1).padStart(2, "0")}-${step.label.replace(/\W+/g, "_")}.log`);
+      await writeFile(logFile, `$ (${step.cwd}) ${step.cmd}\n${r.log}`, "utf8");
+      const failed = r.code !== 0 || r.timedOut;
+      if (step.label === OTHERS) {
+        if (failed) reported.push(`papers the edits do not reach (none imports a changed module) do not all build — not the edits' doing; full log: ${logFile}`);
+        continue;
+      }
+      if (step.label === REQUIRED && failed && !r.timedOut) {
+        // which of them do not build
+        const failing: string[] = [];
+        for (const p of reachedAll) if ((await d.run(`lake build --no-build ${targetsOf.get(p)!.join(" ")}`, root)).code !== 0) failing.push(p);
+        const fatal = failing.length ? await judgeFailing(failing, logFile) : [`the build failed, yet each paper is up to date`];
+        if (fatal.length === 0) continue;
+        problems.push(`${step.label} failed (${fatal.join("; ")}) — full log: ${logFile}`);
+        built = false;
+        break;
+      }
+      const axiomsBad = step.label === "axioms" && r.code === 0 ? axiomsProbeFailure(r.log, axiomDecls) : null;
+      if (failed || axiomsBad) {
+        problems.push(`${step.label} failed${axiomsBad ? `: ${axiomsBad}` : ""} — full log: ${logFile}`);
+        if (step.label.startsWith("lake build")) { built = false; break; }
+      }
     }
+  } finally {
+    // this verify's own baseline workspace: removed once its builds are over
+    const bw = baselineWs as BaselineWorkspace | { why: string } | null;
+    if (bw && "remove" in bw) await bw.remove().catch(() => {});
   }
 
-  // The toolkit graph's health against HEAD (main view): regressions are reported, not failures.
+  // The toolkit graph's health against HEAD (main view), the toolkit alone on both sides: the scan
+  // after is the toolkit's only (a shared hold of no paper, nothing but the toolkit built — never the
+  // whole library's build); the committed graph is cut to its toolkit. Regressions are reported, not
+  // failures. (Always the shared tree, never `withScanRoot`'s workspace, 2026-11-10: the edits it
+  // judges are in the shared tree, in no generation yet.)
   let regressions: string[] = [];
   if (built) {
     const graphAt = d.git(["show", `${baseline}:doc/toolkit_graph.json`], root);
@@ -231,47 +472,48 @@ export async function verifyGarden(args: {
     if (graphAt.code === 0) {
       const committedGraph = graphAt.stdout; // the committed file, not model output
       try {
-        beforeGraph = JSON.parse(committedGraph) as ToolkitGraph;
+        beforeGraph = toolkitOnly(JSON.parse(committedGraph) as ToolkitGraph);
       } catch {
         args.log(`the committed doc/toolkit_graph.json is unreadable; the health comparison is skipped`);
       }
     }
-    const afterGraph = await (args.graphAfter ?? (() => refreshToolkitGraph({ toolkit: cfg, log: args.log })))().catch(() => null);
+    const afterGraph = await (args.graphAfter ?? (() => refreshToolkitGraph({ toolkit: cfg, log: args.log, scope: { qid: "_garden", papers: [] }, local: false })))()
+      .catch((err: unknown) => { args.log(`the toolkit graph after the edits could not be taken (${err instanceof Error ? err.message.split("\n")[0] : String(err)}); the health comparison is skipped`); return null; });
     if (beforeGraph && afterGraph) {
       const touched = [...new Set([...renames.values(), ...moved.keys()])];
-      regressions = healthRegressions(toolkitHealth(beforeGraph), toolkitHealth(afterGraph), touched);
+      regressions = healthRegressions(toolkitHealth(beforeGraph), toolkitHealth(toolkitOnly(afterGraph)), touched);
     }
   }
 
   const ok = problems.length === 0;
   let recorded = 0;
   if (ok) {
-    const ledger = await loadLedger(cfg.ledgerPath);
     const decidedAt = stamp;
-    const decls = (ledger.declarations as Array<Record<string, unknown>>).map((x) => {
-      const name = String(x.name);
-      const renamed = renames.get(name);
-      const nowName = renamed ?? name;
-      const mod = moved.get(nowName);
-      const owners = Array.isArray(x.owners) ? { owners: (x.owners as string[]).map((o) => renames.get(o) ?? o) } : {};
-      return {
-        ...x, name: nowName, ...owners,
-        ...(renamed ? { renamed_from: name } : {}),
-        ...(mod ? { module: mod, division: mod.split(".")[1] } : {}),
-      };
+    recorded = await updateLedger(cfg.ledgerPath, (ledger) => {
+      const decls = (ledger.declarations as Array<Record<string, unknown>>).map((x) => {
+        const name = String(x.name);
+        const renamed = renames.get(name);
+        const nowName = renamed ?? name;
+        const mod = moved.get(nowName);
+        const owners = Array.isArray(x.owners) ? { owners: (x.owners as string[]).map((o) => renames.get(o) ?? o) } : {};
+        return {
+          ...x, name: nowName, ...owners,
+          ...(renamed ? { renamed_from: name } : {}),
+          ...(mod ? { module: mod, division: mod.split(".")[1] } : {}),
+        };
+      });
+      const records = batch.items.map((it) => ({
+        kind: "garden_decision", garden: batch.created, item: it.finding_id, action: it.action, decision: decisions[it.finding_id],
+        title: it.title, decided_at: decidedAt,
+        ...(carried.includes(it.finding_id) ? { applied: true, verified_at: decidedAt, baseline } : { applied: false }),
+      }));
+      const kept = (ledger.decisions as Array<Record<string, unknown>>).filter((x) =>
+        !(x.kind === "garden_decision" && x.garden === batch.created && records.some((r) => r.item === x.item)));
+      const changes = renames.size || moved.size
+        ? [{ kind: "garden_verified", garden: batch.created, at: decidedAt, baseline, renamed: Object.fromEntries(renames), moved: Object.fromEntries(moved) }]
+        : [];
+      return { ledger: { ...ledger, declarations: decls as typeof ledger.declarations, decisions: [...kept, ...records, ...changes] }, result: records.length };
     });
-    const records = batch.items.map((it) => ({
-      kind: "garden_decision", garden: batch.created, item: it.finding_id, action: it.action, decision: decisions[it.finding_id],
-      title: it.title, decided_at: decidedAt,
-      ...(carried.includes(it.finding_id) ? { applied: true, verified_at: decidedAt, baseline } : { applied: false }),
-    }));
-    const kept = (ledger.decisions as Array<Record<string, unknown>>).filter((x) =>
-      !(x.kind === "garden_decision" && x.garden === batch.created && records.some((r) => r.item === x.item)));
-    const changes = renames.size || moved.size
-      ? [{ kind: "garden_verified", garden: batch.created, at: decidedAt, baseline, renamed: Object.fromEntries(renames), moved: Object.fromEntries(moved) }]
-      : [];
-    await writeFile(cfg.ledgerPath, serializeLedger({ ...ledger, declarations: decls as typeof ledger.declarations, decisions: [...kept, ...records, ...changes] }), "utf8");
-    recorded = records.length;
   }
-  return { ok, problems, regressions, renames, moved, baseline, logDir, recorded };
+  return { ok, problems, regressions, reported, renames, moved, baseline, logDir, recorded };
 }

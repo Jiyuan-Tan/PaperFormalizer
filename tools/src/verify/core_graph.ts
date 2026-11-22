@@ -130,6 +130,9 @@ export function isReadingAddition(a: CoreAssumption): boolean {
 }
 /** The marker that opens a patch's proof change inside a statement's `proof_tex`. */
 export const PROOF_CHANGE_MARKER = "[Proof change (minimal patch):";
+/** The line that opens the `proof_tex` of a statement whose printed proof only had typos corrected
+ * (`patches.ts` `typo_fixes`): no repair, so no proof change is reported for it. */
+export const TYPO_FIX_MARKER = "[The printed proof, its typos corrected (printed -> intended):";
 
 /**
  * A build that failed because of its INPUTS — a hand-edited `core.transcribed.json` that is not
@@ -461,6 +464,9 @@ export interface PatchFileLike {
   /** Readings the paper's owner adopted when withdrawing a finding (`owner_rulings.ts`): each
    * becomes an `ass:pin-owner-<n>` wired into the node (a statement) or every statement using it. */
   owner_readings?: OwnerReading[];
+  /** The typos the referee listed in proofs, corrected by the runner (`patches.ts` `TypoFixSchema`):
+   * `proof_note` (derived) is the node's proof with them applied — its repair's ops too, when it has one. */
+  typo_fixes?: Array<{ node: string; proof_note?: string; typos?: Array<{ printed: string; intended: string; unit: string | null }> }>;
 }
 
 /** One corollary a repair splits off its node (`patches.json`, a patch's or a suggested repair's `corollaries`). */
@@ -554,10 +560,13 @@ export function symbolsUsedByNode(core: Core, id: string): Set<string> {
  * their structured state (pinned / left open — with the line its shard prints —, redefined later);
  * a hypothesis's own readings, printed as binding on it, are its own extra (`ownReadingsExtra`). Of a symbol entry's scoped clauses a
  * basis reads only those applicable to the node (`applicableClauses`). A cache recorded under another
- * scheme is dropped (every node graded afresh) — but for scheme 4, carried over (`basisInputsV4`). A
+ * scheme is dropped (every node graded afresh) — but for schemes 4 and 5, carried over (`basisInputsV4`;
+ * scheme 5, `basisInputs` with `scheme` 5). A
  * basis never includes prompt text or the code version: editing a prompt never re-opens a verdict.
+ * Nor where the node is printed (scheme 6): its `tex_locator` is read for its environment and label
+ * only, so an author's revision that moves a result's lines re-opens nothing (`--revise`).
  */
-export const BASIS_SCHEME = 5;
+export const BASIS_SCHEME = 6;
 
 /** Fields of a node DERIVED from other nodes' wiring (the users' side, `normalizeCore`): never read
  * into a basis. */
@@ -565,12 +574,15 @@ export const DERIVED_USER_FIELDS = ["used_by"] as const;
 
 /** A node as a basis reads it: without its derived user-side fields; a V1.5-appended condition (a
  * pinned reading, a bookkeeping condition) by its meaning — its condition and reason normalized
- * (`normalizeBasisText`). A statement's text never. */
-function basisView(n: unknown): unknown {
+ * (`normalizeBasisText`). A statement's text never. Its `tex_locator` by its environment and label
+ * (`lines`: whole, as schemes 4 and 5 read it). */
+function basisView(n: unknown, lines = false): unknown {
   if (n == null) return null;
   if (typeof n !== "object") return n;
   const out = { ...(n as Record<string, unknown>) };
   for (const f of DERIVED_USER_FIELDS) delete out[f];
+  const at = out.tex_locator as { env?: unknown; label?: unknown } | undefined;
+  if (!lines && at && typeof at === "object") out.tex_locator = { env: at.env ?? null, label: at.label ?? null };
   if (isReadingAddition(out as unknown as CoreAssumption)) {
     if (typeof out.condition === "string") out.condition = normalizeBasisText(out.condition);
     const bk = out.bookkeeping as Record<string, unknown> | undefined;
@@ -872,6 +884,11 @@ export function basisInputs(
   extra: BasisExtra = new Map(),
   own?: string,
   verdictOf: (dep: string) => string | undefined = () => undefined,
+  /** TRANSITION (remove once every run on file has passed one V1.5 pass under scheme 6): 5 computes
+   *  the scheme-5 basis — the node's lines read with it — to carry a verdict recorded under it;
+   *  `linesBefore`, the node's locator as it was when that verdict was given (a revision moved it). */
+  scheme: 5 | typeof BASIS_SCHEME = BASIS_SCHEME,
+  linesBefore?: unknown,
 ): BasisInputs {
   const ix = shownIndex(core);
   const node = ix.byId.get(id);
@@ -895,7 +912,7 @@ export function basisInputs(
     const names = [...new Set(rs.map((r) => r.symbol))].sort();
     return names.length > 0 ? `\nreadings: ${JSON.stringify(names)}` : "";
   };
-  const ownView = JSON.stringify(basisView(node));
+  const ownView = JSON.stringify(basisView(scheme === 5 && linesBefore !== undefined && node ? { ...node, tex_locator: linesBefore } : node, scheme === 5));
   const text = extra.has(id) ? asExtraEntry(extra.get(id)!).text : undefined;
   const parts = [
     ownView + (text !== undefined ? `\n${text}` : "") + bound(id),
@@ -913,7 +930,7 @@ export function basisInputs(
   const hashSets = (m: Map<string, Set<string>>): Record<string, string> =>
     Object.fromEntries([...m.keys()].sort().map((k) => [k, sha([...m.get(k)!].sort().join("\n"))] as const));
   return {
-    scheme: BASIS_SCHEME,
+    scheme,
     ...(own !== undefined ? { own: sha(own) } : {}),
     node: sha(ownView),
     closure: sha(parts.join("\n")),
@@ -958,14 +975,14 @@ export function basisInputsV4(core: Core, id: string, extra: BasisExtra = new Ma
       (meaning.get(r.symbol) ?? meaning.set(r.symbol, new Set()).get(r.symbol)!).add(head + normalizeBasisText(r.text));
     }
     const bound = [...new Set(rs.map((r) => r.symbol))].sort();
-    return JSON.stringify(basisView(byId.get(k))) + (e.text !== undefined ? `\n${e.text}` : "") + (bound.length > 0 ? `\nreadings: ${JSON.stringify(bound)}` : "");
+    return JSON.stringify(basisView(byId.get(k), true)) + (e.text !== undefined ? `\n${e.text}` : "") + (bound.length > 0 ? `\nreadings: ${JSON.stringify(bound)}` : "");
   });
   const hashSets = (m: Map<string, Set<string>>): Record<string, string> =>
     Object.fromEntries([...m.keys()].sort().map((k) => [k, sha([...m.get(k)!].sort().join("\n"))] as const));
   return {
     scheme: 4,
     ...(own !== undefined ? { own: sha(own) } : {}),
-    node: sha(JSON.stringify(basisView(byId.get(id)))),
+    node: sha(JSON.stringify(basisView(byId.get(id), true))),
     closure: sha(parts.join("\n")),
     symbols: Object.fromEntries(usedEntries.map((x) => [x.name, symbolEntryHash(x, applicableClauses(core, id, x.scoped).map((c) => scopedClauseText(c, (r) => resultTexName(core, r))))] as const)),
     readings: hashSets(meaning),
@@ -1120,6 +1137,14 @@ export function compilePatchEdits(transcribed: Core, file: PatchFileLike): { edi
     edits.push({ op: "unwire", statement, dep });
     (unwired.get(statement) ?? unwired.set(statement, new Set()).get(statement)!).add(dep);
   };
+  // A proof's typos, corrected by the runner (`typo_fixes`): its proof carries them, with its repair's
+  // ops when it has a repair (one derived text), else under a line of its own that names no repair.
+  const typoProof = new Map((file.typo_fixes ?? []).flatMap((t) => (t.proof_note && statements.has(t.node) && !gone.has(t.node) ? [[t.node, t] as const] : [])));
+  const typoProofEdit = (node: string): GraphEdit => {
+    const t = typoProof.get(node)!;
+    const swaps = (t.typos ?? []).filter((x) => x.unit).map((x) => `${x.printed} -> ${x.intended}`.replace(/\s+/gu, " "));
+    return { op: "set_proof", id: node, text: `${TYPO_FIX_MARKER} ${swaps.join("; ")}]\n${t.proof_note}` };
+  };
   for (const p of file.patches) {
     if (!ids.has(p.node) || gone.has(p.node)) continue;
     const st = statements.get(p.node);
@@ -1145,13 +1170,16 @@ export function compilePatchEdits(transcribed: Core, file: PatchFileLike): { edi
     if (p.corrected_statement !== null) edits.push({ op: "set_statement", id: p.node, statement: p.corrected_statement });
     if (!st) continue;
     if (revisesProof(p)) {
-      // The printed proof, revised by the repair's ops (the derived `proof_note`): the F stages and the
-      // confirming referee read it.
-      edits.push({ op: "set_proof", id: p.node, text: `${PROOF_CHANGE_MARKER} the printed proof, revised step by step]\n${p.proof_note}` });
+      // The printed proof, revised by the repair's ops (the derived `proof_note`; with the proof's typos
+      // corrected, the typo fix's): the F stages and the confirming referee read it.
+      edits.push({ op: "set_proof", id: p.node, text: `${PROOF_CHANGE_MARKER} the printed proof, revised step by step]\n${typoProof.get(p.node)?.proof_note ?? p.proof_note}` });
     } else {
+      if (typoProof.has(p.node)) edits.push(typoProofEdit(p.node));
       edits.push({ op: "append_proof", id: p.node, text: `${PROOF_CHANGE_MARKER} ${p.proof_note}]` });
     }
   }
+  const patched = new Set(file.patches.map((p) => p.node));
+  for (const node of typoProof.keys()) if (!patched.has(node)) edits.push(typoProofEdit(node));
   // A result the repair's own text cites (`\ref` and its kin) is one it uses: wired in, unless the label
   // names no single result or the edge would close a cycle.
   const byLabel = new Map<string, string[]>();
@@ -1489,10 +1517,11 @@ export interface BindingReading {
  * that settle how the node is to be read. For a statement: every pinned reading and bookkeeping
  * condition wired into it. For an assumption or definition: the pinned readings of that node, and
  * those wired into every statement using it (its reading is fixed where it is used; `ownOnly`
- * drops these). A condition V1.5 appended has none. Deduplicated, in core order.
+ * drops these). A condition appended to the core (by V1.5, a repair or the owner) has none of its own;
+ * unless `ownOnly`, an appended reading carries the owner's rulings on the node it reads (the others,
+ * for an owner's ruling). Deduplicated, in core order.
  */
 export function bindingReadings(core: Core, id: string, opts: { ownOnly?: boolean } = {}): BindingReading[] {
-  if (core.assumptions.some((a) => a.id === id && isReadingAddition(a))) return [];
   const reviewAdded = core.assumptions.filter(isReadingAddition);
   const read = (a: CoreAssumption, owner: string): BindingReading | null => {
     const reason = a.bookkeeping?.reason ?? "";
@@ -1501,6 +1530,14 @@ export function bindingReadings(core: Core, id: string, opts: { ownOnly?: boolea
     }
     return a.id.startsWith("ass:bk-") ? { id: a.id, kind: "bookkeeping", of: owner, text: a.condition } : null;
   };
+  const addition = reviewAdded.find((a) => a.id === id);
+  if (addition) {
+    // A generated reading has no readings of its own (`ownOnly`: none, so V1.5's basis of it is
+    // unchanged). But the owner's ruling on its source node also binds a review of that reading.
+    const of = opts.ownOnly ? undefined : read(addition, id)?.of;
+    return of ? reviewAdded.map((a) => read(a, of)).filter((r): r is BindingReading =>
+      r !== null && r.id !== id && r.id.startsWith(OWNER_PIN_PREFIX) && r.of === of) : [];
+  }
   const wiredInto = (stId: string): BindingReading[] => {
     const st = core.statements.find((s) => s.id === stId);
     if (!st) return [];
@@ -1639,7 +1676,7 @@ interface RepairIdFields {
 
 /**
  * Statement X's content now stands on node `moves[X]` (a V1 restructuring removed or renamed X —
- * `orphan_records.ts`). Every name of X follows it: the patch, `unfixable` entry, owner reading,
+ * `orphan_records.ts`). Every name of X follows it: the patch, `unfixable` entry, owner reading, typo fix,
  * error-ledger entry, finding, key-result mark and ruled-out / rejection / receipt entries on X (an
  * error-ledger entry the carrier already has is kept), and X among the ids a repair lists (its
  * hypotheses, the repairs it follows, its blocks' hypotheses); X's revise-round and
@@ -1709,5 +1746,6 @@ export function remapNodeIds<F extends PatchFileLike>(moves: Record<string, stri
       return { ...u, node: to(u.node), ...(sr ? { suggested_repair: repair(sr) } : {}), ...(follows ? { consequence_of: ids(follows) } : {}) };
     }),
     ...(file.owner_readings ? { owner_readings: file.owner_readings.map((r) => ({ ...r, node: to(r.node) })) } : {}),
+    ...(file.typo_fixes ? { typo_fixes: file.typo_fixes.map((t) => ({ ...t, node: to(t.node) })) } : {}),
   };
 }

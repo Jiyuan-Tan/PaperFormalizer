@@ -4,6 +4,8 @@ runs/**/uploads/
 .lake-build.lock
 runs/**/dry_run_prompts/
 .toolkit-promote.lock
+.toolkit-statements.lock
+.toolkit-ledger.lock
 # a share in progress: its poll token and the claim link (anyone holding it could confirm the share)
 runs/**/share.json
 # bulky or rewritten by a run: run logs, agent prompt dumps, fetched or downloaded cited sources

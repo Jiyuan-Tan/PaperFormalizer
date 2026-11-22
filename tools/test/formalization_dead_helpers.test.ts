@@ -1,6 +1,9 @@
-import { mkdir, mkdtemp, rm, writeFile } from "node:fs/promises";
+import { execFile } from "node:child_process";
+import { link, mkdir, mkdtemp, rm, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import path from "node:path";
+import { fileURLToPath, pathToFileURL } from "node:url";
+import { promisify } from "node:util";
 import { describe, expect, it } from "vitest";
 import { sweepDeadHelpers } from "../src/formalization/dead_helpers.js";
 
@@ -137,4 +140,46 @@ lemma dead_three : True := by trivial
       await rm(dir, { recursive: true, force: true });
     }
   });
+
+  it("counts consumers across a package corpus several times its heap without holding it (live F4 OOM, 2026-11-08)", async () => {
+    // Production counts consumers package-wide (every paper's sources, ~0.7 GB live). Holding that
+    // corpus raw + masked overflowed the runner's heap after each F4 review; the sweep must keep
+    // memory bounded by one source file, not by the package.
+    const root = await mkdtemp(path.join(tmpdir(), "dead-helpers-heap-"));
+    try {
+      const paper = path.join(root, "Papers", "A");
+      const sibling = path.join(root, "Papers", "B");
+      await mkdir(paper, { recursive: true });
+      await mkdir(sibling, { recursive: true });
+      await writeFile(
+        path.join(paper, "Helpers.lean"),
+        "lemma reused_bound : True := trivial\nlemma dead_bound : True := trivial\n",
+      );
+      // Non-Latin-1 text makes V8 store each copy two bytes per char, as real Lean sources do.
+      const line = "example : ∀ n : ℕ, n + 0 = n := fun _ => rfl -- αβγ\n";
+      const pad = line.repeat(Math.ceil(1_000_000 / Buffer.byteLength(line)));
+      await writeFile(path.join(sibling, "Pad.lean"), `${pad}example : True := reused_bound\n`);
+      // A disposable probe is no consumer, however deep its tmp/ tree.
+      await mkdir(path.join(sibling, "tmp", "deep"), { recursive: true });
+      await writeFile(path.join(sibling, "tmp", "deep", "Probe.lean"), "example : True := dead_bound\n");
+      const copies = 120; // hard links: ~120 MB of distinct files to the sweep, ~1 MB on disk
+      for (let i = 0; i < copies; i++) await link(path.join(sibling, "Pad.lean"), path.join(sibling, `Pad${i}.lean`));
+      const heapMb = 64;
+      const corpusChars = (copies + 1) * pad.length;
+      expect(corpusChars * 2 * 2).toBeGreaterThan(4 * heapMb * 1024 * 1024); // raw + masked at 2 B/char: 4x the heap
+      const tools = fileURLToPath(new URL("..", import.meta.url));
+      const mod = pathToFileURL(path.join(tools, "src/formalization/dead_helpers.ts")).href;
+      const script = `const { sweepDeadHelpers } = await import(${JSON.stringify(mod)});
+        const dead = await sweepDeadHelpers(${JSON.stringify(paper)}, new Set(), { searchRoot: ${JSON.stringify(path.dirname(paper))} });
+        console.log(JSON.stringify(dead));`;
+      const { stdout } = await promisify(execFile)(
+        process.execPath,
+        [`--max-old-space-size=${heapMb}`, "--import", "tsx", "--input-type=module", "-e", script],
+        { cwd: tools, timeout: 90_000 },
+      );
+      expect(JSON.parse(stdout)).toEqual([{ decl: "dead_bound", file: "Helpers.lean", line: 2 }]);
+    } finally {
+      await rm(root, { recursive: true, force: true });
+    }
+  }, 120_000);
 });

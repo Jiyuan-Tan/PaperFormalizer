@@ -6,7 +6,7 @@ import path from "node:path";
 import { afterAll, describe, expect, it, vi } from "vitest";
 import { buildArgv, displayCommand, setDecisions } from "../../src/ui/actions.js";
 import { paperNames, paperUses, parseModule } from "../../src/ui/library_model.js";
-import { texCut, closedProofs, liveHeadline, markStarted, ownerReadingsByComment, redoingOf, repairKey, runDetail, newerRuns, runLive, runSummary, stageIndexOf, stageStates, failedStageOf, validSlug } from "../../src/ui/run_model.js";
+import { texCut, closedProofs, liveHeadline, markStarted, ownerReadingsByComment, redoingOf, repairKey, repairPlace, runDetail, newerRuns, runLive, runSummary, stageIndexOf, stageStates, failedStageOf, validSlug } from "../../src/ui/run_model.js";
 import { gunzipSync } from "node:zlib";
 import { readFileSync } from "node:fs";
 import { brotliDecompressSync } from "node:zlib";
@@ -251,6 +251,28 @@ Body.\end{document}`;
 \end{document}`;
     const p = renderPaper({ files: { "m.tex": annotated }, main: "m.tex", anchors: [{ node: "thm:variance", file: "m.tex", line: String.raw`\textbf{Theorem 2.} \emph{As $n\to\infty$ the variance shrinks.}` }] });
     expect(p.anchors["thm:variance"]).toBeDefined();
+  });
+  it("never sets a short delimiter's anchor inside a longer command (`\\[` in `\\\\[2pt]`) when the copy's count differs", () => {
+    // the source held `\[` twice (the anchor's is the second, at line 7); the annotated copy holds it more
+    // often, and the occurrence nearest line 7 is the row break of an align
+    const annotated = String.raw`\begin{document}
+\[ x \]
+\[ y \]
+\begin{align}
+a &= b \\[2pt]
+c &= d
+\end{align}
+More.
+\[
+e = f.
+\]
+\end{document}`;
+    const p = renderPaper({ files: { "m.tex": annotated }, main: "m.tex", anchors: [{ node: "lem:seg", file: "m.tex", line: "\\[", at: 7, nth: [1, 2] }] });
+    expect(p.health.mathFailures).toEqual([]);
+    expect(p.html).not.toContain("tcAnchor");
+    // the display nearest line 7 that a `\[` opens: the one after "More.", not the align's row break
+    const at = p.html.indexOf(`id="${p.anchors["lem:seg"]}"`);
+    expect(at).toBeGreaterThan(p.html.indexOf("More."));
   });
   it("anchors a condition at its own text, before the formula when that text starts inside one", () => {
     const src = String.raw`\begin{document}First. Assume no ties among the ranks. Then
@@ -688,7 +710,7 @@ describe("an owner's reading: which note states which entry on file, and its car
   it("the card is tagged as the owner's reading, says what it is, and offers Edit / Remove only for an entry on file while the run is at rest", () => {
     const js = readFileSync(path.join(__dirname, "..", "..", "src", "ui", "static", "app.js"), "utf8").replace(/\r\n/g, "\n");
     const line = (start: string) => js.slice(js.indexOf(start), js.indexOf("\n", js.indexOf(start)));
-    const cardHTML = new Function("esc", "envOf", `const SNAP = null;\n${line("const KIND_TAG")}\n${line("const CHIP")}\n${js.slice(js.indexOf("function cardHTML("), js.indexOf("/* Edit / Save / Cancel / Remove"))}; return cardHTML;`)(
+    const cardHTML = new Function("esc", "envOf", `const SNAP = null;\nconst frozen = () => false;\n${line("const KIND_TAG")}\n${line("const CHIP")}\n${js.slice(js.indexOf("function cardHTML("), js.indexOf("/* Edit / Save / Cancel / Remove"))}; return cardHTML;`)(
       (x: string) => String(x).replace(/&/g, "&amp;").replace(/</g, "&lt;"), () => null,
     ) as (c: unknown, r: unknown, o?: unknown) => string;
     const c = { id: "c3", kind: "reading-owner", label: "Clarification (author)", html: "<i>uniform</i>" };
@@ -1722,19 +1744,16 @@ setTimeout(() => {}, 60_000);
       // handed over: armed again, the same stopped apply is not news
       expect((await watch(root, "--timeout", "1")).code).toBe(2);
       // an apply that began and ended while no watcher was armed is reported by its record alone …
-      writeFileSync(path.join(run, "proposals", "move_pending.json"), "{}");
+      writeFileSync(path.join(run, "proposals", "B.decisions.json"), JSON.stringify({ decided_at: "2026-10-02T00:00:01.000Z" }));
       expect((await watch(root, "--timeout", "5")).out).toContain("ended without completing it");
       // one refused before it recorded anything is reported with what it said
-      rmSync(path.join(run, "proposals", "move_pending.json"));
       writeFileSync(path.join(run, "proposals", "B.decisions.json"), JSON.stringify({ decided_at: "2026-09-01T00:00:00.000Z" }));
       writeFileSync(path.join(run, "proposals", "apply_failed.json"), JSON.stringify({ round: "B", at: "x", message: "refusing --apply:\n  b-one is still pending" }));
       const refused = await watch(root, "--timeout", "5");
       expect(refused.code).toBe(0);
       expect(refused.out).toMatch(/promotion round B was refused and nothing was applied[\s\S]*b-one is still pending/);
       rmSync(path.join(run, "proposals", "apply_failed.json"));
-      writeFileSync(path.join(run, "proposals", "move_pending.json"), "{}");
       // … and one that completed the round is not
-      rmSync(path.join(run, "proposals", "move_pending.json"));
       writeFileSync(path.join(run, "proposals", "B.decisions.json"), JSON.stringify({ decided_at: "2026-10-03T00:00:00.000Z" }));
       state("applied");
       expect((await watch(root, "--timeout", "1")).code).toBe(2);
@@ -1768,6 +1787,18 @@ setTimeout(() => {}, 60_000);
       r1.kill();
       expect((await next).out).toContain("the runner exited");
     } finally { r1.kill(); }
+  }, 30_000);
+  it("a run whose apply is at work (no verify runner) is running, not waiting for the owner (2026-11-11)", async () => {
+    const { root, run } = fresh();
+    const holder = spawn(process.execPath, ["-e", "setTimeout(() => {}, 60_000)"]);
+    try {
+      mkdirSync(path.join(run, "proposals"), { recursive: true });
+      writeFileSync(path.join(run, "proposals", "apply_B.pid"), `${holder.pid} host=${os.hostname()} beat=15\n`);
+      const r = await watch(root, "--timeout", "2");
+      expect(r.code).toBe(2);
+      expect(r.out).toContain("(running)");
+      expect(r.out).not.toContain("waiting for the owner");
+    } finally { holder.kill(); }
   }, 30_000);
   // Discovery of an unregistered process by argv/cwd uses Linux /proc. Heartbeat cases run everywhere.
   it.skipIf(process.platform !== "linux")("takes for the run's runner only a verify of its slug on its toolkit, not another toolkit's or a shell's that names one", async () => {
@@ -2194,7 +2225,7 @@ describe("server: the owner reports an issue with a margin comment that asks no 
   it("the control stands at the foot of a note or a clarification, not of a note awaiting a ruling", () => {
     const js = readFileSync(path.join(__dirname, "..", "..", "src", "ui", "static", "app.js"), "utf8").replace(/\r\n/g, "\n");
     const line = (start: string) => js.slice(js.indexOf(start), js.indexOf("\n", js.indexOf(start)));
-    const cardHTML = new Function("esc", "envOf", `const SNAP = null;\n${line("const KIND_TAG")}\n${line("const CHIP")}\n${js.slice(js.indexOf("function cardHTML("), js.indexOf("/* Edit / Save / Cancel / Remove"))}; return cardHTML;`)(
+    const cardHTML = new Function("esc", "envOf", `const SNAP = null;\nconst frozen = () => false;\n${line("const KIND_TAG")}\n${line("const CHIP")}\n${js.slice(js.indexOf("function cardHTML("), js.indexOf("/* Edit / Save / Cancel / Remove"))}; return cardHTML;`)(
       (x: string) => String(x).replace(/&/g, "&amp;").replace(/</g, "&lt;"), () => null,
     ) as (c: unknown, r: unknown, o?: unknown) => string;
     const c = { id: "c1", key: "k", kind: "note", label: "PaperFormalizer", html: "x" };
@@ -2208,6 +2239,35 @@ describe("server: the owner reports an issue with a margin comment that asks no 
     const own = [{ id: "ass:pin-owner-1", node: "thm:a", kind: "reading", text: "t", withdraws: 0 }];
     expect(cardHTML({ ...c, kind: "reading-owner" }, null, { own, atRest: true, draft: "t" })).not.toContain("data-flag");
   });
+});
+
+describe("server: papers held in memory", () => {
+  it("renders no paper ahead, records a changed run's formulas with no page open, and serves a paper it let go", async () => {
+    const root = mkdtempSync(path.join(tmpdir(), "tc-ui-held-"));
+    const state = (n: number) => JSON.stringify({ verify: { source: { main_file: "m.tex" } }, n });
+    const runs = Array.from({ length: 10 }, (_, i) => {
+      const run = path.join(root, "runs", `p${i}`);
+      mkdirSync(path.join(run, "source"), { recursive: true });
+      writeFileSync(path.join(run, "state.json"), state(0));
+      writeFileSync(path.join(run, "source", "m.tex"), `\\begin{document}$\\zzundef${"q".repeat(i + 1)} x$.\\end{document}`);
+      return run;
+    });
+    const cfg = { toolkitRoot: root, runsDir: path.join(root, "runs"), lib: "Toolkit", papersLib: "Papers", divisions: [], baseLibraries: [], owner: { name: "O" }, leanToolchain: "x" } as unknown as ToolkitConfig;
+    const ui = await startUiServer(cfg, { port: 0 });
+    try {
+      const record = path.join(runs[0]!, "logs", "ui_math_failures.json");
+      await new Promise((r) => setTimeout(r, 1500));
+      expect(existsSync(record)).toBe(false);
+      writeFileSync(path.join(runs[0]!, "state.json"), state(1));
+      for (let k = 0; k < 40 && !existsSync(record); k++) await new Promise((r) => setTimeout(r, 500));
+      expect(JSON.parse(readFileSync(record, "utf8")).failures).toEqual([expect.objectContaining({ tex: "\\zzundefq x" })]);
+      const base = new URL(ui.url).origin;
+      const Cookie = ((await fetch(ui.url, { redirect: "manual" })).headers.get("set-cookie") ?? "").split(";")[0]!;
+      const failures = async (slug: string) => ((await (await fetch(`${base}/api/runs/${slug}/paper`, { headers: { Cookie } })).json()) as { health: { mathFailures: Array<{ tex: string }> } }).health.mathFailures.map((f) => f.tex);
+      for (let i = 0; i < 10; i++) expect(await failures(`p${i}`)).toEqual([`\\zzundef${"q".repeat(i + 1)} x`]);
+      expect(await failures("p0")).toEqual(["\\zzundefq x"]);
+    } finally { await ui.close(); }
+  }, 60_000);
 });
 
 describe("server: formulas no renderer reads go on record for the agent", () => {
@@ -2239,6 +2299,10 @@ describe("server: formulas no renderer reads go on record for the agent", () => 
       expect((await review({ id: "d9", verdict: "approve" })).status).toBe(404);
       expect((await review({ id: "d1", verdict: "reject", guidance: "keep n >= 1" })).status).toBe(200);
       expect(JSON.parse(readFileSync(path.join(run, "orch_decisions.json"), "utf8"))[0].review).toMatchObject({ verdict: "reject", guidance: "keep n >= 1" });
+      // two approvals sent at once (the cards leave the page at the click): both recorded, neither drops the other
+      writeFileSync(path.join(run, "orch_decisions.json"), JSON.stringify([{ id: "d1", node: "round A", at: "x", text: "applied round A" }, { id: "d2", node: "round B", at: "x", text: "applied round B" }]));
+      expect((await Promise.all([review({ id: "d1", verdict: "approve" }), review({ id: "d2", verdict: "approve" })])).map((r) => r.status)).toEqual([200, 200]);
+      expect((JSON.parse(readFileSync(path.join(run, "orch_decisions.json"), "utf8")) as Array<{ review?: { verdict: string } }>).map((d) => d.review?.verdict)).toEqual(["approve", "approve"]);
       // the owner takes an answered question of the agent's off the page
       writeFileSync(path.join(run, "orch_requests.json"), JSON.stringify([{ id: "q1", at: "x", text: "which account?" }]));
       const dismiss = (id: string) => fetch(`${base}/api/runs/p1/dismiss`, { method: "POST", headers: { Cookie, "X-TC": "1" }, body: JSON.stringify({ id }) });
@@ -2357,6 +2421,9 @@ describe("paper page: mathematics written outside a formula, and a heading in th
     expect(texCut("is $n \\ge 1$?", 160)).toBe("is $n \\ge 1$?");
     expect(texCut("whether $a$ or $b_{n} \\to 0$ is meant", 22)).toBe("whether $a$ or…");
     expect(texCut("a price of \\$5 and more words", 16)).toBe("a price of \\$5 a…");
+    // a group the cut would leave open goes, with its command: no raw `\texttt{Papers/…` too long for its box
+    expect(texCut("fails in the other paper at \\texttt{Papers/HotCounting/Helpers/Divisor.lean} now", 50)).toBe("fails in the other paper at…");
+    expect(texCut("set \\{x\\} at \\texttt{a} and more", 24)).toBe("set \\{x\\} at \\texttt{a}…");
   });
 });
 
@@ -2757,6 +2824,67 @@ describe("server: the owner shares a finished paper on the public site", () => {
 // The finding: the proof map drew "Lem ?" for a result in an unlabelled \begin{corollary} and for every
 // cited result, and nothing told the orchestrator.
 describe("results the page names on the proof map", () => {
+  it("anchors a segmented result at its opening display and uses its recorded title", async () => {
+    const { runPaper } = await import("../../src/ui/page_snapshot.js");
+    const dir = mkdtempSync(path.join(tmpdir(), "tc-pm-display-"));
+    mkdirSync(path.join(dir, "source"), { recursive: true });
+    mkdirSync(path.join(dir, "discovery"), { recursive: true });
+    writeFileSync(path.join(dir, "state.json"), "{}");
+    writeFileSync(path.join(dir, "source", "m.tex"), String.raw`\documentclass{article}
+\begin{document}
+\[
+a=b.
+\]
+The next assertion is
+\[
+c=d.
+\]
+\end{document}
+`);
+    const locator = { file: "m.tex", from: 7, to: 9, env: "segment", label: null };
+    writeFileSync(path.join(dir, "discovery", "envs.json"), JSON.stringify({ envs: [
+      { id: "lem:identity", envName: "segment", title: "Riemannian Gauss--Green", lines: locator },
+    ] }));
+    writeFileSync(path.join(dir, "discovery", "core.json"), JSON.stringify({ statements: [
+      { id: "lem:identity", kind: "lemma", status: "to-prove", tex_locator: locator },
+    ] }));
+    const { view } = await (await runPaper(dir, "/asset"))!.render();
+    expect(view.anchors["lem:identity"]).toBeTruthy();
+    expect(view.anchorHeadings["lem:identity"]).toBe("Riemannian Gauss--Green");
+    expect(view.renderProblems.unnamedResults).toEqual([]);
+    // The repeated opener belongs to the second display, outside its formula.
+    const at = view.html.indexOf(`id="${view.anchors["lem:identity"]}"`);
+    expect(at).toBeGreaterThan(view.html.indexOf("The next assertion is"));
+    expect(at).toBeLessThan(view.html.indexOf('class="katex-display"', at));
+    expect(view.health.mathFailures).toEqual([]);
+  });
+
+  it("names styled prose headings without changing the source used by annotation anchors", async () => {
+    const { runPaper } = await import("../../src/ui/page_snapshot.js");
+    const dir = mkdtempSync(path.join(tmpdir(), "tc-pm-styled-"));
+    mkdirSync(path.join(dir, "source"), { recursive: true });
+    mkdirSync(path.join(dir, "discovery"), { recursive: true });
+    writeFileSync(path.join(dir, "state.json"), "{}");
+    writeFileSync(path.join(dir, "source", "m.tex"), String.raw`\documentclass{article}
+\begin{document}
+\textit{Property} 1. The first assertion holds.
+\textit{Property 2.} The second assertion holds.
+\textsc{Theorem.}\ \ Both assertions hold.
+An unnamed assertion holds.
+\end{document}
+`);
+    writeFileSync(path.join(dir, "discovery", "core.json"), JSON.stringify({ statements: [
+      { id: "prop:first", tex_locator: { file: "m.tex", from: 3, env: "segment" } },
+      { id: "prop:second", tex_locator: { file: "m.tex", from: 4, env: "segment" } },
+      { id: "thm:main", tex_locator: { file: "m.tex", from: 5, env: "segment" } },
+      { id: "thm:unnamed", tex_locator: { file: "m.tex", from: 6, env: "segment" } },
+    ] }));
+    const { view } = await (await runPaper(dir, "/asset"))!.render();
+    expect(view.anchorHeadings).toEqual({ "prop:first": "Property 1", "prop:second": "Property 2", "thm:main": "Theorem" });
+    expect(view.renderProblems.unnamedResults).toEqual(["thm:unnamed"]);
+    expect(view.anchors["thm:main"]).toBeTruthy();
+  });
+
   it("takes an unlabelled environment's heading and reports a result it cannot name", async () => {
     const { runPaper } = await import("../../src/ui/page_snapshot.js");
     const dir = mkdtempSync(path.join(tmpdir(), "tc-pm-"));
@@ -2826,5 +2954,47 @@ describe("a symbol label carrying local definitions", () => {
     const r2 = renderPaper({ files: { "m.tex": String.raw`\documentclass{article}\begin{document}Text.\vsReadingSymbol{{\providecommand*{\fs} [1][a]{S_{#1}}$\alpha$}}{A reading.}\newcommand*{\fs}[1][a]{S_{#1}}\end{document}` }, main: "m.tex" });
     expect(r2.health.mathFailures).toEqual([]);
     expect(JSON.stringify(r2.comments)).not.toContain("S_");
+  });
+});
+
+describe("repairPlace: where a repair changes its result", () => {
+  const proofOp = { op: "replace" as const, unit: "thm:a/proof/0/1", tex: "step" };
+  const stmtOp = { op: "replace" as const, unit: "thm:a/stmt/0", tex: "stmt" };
+  it("a statement change, a proof op, or a full proof given for a result the paper prints no proof of", () => {
+    expect(repairPlace({ corrected_statement: "S", ops: [] })).toBe("statement");
+    expect(repairPlace({ corrected_statement: null, ops: [stmtOp, proofOp] })).toBe("statement");
+    expect(repairPlace({ corrected_statement: null, ops: [proofOp] })).toBe("proof");
+    // the Milnor case: the paper prints no proof, the repair supplies the whole proof as its proof_note
+    expect(repairPlace({ corrected_statement: null, ops: [], proof_note: "Put $n=s-1$. We use ..." })).toBe("proof");
+  });
+  it("none: no patch, or a patch that changes nothing", () => {
+    expect(repairPlace(undefined)).toBe("none");
+    expect(repairPlace({ corrected_statement: null, ops: [], proof_note: "  " })).toBe("none");
+    expect(repairPlace({ corrected_statement: null, ops: [], proof_note: "The proof as printed proves the repaired statement; no step changes." })).toBe("none");
+  });
+});
+
+describe("a paper's title on the page (titleText)", () => {
+  const doc = (pre: string, body: string) => `\\documentclass{article}\n${pre}\n\\begin{document}\n${body}\n\\end{document}\n`;
+  it("takes a title set in \\large when no larger size is used (the old journals' scans)", async () => {
+    const { titleText } = await import("../../src/ui/run_model.js");
+    expect(titleText(doc("", "\\begin{center}\n{\\large INDIVIDUAL RATIONALITY AND NASH'S SOLUTION\\\\\nTO THE BARGAINING PROBLEM}\\footnote[1]{Received August 16, 1976. \\textit{Key words.} Nash.}\n\n\\medskip\nALVIN E. ROTH\n\\end{center}\n\\begin{quote}x\\end{quote}")).title)
+      .toBe("INDIVIDUAL RATIONALITY AND NASH'S SOLUTION TO THE BARGAINING PROBLEM");
+    expect(titleText(doc("", "\\begin{center}\n{\\large A NOTE ON CONVERGENCE OF THE\\\\\nFORD--FULKERSON FLOW ALGORITHM\\footnotemark[1]\\footnotemark[2]}\n\\bigskip\nALAN TUCKER\n\\end{center}")).title)
+      .toBe("A NOTE ON CONVERGENCE OF THE FORD--FULKERSON FLOW ALGORITHM");
+    expect(titleText(doc("", "\\begin{center}\n{\\large A NOTE ON APPROXIMATION SCHEMES FOR\\\\\nMULTIDIMENSIONAL KNAPSACK PROBLEMS$^{*\\dagger}$}\\\\[2ex]\nMICHAEL J. MAGAZINE\n\\end{center}")).title)
+      .toBe("A NOTE ON APPROXIMATION SCHEMES FOR MULTIDIMENSIONAL KNAPSACK PROBLEMS");
+    expect(titleText(doc("", "\\begin{center}\n{\\large A GREEDY HEURISTIC FOR THE SET-COVERING\\\\ PROBLEM\\textsuperscript{*}}\\\\[1.5ex]\nV. CHVATAL\n\\end{center}")).title)
+      .toBe("A GREEDY HEURISTIC FOR THE SET-COVERING PROBLEM");
+  });
+  it("prefers a larger size over \\large, and keeps a formula's superscript", async () => {
+    const { titleText } = await import("../../src/ui/run_model.js");
+    expect(titleText(doc("", "\\begin{center}{\\large Journal of Things}\\\\{\\Large Bounds in $L^2$ Spaces}\\\\ A. Author\\end{center}")).title).toBe("Bounds in L^2 Spaces");
+    expect(titleText(doc("\\title{Close Separable C$^*$-Algebras Without Spatial Conjugacy}", "\\maketitle")).title).toBe("Close Separable C^*-Algebras Without Spatial Conjugacy");
+  });
+  it("expands a title set by a macro (\\title{\\ttl})", async () => {
+    const { titleText } = await import("../../src/ui/run_model.js");
+    expect(titleText(doc("\\newcommand{\\ttl}{Rank-one Boolean tensor factorization and the multilinear polytope}\n\\title{\\ttl}\n\\author{Alberto Del Pia}", "\\maketitle")).title)
+      .toBe("Rank-one Boolean tensor factorization and the multilinear polytope");
   });
 });

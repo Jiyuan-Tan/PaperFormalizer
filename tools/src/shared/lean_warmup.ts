@@ -1,45 +1,59 @@
-// Bounded warm-up of the toolkit's `.lake` before a `verify` run.
+// The cold-start guard of the toolkit's `.lake` before a `verify` or `study` run.
+import { existsSync, readFileSync } from "node:fs";
+import path from "node:path";
 import process from "node:process";
 
-/** Env var holding the warm-up wall-clock cap in ms (default 10 min; 0 disables the guard). */
+/** Env var of the guard: `0` disables it (any other number: on, the default). */
 export const LEANLSP_WARMUP_ENV = "PAPERFORMALIZER_LEANLSP_WARMUP_MS";
 
 /**
- * Run `lake build` in the Lean project with a wall-clock cap, so a cold `.lake` is detected up
- * front instead of a lean-lsp stage silently parking on a from-scratch `lake serve` compile. A
- * cap breach throws with a "warm the .lake first" message. A non-timeout build failure is NOT
- * fatal (the tree may carry a pre-existing error unrelated to this run): warn and let the
- * pipeline's own targeted builds surface real errors.
+ * What the toolkit's `.lake` lacks for a run to start without a from-scratch compile: its own
+ * build output, a dependency checkout the manifest names (a dangling link on a node whose local
+ * package cache was never synced), or Mathlib's build output (hours to rebuild). Empty when warm.
+ * Reads only.
+ */
+export function coldLakeParts(projectPath: string): string[] {
+  const missing: string[] = [];
+  const built = (dir: string) => existsSync(path.join(dir, ".lake", "build", "lib", "lean"));
+  if (!built(projectPath)) missing.push(`the toolkit's own build (${path.join(projectPath, ".lake", "build")})`);
+  let manifest: { packagesDir?: string; packages?: { type?: string; name?: string; dir?: string }[] };
+  try {
+    manifest = JSON.parse(readFileSync(path.join(projectPath, "lake-manifest.json"), "utf8"));
+  } catch {
+    return missing; // no manifest: no dependency to check
+  }
+  const pkgs = path.resolve(projectPath, manifest.packagesDir ?? path.join(".lake", "packages"));
+  for (const p of manifest.packages ?? []) {
+    if (!p.name) continue;
+    const dir = p.type === "path" && p.dir ? path.resolve(projectPath, p.dir) : path.join(pkgs, p.name);
+    if (!existsSync(dir)) missing.push(`dependency ${p.name} (${dir})`);
+    else if (p.name.toLowerCase() === "mathlib" && !built(dir)) missing.push(`Mathlib's build (${path.join(dir, ".lake", "build")})`);
+  }
+  return missing;
+}
+
+/**
+ * Fail fast on a COLD toolkit `.lake`, so a lean-lsp stage does not silently park on a
+ * from-scratch `lake serve` compile: a run started on it throws with a "warm the .lake first"
+ * message. That was the guard's only job — no stage relies on it for a build (each builds what it
+ * needs, under the Lake lock). It used to run `lake build` of the default target for up to 10 min
+ * here, unlocked (racing every other run's build) and, once locked, queuing every runner start
+ * behind the lock before even V1; now it only looks at what is on disk, writes nothing and takes no lock.
  */
 export async function warmUpLeanOrThrow(projectPath: string, mode: "verify" | "study"): Promise<void> {
-  const rawCapMs = process.env[LEANLSP_WARMUP_ENV] ?? String(10 * 60_000);
-  const capMs = Number(rawCapMs);
-  if (!Number.isFinite(capMs)) {
-    // why: a typo here used to disable the warm-up guard by producing NaN.
-    throw new Error(`Invalid ${LEANLSP_WARMUP_ENV}: ${rawCapMs} (expected a number of milliseconds)`);
+  const raw = process.env[LEANLSP_WARMUP_ENV] ?? String(10 * 60_000);
+  const on = Number(raw);
+  if (!Number.isFinite(on)) {
+    // why: a typo here used to disable the guard by producing NaN.
+    throw new Error(`Invalid ${LEANLSP_WARMUP_ENV}: ${raw} (expected a number; 0 disables the guard)`);
   }
-  if (!(capMs > 0)) return; // opted out: cold compile intended, operator will wait
-  const { spawnWithInactivityTimeout } = await import("../workers/spawn.js");
-  // Inactivity is set beyond the cap: a cold build emits steady progress, so ONLY the
-  // wall-clock cap should fire; the shared helper tree-kills the whole `lake → lean` group.
-  const r = await spawnWithInactivityTimeout("lake", ["build"], {
-    cwd: projectPath,
-    env: process.env,
-    inactivityTimeoutMs: capMs + 60_000,
-    maxTotalMs: capMs,
-  });
-  if (r.killedDueToTotalTimeout) {
+  if (!(on > 0)) return; // opted out: cold compile intended, operator will wait
+  const missing = coldLakeParts(projectPath);
+  if (missing.length > 0) {
     throw new Error(
-      `lean-lsp cold-start guard: \`lake build\` in ${projectPath} exceeded ` +
-        `${Math.round(capMs / 60_000)} min — the toolkit's .lake is COLD (a from-scratch compile). ` +
-        `Warm it first (\`lake build\` to completion), then rerun \`paperformalizer ${mode}\`. ` +
-        `Set ${LEANLSP_WARMUP_ENV} to raise the cap, or 0 to disable this guard.`,
-    );
-  }
-  if (r.exitCode !== 0) {
-    console.warn(
-      `[${mode}] warm-up \`lake build\` failed (exit ${r.exitCode}) — proceeding; the ` +
-        `pipeline's targeted builds will surface real errors. ${r.stderr.trim().slice(-300)}`,
+      `lean-lsp cold-start guard: the toolkit's .lake in ${projectPath} is COLD — missing ${missing.join("; ")}. ` +
+        `Warm it first (sync the node's package cache if it uses one, then \`lake build\` to completion), ` +
+        `then rerun \`paperformalizer ${mode}\`. Set ${LEANLSP_WARMUP_ENV}=0 to disable this guard.`,
     );
   }
 }

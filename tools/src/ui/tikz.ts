@@ -11,12 +11,9 @@ export const TIKZ_DIR = path.join("logs", "ui_tikz");
 const TIMEOUT_MS = 180_000;
 const running = new Set<string>();
 
-/** The PDF holding `pictures` (bodies of `tikzpicture` environments) one to a page, by name under
- *  `<runDir>/logs/ui_tikz/`, or null while it is being typeset, when that failed, or with no pdflatex.
- *  `base`: the paper's directory, read from only; `mainText`: its main file (for the preamble). */
 /** Why the paper's pictures are not drawn, when their compile failed: the reason and the log's first error
  *  line; null when nothing failed (no pictures, drawn, or still being typeset). */
-export function tikzFailure(runDir: string, base: string, mainText: string, pictures: string[], setup = ""): string | null {
+export function tikzFailure(runDir: string, mainText: string, pictures: string[], setup = ""): string | null {
   const name = tikzName(mainText, pictures, setup);
   if (!name) return null;
   const dir = path.join(runDir, TIKZ_DIR);
@@ -37,6 +34,9 @@ const tikzName = (mainText: string, pictures: string[], setup: string): string |
   return tex ? createHash("sha1").update(tex).digest("hex").slice(0, 16) : null;
 };
 
+/** The PDF holding `pictures` (bodies of `tikzpicture` environments) one to a page, by name under
+ *  `<runDir>/logs/ui_tikz/`, or null while it is being typeset, when that failed, or with no pdflatex.
+ *  `base`: the paper's directory, read from only; `mainText`: its main file (for the preamble). */
 export function tikzPdf(runDir: string, base: string, mainText: string, pictures: string[], setup = ""): string | null {
   const tex = tikzDoc(mainText, pictures, setup);
   if (!tex) return null;

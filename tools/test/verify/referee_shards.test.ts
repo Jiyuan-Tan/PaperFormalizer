@@ -752,7 +752,17 @@ describe("fix as you go (sharded referee)", () => {
       return flags.weakens ? { correctness: "error", witness: "the repair needs eta > 0, which the paper does not assume", weakens_contribution: true } : {};
     };
     const codex = withFixer(
-      fakeCodex(calls, { grade, global: () => ({ patch_review: { key_results_ok: true, detail: "the ATE theorem is the headline" } }) }),
+      fakeCodex(calls, {
+        grade,
+        // a severity for the accepted weakening of the key result, once the PATCHES block shows one
+        global: (prompt) => ({
+          patch_review: {
+            key_results_ok: true,
+            detail: "the ATE theorem is the headline",
+            weakenings: /"accepted_weakening":\s*true/.test(prompt) ? [{ node: "lem:ipw-identity", severity: "limited", reason: "a corner case" }] : [],
+          },
+        }),
+      }),
       () => {
         flags.repaired = true;
         return ipwPatch();
