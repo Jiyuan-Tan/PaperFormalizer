@@ -1631,11 +1631,13 @@ export function planAnnotations(input: AnnotationInput): AnnotationPlan {
   };
   /** The conditions result `id` carries beyond `text`, its statement as it now reads, one per wording
    * (spacing ignored). One is left out only when a whole sentence of the statement is that condition:
-   * words found inside another sentence state nothing, and matching them would drop it from the paper. */
+   * words found inside another sentence state nothing, and matching them would drop it from the paper.
+   * The corrected view states none: every added condition (the referee's, the owner's, a repair's side
+   * condition) is bookkeeping, which the page and the report show and the paper handed back does not. */
   const bare = (t: string): string => t.replace(/\s+/gu, "").replace(/\.$/u, "");
   const conditionsToState = (id: string, text: string): ReturnType<typeof conditionsOn> => {
     const stated = new Set(sentenceSpans(text).map((sp) => bare(text.slice(sp.start, sp.end))));
-    return conditionsOn(core, id).filter((c, i, all) => !stated.has(bare(c.condition)) && all.findIndex((x) => bare(x.condition) === bare(c.condition)) === i);
+    return conditionsOn(core, id).filter((c, i, all) => !input.correctedView && !stated.has(bare(c.condition)) && all.findIndex((x) => bare(x.condition) === bare(c.condition)) === i);
   };
   const conditionText = (node: string, c: { condition: string; by: "referee" | "owner" | "repair" }): string =>
     safe(node, "condition added", c.condition, c.by === "owner" ? "other" : c.by === "repair" ? "fixer" : "referee");
@@ -1721,7 +1723,7 @@ export function planAnnotations(input: AnnotationInput): AnnotationPlan {
 
   // --- conditions the verified statement carries beyond the printed text (the referee's bookkeeping,
   // the owner's side conditions, a repair's `conditions`): a note at the end of every result carrying one — inside its
-  // environment, so the corrected paper states it in the result. Nothing printed is marked.
+  // environment. Nothing printed is marked; the corrected paper states none (`conditionsToState`).
   for (const s of core.statements) {
     if (s.split_from) continue; // stated in its block (above)
     const added = conditionsToState(s.id, s.statement);

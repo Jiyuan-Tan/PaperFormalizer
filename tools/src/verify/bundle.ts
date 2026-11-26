@@ -4,8 +4,7 @@
  *   corrected_paper/ the author's source tree with the corrections written in (`corrected_tex.ts`; a
  *               block a repair split off a result is a corollary or a proposition of the paper after it): their
  *               class, preamble, bibliography, figures and layout, plain TeX with no macro, colour or
- *               word of the review; a condition
- *               added to a result is the last paragraph of its statement; compiled with the annotated paper's compiler. `TODO.md` lists, each
+ *               word of the review, no reading and no added (bookkeeping) condition; compiled with the annotated paper's compiler. `TODO.md` lists, each
  *               with file:line, what still keeps it from being ready to submit.
  *   lean/       a standalone Lake project to send to a third person: the paper's Lean
  *               (`Papers/<Name>` without `tmp/`), the toolkit modules it imports, a generated lakefile
@@ -622,7 +621,7 @@ export async function writeBundle(a: BundleArgs): Promise<BundleResult> {
       ? `Ready to submit as far as the mechanical checks go${paper.todo.length > 0 ? `; ${paper.todo.length} item(s) to check are listed in \`${PAPER_DIR}/TODO.md\`` : ""}.`
       : `NOT ready to submit: ${blocking} blocking item(s)${paper.compile.status === "passed" ? "" : `, and the paper ${ownSource ? "does not compile on this installation (nor does its original source)" : paper.compile.status === "failed" ? "does not compile" : "was not compiled"}`} — see \`${PAPER_DIR}/TODO.md\`.`,
     "",
-    `- \`${PAPER_DIR}/\` — the paper as it reads after the corrections: the author's own source (class, preamble, bibliography, figures, file layout), with each corrected statement, proof step and proof written in place of the printed one. Main file \`${PAPER_DIR}/${a.mainFile}\`${paper.compile.pdf ? `; compiled: \`${PAPER_DIR}/${paper.compile.pdf}\`${paper.pages ? ` (${paper.pages} pages)` : ""}` : ""}. A reading the statements rely on appears as a remark of the paper at the statement it concerns.`,
+    `- \`${PAPER_DIR}/\` — the paper as it reads after the corrections: the author's own source (class, preamble, bibliography, figures, file layout), with each corrected statement, proof step and proof written in place of the printed one. Main file \`${PAPER_DIR}/${a.mainFile}\`${paper.compile.pdf ? `; compiled: \`${PAPER_DIR}/${paper.compile.pdf}\`${paper.pages ? ` (${paper.pages} pages)` : ""}` : ""}. The readings and bookkeeping conditions of the formalization are not in it (\`REPORT.md\` and the page list them).`,
     `- \`${PAPER_DIR}/TODO.md\` — what remains before submitting, each item with its file and line.`,
     "- `REPORT.md` — what was wrong, what was done about it, and what was proved in Lean.",
     "- `MATCH.md` — each result beside its Lean declaration, phrase by phrase.",

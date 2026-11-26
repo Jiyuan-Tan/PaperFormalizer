@@ -161,7 +161,7 @@ export function ownerReadingsFor(file: PatchFile | null, nodes: readonly string[
   return nodes.map((node) => ({ id: `${prefix}${(n += 1)}`, node, reading, ...(kind === "bookkeeping" ? { kind } : {}) }));
 }
 
-/** An owner reading or condition is written into the corrected paper as TeX, and the reviewed core
+/** An owner reading or condition is written into the annotated paper as TeX, and the reviewed core
  * holds it as written: one that is not plain-ASCII TeX is refused here, before it is recorded (a later
  * rewording changes the reviewed core). */
 export function assertOwnerTex(text: string): void {

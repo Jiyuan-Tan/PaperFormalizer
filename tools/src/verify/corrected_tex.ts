@@ -5,8 +5,8 @@
  * (`AnnotationInput.correctedView`: every block tagged `\vsAt{node}{kind}`) and writes the paper as it
  * reads after the repairs, as plain source the author keeps editing: a printed passage with a
  * correction is replaced by the correction, a correction without a printed passage is inserted, every
- * note is dropped, a reading becomes a remark of the paper at its statement, a condition added to a
- * result the last paragraph of its statement ("Additional condition."), a corrected proof a
+ * note, reading and added condition is dropped (bookkeeping: the page and the report carry them; the
+ * corrected view states no condition in a corollary block either, `planAnnotations`), a corrected proof a
  * proof (in place of the printed proof it replaces, when the view marks that one: `\vsPrintedProof`), a corollary a repair split off a result a corollary of the paper after that result, its
  * readings and its proof (in the paper's own corollary environment when it has one, labelled by its
  * node id when numbered; its proof follows it — or, when the paper proves that result elsewhere, follows
@@ -19,7 +19,7 @@
  * corollary added) is returned as items, each at its line of the output, for the bundle's TODO list —
  * never written into the paper.
  */
-import { MATH_ENV, SPLIT_MACROS, conditionParagraph, splitCorollaryBlock, splitMacroKind } from "./annotate_tex.js";
+import { MATH_ENV, SPLIT_MACROS, splitCorollaryBlock, splitMacroKind } from "./annotate_tex.js";
 import { UMBRELLA_STATEMENT } from "./core_graph.js";
 
 export type CorrectedItemKind =
@@ -246,8 +246,6 @@ function envHead(tex: string): { name: string; head: string } | null {
   return { name: m[1]!, head: tex.slice(0, end) };
 }
 
-const stopped = (t: string): string => (/[.!?]\s*(?:\$\$|\\\])?\s*$/u.test(t.trim()) ? t.trim() : `${t.trim()}.`);
-
 /**
  * The corrected paper's text of one annotated file (see the module doc), what it leaves open, and the
  * lines of each corollary it wrote (statement and proof). Pure.
@@ -396,10 +394,13 @@ export function correctedTex(tagged: string, opts: CorrectedOptions): { tex: str
     held.forEach(corollary);
     held = [];
   };
+  /** The text after a reading dropped as a paragraph of its own: its first line break goes with it. */
+  let eat = false;
   for (let i = 0; i < toks.length; i += 1) {
     const k = toks[i]!;
     if (k.t === "text") {
-      let t = k.text;
+      let t = eat ? k.text.slice(1) : k.text;
+      eat = false;
       if (held.length > 0) {
         if (!inProof && /^\s*\\begin\s*\{proof\}/u.test(t)) inProof = true;
         const end = inProof ? /\\end\s*\{proof\}/u.exec(t) : null;
@@ -467,39 +468,15 @@ export function correctedTex(tagged: string, opts: CorrectedOptions): { tex: str
       if (k.kind.startsWith("not determined")) item("not-repaired", k.node, "this result could not be checked as printed (the paper does not determine what is claimed) and no reading or repair was adopted; it is printed as in the original", true);
       continue;
     }
-    if (READING.has(k.name)) {
-      // The readings set at one place: one remark of the paper.
-      const texts: string[] = [];
-      const notation = k.name === "vsReadingSymbol";
-      let j = i;
-      for (; j < toks.length; j += 1) {
-        const n = toks[j]!;
-        if (isMacro(n, READING) && (n.name === "vsReadingSymbol") === notation) {
-          const t = stopped(own(n.args[n.args.length - 1]!));
-          if (!texts.includes(t)) texts.push(t);
-        } else if (!(n.t === "text" && n.text.trim() === "")) break;
-      }
-      i = j - 1;
-      para(`\\noindent\\textit{Remark${notation ? " (notation)" : ""}.} ${texts.join(" ")}`);
-      continue;
-    }
-    if (CONDITION.has(k.name)) {
-      // The conditions set at one place: the last paragraph of the statement they end.
-      const texts: string[] = [];
-      let j = i;
-      for (; j < toks.length; j += 1) {
-        const n = toks[j]!;
-        if (isMacro(n, CONDITION)) {
-          const t = stopped(own(n.args[0]!));
-          if (!typeset(n.args[0]!)) item("unplaced", n.node, `the condition added to it was not written into the paper (its text does not typeset): ${t.replace(/\s+/gu, " ").slice(0, 200)}`);
-          else if (!texts.includes(t)) texts.push(t);
-        } else if (!(n.t === "text" && n.text.trim() === "")) break;
-      }
-      i = j - 1;
-      if (texts.length > 0) {
-        gap();
-        const next = toks[j];
-        out += `${conditionParagraph(texts)}${next?.t === "text" && next.text.startsWith("\n") ? "" : "\n"}`;
+    if (READING.has(k.name) || CONDITION.has(k.name)) {
+      // How the formalization reads the paper and the side conditions it carries (the page and the report
+      // show them): not the paper's. One set as a paragraph of its own (`\n…\n` at a blank line) takes
+      // the line breaks around it along.
+      dropSpace();
+      const next = toks[i + 1];
+      if (out.endsWith("\n") && next?.t === "text" && next.text.startsWith("\n")) {
+        out = out.slice(0, -1);
+        eat = true;
       }
       continue;
     }

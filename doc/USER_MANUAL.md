@@ -409,10 +409,9 @@ V6 also writes `runs/<slug>/bundle/`, a self-contained directory:
 
 - `corrected_paper/` — your paper as it reads after the corrections: your own class, preamble, bibliography,
   figures and file layout, with each corrected statement, proof step and proof written in place of
-  the printed one. It is plain TeX you can keep editing: no PaperFormalizer macro, colour or note. A
-  reading a statement relies on appears as a remark at that statement. A condition added to a result
-  beyond its printed text is the last paragraph of its statement ("Additional condition."), unless the
-  statement already states it in the same words. A corollary or proposition a repair split off
+  the printed one. It is plain TeX you can keep editing: no PaperFormalizer macro, colour or note, and
+  none of the formalization's readings or added (bookkeeping) conditions — the report and the paper's
+  page show them. A corollary or proposition a repair split off
   a result is a corollary or proposition of the paper (in your own environment of that kind when the
   paper has one), placed as you place that result: when its proof follows its
   statement, the corollary and its proof come after that proof; when you prove the result elsewhere
@@ -1833,7 +1832,7 @@ entry from `patches.json` (the printed statement stands), pins `ass:pin-owner-<n
 `finding rejected`, rules the finding out, withdraws every refutation recorded on the node, lifts a
 pending cap halt, and re-enters V1.5; `"<node>: bookkeeping: <condition>"` records an
 `ass:bk-owner-<n>` side condition instead (binding, listed with the bookkeeping conditions, and
-written into the paper like every added condition). A node of the pending receipt takes the batch form. By hand: a patch in
+noted in the annotated paper like every added condition). A node of the pending receipt takes the batch form. By hand: a patch in
 `patches.json` with `accepted_weakening: true` (+ `given_up`) and `--from-stage V1.5` formalizes a
 weaker version the owner chose; the referee then judges only whether it holds.
 
@@ -1841,8 +1840,8 @@ weaker version the owner chose; the referee then judges only whether it holds.
 "<result id>: <condition>"` (repeatable) records a condition the paper takes for granted that the
 checker does not carry on that result (a setup fact stated elsewhere, the well-definedness a lemma
 presupposes); findings and applied repairs stay as they are, and V1.5 re-checks the result under
-it. The condition is written into the paper handed back: a note at the result in `annotated/`, the
-last paragraph of its statement in the corrected paper — so write it as TeX, in the paper's macros (a reading or condition that is not plain-ASCII TeX is refused when it is recorded: rewording it later changes the reviewed core and sends the run back to V1.5). Use this, not the `bookkeeping:` form of `--reject-finding`, when the finding should stand.
+it. The condition is a note at the result in `annotated/` (the corrected paper, like every added
+condition, does not state it) — so write it as TeX, in the paper's macros (a reading or condition that is not plain-ASCII TeX is refused when it is recorded: rewording it later changes the reviewed core and sends the run back to V1.5). Use this, not the `bookkeeping:` form of `--reject-finding`, when the finding should stand.
 
 On the page a reading's Edit and Remove are shown while the run is stopped.
 

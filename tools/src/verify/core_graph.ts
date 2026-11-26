@@ -1490,8 +1490,8 @@ export function pinsOn(core: Core, id: string): Array<{ id: string; node: string
 }
 
 /** The conditions statement `id` of an accepted core carries beyond the paper's text (`ass:bk-n` by
- * the referee, `ass:bk-owner-n` by the paper's owner, `ass:bk-fix-<hash>` by a repair): what the
- * paper handed back must state there. */
+ * the referee, `ass:bk-owner-n` by the paper's owner, `ass:bk-fix-<hash>` by a repair): bookkeeping
+ * the annotated paper notes at that result (the corrected paper states none). */
 export function conditionsOn(core: Core, id: string): Array<{ id: string; condition: string; by: "referee" | "owner" | "repair" }> {
   const st = core.statements.find((s) => s.id === id);
   if (!st) return [];

@@ -77,14 +77,16 @@ const FINDINGS: VerifyFinding[] = [
 
 const COR = { title: "the Gaussian case", statement: "If the design is Gaussian, the estimator of Theorem~\\ref{thm:rate} converges at rate $n^{-1/2}$.", follows: "Under a Gaussian design the bias term of Theorem~\\ref{thm:rate} vanishes." };
 const COR_ID = splitCorollaryId("thm:rate", COR.statement);
-/** Conditions the verified statements carry beyond the printed text: the referee's on a lemma, the
- * owner's on the repaired theorem — one of them in the words its repair already states — and one on
- * the corollary a repair splits off. */
+/** Conditions the verified statements carry beyond the printed text: the referee's and a repair's on a
+ * lemma, the owner's on the repaired theorem — one of them in the words its repair already states — and
+ * the referee's and a repair's on the corollary a repair splits off. */
 const CONDITIONS = [
   { id: "ass:bk-1", on: "lem:bound", condition: "$X$ is measurable" },
+  { id: "ass:bk-fix-1", on: "lem:bound", condition: "$X$ has a finite second moment" },
   { id: "ass:bk-owner-1", on: "thm:rate", condition: "The sample is i.i.d." },
   { id: "ass:bk-owner-2", on: "thm:rate", condition: "Assume the propensity score is  bounded away from zero." },
-  { id: "ass:bk-2", on: COR_ID, condition: "The design has full rank." },
+  { id: "ass:bk-fix-2", on: COR_ID, condition: "The design has full rank." },
+  { id: "ass:bk-2", on: COR_ID, condition: "The noise is sub-Gaussian." },
 ];
 /** The same repair and suggestion, each splitting a corollary off its result. */
 const SPLIT = {
@@ -136,7 +138,7 @@ async function seedRun(opts: { split?: boolean; preamble?: string; printedProof?
   } as Core["assumptions"][number]);
   core.statements.find((s) => s.id === "thm:rate")!.depends_on.push("ass:pin-1");
   if (opts.conditions) for (const c of CONDITIONS.map((x) => ({ ...x, condition: opts.conditionText?.[x.id] ?? x.condition }))) {
-    core.assumptions.push({ id: c.id, kind: "regularity", condition: c.condition, bookkeeping: { flag: true, added_by: c.id.includes("owner") ? "owner" : "V1.5", reason: "a side condition" } } as Core["assumptions"][number]);
+    core.assumptions.push({ id: c.id, kind: "regularity", condition: c.condition, bookkeeping: { flag: true, added_by: c.id.includes("owner") ? "owner" : c.id.includes("fix") ? "V1-patch" : "V1.5", reason: "a side condition" } } as Core["assumptions"][number]);
     core.statements.find((s) => s.id === c.on)?.depends_on.push(c.id);
   }
   const write = (rel: string, v: unknown): Promise<void> => writeFile(path.join(runDir, rel), JSON.stringify(v, null, 2), "utf8");
@@ -190,8 +192,9 @@ describe("the corrected-paper bundle (V6)", () => {
     expect(main).toContain("\\documentclass{article}\n\\usepackage{amsmath,amsthm}");
     expect(main).toContain("% the paper's own comment");
     expect(main).toContain("\\input{sec/results}");
-    // the pinned reading: a remark of the paper at its statement
-    expect(main).toMatch(/\\end\{thm\}\n\n\\noindent\\textit\{Remark\.\} \$n \\ge 2\$\./u);
+    // the pinned reading is the formalization's, not the paper's: not written
+    expect(main).not.toContain("$n \\ge 2$");
+    expect(main).not.toContain("Remark");
     // the refuted result with no repair is printed as in the original — and listed, never marked in the paper
     expect(sec).toBe(await readFile(path.join(FIXTURE, "sec/results.tex"), "utf8"));
     const todo = await read("corrected_paper/TODO.md");
@@ -285,37 +288,36 @@ describe("the corrected-paper bundle (V6)", () => {
     expect(await readFile(path.join(run.runDir, "bundle", "REPORT.md"), "utf8")).toBe(md);
   });
 
-  it("a condition added beyond the printed text is the last paragraph of the statement carrying it, once; a pinned reading stays a remark", async () => {
+  it("an added condition is bookkeeping: the annotated paper notes it at its result, the corrected paper states none, nor a pinned reading", async () => {
     const run = await seedRun({ conditions: true, split: true, preamble: "\\newtheorem{cor}[thm]{Corollary}" });
     await runV6(run);
     const read = (rel: string): Promise<string> => readFile(path.join(run.runDir, rel), "utf8");
     const main = await read("bundle/corrected_paper/main.tex");
-    // the owner's, in the repaired theorem; the one its corrected statement already states is not written again
-    expect(main).toMatch(/It is efficient\.\n\n\\emph\{Additional condition\.\} The sample is i\.i\.d\.\n\\end\{thm\}\n\n\\noindent\\textit\{Remark\.\} \$n \\ge 2\$\./u);
+    // the referee's, the owner's and a repair's, on a result or on the corollary split off: none written
+    expect(main).toMatch(/It is efficient\.\n\\end\{thm\}/u);
+    expect(main).toContain("Suppose $X$ is bounded. Then $E[X]$ exists.\n\\end{lem}");
+    expect(main).toContain(`${COR.statement}\n\\end{cor}`);
+    expect(main).not.toMatch(/measurable|finite second moment|i\.i\.d\.|full rank|sub-Gaussian|\$n \\ge 2\$|Remark|Additional condition/u);
     expect(main.split("bounded away from zero").length).toBe(2);
-    // the referee's, in a lemma printed as in the original
-    expect(main).toContain("Suppose $X$ is bounded. Then $E[X]$ exists.\n\n\\emph{Additional condition.} $X$ is measurable.\n\\end{lem}");
-    // the corollary's, in its own statement
-    expect(main).toContain(`${COR.statement}\n\n\\emph{Additional condition.} The design has full rank.\n\\end{cor}`);
     expect(main).not.toMatch(/\\vs[A-Z]|Condition added/u);
     expect(await read("bundle/corrected_paper/TODO.md")).not.toContain("## Corrections not written into the paper");
     // the annotated paper: a note at the end of each result, nothing printed marked for it
     const annotated = await read("annotated/main.tex");
     expect(annotated).toContain("\\vsConditionOwner{The sample is i.i.d.}\\end{thm}\\vsReading{$n \\ge 2$");
-    expect(annotated).toContain("Suppose $X$ is bounded. Then $E[X]$ exists.\n\\vsCondition{$X$ is measurable}\\end{lem}");
-    expect(annotated).toContain("\\vsPar \\emph{Additional condition.} The design has full rank.");
-    expect([annotated.split("\\vsCondition{").length, annotated.split("\\vsConditionOwner{").length]).toEqual([2, 2]);
+    expect(annotated).toContain("Suppose $X$ is bounded. Then $E[X]$ exists.\n\\vsCondition{$X$ is measurable}\\vsCondition{$X$ has a finite second moment}\\end{lem}");
+    expect(annotated).toContain("\\vsPar \\emph{Additional conditions.} The design has full rank. The noise is sub-Gaussian.");
+    expect([annotated.split("\\vsCondition{").length, annotated.split("\\vsConditionOwner{").length]).toEqual([3, 2]);
     const index = await read("annotated/ANNOTATIONS.md");
     expect(index).toMatch(/\| `lem:bound` \| main\.tex:\d+ \| condition added \| env-end \| ass:bk-1: \$X\$ is measurable \|/u);
     expect(index).toMatch(/\| `thm:rate` \| main\.tex:\d+ \| condition added \| env-end \| ass:bk-owner-1: The sample is i\.i\.d\. \|/u);
     expect(index).not.toContain("ass:bk-owner-2");
   });
 
-  it("a condition whose words stand inside another sentence of the statement is still written", async () => {
-    const run = await seedRun({ conditions: true, split: true, preamble: "\\newtheorem{cor}[thm]{Corollary}", conditionText: { "ass:bk-1": "$X$ is bounded" } });
+  it("a condition whose words stand inside another sentence of the statement is still noted", async () => {
+    const run = await seedRun({ conditions: true, split: true, preamble: "\\newtheorem{cor}[thm]{Corollary}", conditionText: { "ass:bk-fix-1": "$X$ is bounded" } });
     await runV6(run);
     // "Suppose $X$ is bounded." holds the words, and is another sentence: nothing is dropped
-    expect(await readFile(path.join(run.runDir, "bundle/corrected_paper/main.tex"), "utf8")).toContain("\\emph{Additional condition.} $X$ is bounded.\n\\end{lem}");
+    expect(await readFile(path.join(run.runDir, "annotated/main.tex"), "utf8")).toContain("\\vsCondition{$X$ is measurable}\\vsCondition{$X$ is bounded}\\end{lem}");
   });
 
   it("a corollary a repair split off: a corollary of the paper after its result, in the paper's environment and labelled; its numbering and a suggestion's corollaries are listed", async () => {
@@ -802,9 +804,12 @@ describe("the corrected view of the annotation plan", () => {
     expect(tagged).toContain("\\vsReading{$n \\ge 2$}");
     // a condition on a result whose statement has no place in the source is listed, never dropped
     const ghost = structuredClone(input.core);
-    ghost.assumptions.push({ id: "ass:bk-9", kind: "regularity", condition: "$m \\ge 1$", bookkeeping: { flag: true, added_by: "V1.5", reason: "a side condition" } } as Core["assumptions"][number]);
-    ghost.statements.push({ ...ghost.statements[0]!, id: "thm:ghost", depends_on: ["ass:bk-9"] });
-    expect(planAnnotations({ ...input, core: ghost, correctedView: true }).unlocated).toContainEqual({ node: "thm:ghost", kind: "condition added", reason: "ass:bk-9: the statement's environment was not found — the condition: $m \\ge 1$", placed: null });
+    ghost.assumptions.push({ id: "ass:bk-fix-9", kind: "regularity", condition: "$m \\ge 1$", bookkeeping: { flag: true, added_by: "V1-patch", reason: "a side condition" } } as Core["assumptions"][number]);
+    ghost.assumptions.push({ id: "ass:bk-9", kind: "regularity", condition: "$m \\ge 2$", bookkeeping: { flag: true, added_by: "V1.5", reason: "a side condition" } } as Core["assumptions"][number]);
+    ghost.statements.push({ ...ghost.statements[0]!, id: "thm:ghost", depends_on: ["ass:bk-fix-9", "ass:bk-9"] });
+    // an added condition is not the corrected paper's: nothing to place there; the annotated paper lists it unplaced
+    expect(planAnnotations({ ...input, core: ghost, correctedView: true }).unlocated.filter((u) => u.kind === "condition added")).toEqual([]);
+    expect(planAnnotations({ ...input, core: ghost }).unlocated).toContainEqual({ node: "thm:ghost", kind: "condition added", reason: "ass:bk-9: the statement's environment was not found — the condition: $m \\ge 2$", placed: null });
     // the annotated paper itself is unchanged by the option's existence
     expect(text(false)).not.toContain("\\vsAt");
     expect(text(false)).toContain("\\vsReading{$n \\ge 2$ (the reading of one of its hypotheses)}");

@@ -48,23 +48,24 @@ describe("correctedTex — the corrected paper's source", () => {
     expect(r.items[0]).toMatchObject({ kind: "unplaced", node: "thm:a" });
   });
 
-  it("the readings set at one place are one remark of the paper, notation apart; no word of the review", () => {
+  it("a reading is not the paper's: none is written, nor any word of the review", () => {
     const tagged =
       "\\end{theorem}\\vsReading{$n\\geq 2$}\\vsReadingOwner{The limit is in probability.}\\vsReading{$n\\geq 2$}\\vsReadingSymbol{$\\beta$}{$\\beta$ is the slope.}\nText after.";
     const r = correctedTex(tagged, OPTS);
-    expect(r.tex).toBe("\\end{theorem}\n\n\\noindent\\textit{Remark.} $n\\geq 2$. The limit is in probability.\n\n\\noindent\\textit{Remark (notation).} $\\beta$ is the slope.\n\nText after.");
+    expect(r.tex).toBe("\\end{theorem}\nText after.");
+    // set as paragraphs of their own at a blank line (`\n…\n` each): the paper's blank line stands, once
+    const sym = (s: string): string => `\n\\vsReadingSymbol{$${s}$}{$${s}$ is a scalar.}\n`;
+    expect(correctedTex(`P.\n${sym("a")}${sym("b")}\nQ.\n\\end{enumerate}\n${sym("c")}\n\\end{definition}`, OPTS).tex).toBe("P.\n\nQ.\n\\end{enumerate}\n\n\\end{definition}");
     expect(r.tex).not.toMatch(/Clarification|owner/u);
   });
 
-  it("the conditions added to a result are the last paragraph of its statement; one that does not typeset is listed, not written", () => {
+  it("an added condition is bookkeeping, not the paper's: none is written, and nothing is listed", () => {
     const one = correctedTex(`\\begin{theorem}\nThe rate is $n^{-1/2}$.\n${at("thm:a", "condition added")}\\vsCondition{$X$ is measurable}\\end{theorem}\\vsReading{$n\\geq 2$}\nNext.`, OPTS);
-    expect(one.tex).toBe("\\begin{theorem}\nThe rate is $n^{-1/2}$.\n\n\\emph{Additional condition.} $X$ is measurable.\n\\end{theorem}\n\n\\noindent\\textit{Remark.} $n\\geq 2$.\n\nNext.");
+    expect(one.tex).toBe("\\begin{theorem}\nThe rate is $n^{-1/2}$.\n\\end{theorem}\nNext.");
     expect(one.items).toEqual([]);
-    const two = correctedTex(`\\begin{theorem}\nP.\n\\vsCondition{A holds.}\\vsConditionOwner{B holds.}\\vsConditionOwner{A holds.}${at("thm:a", "condition added")}\\vsCondition{\\texttt{raw}}\\end{theorem}`, OPTS);
-    expect(two.tex).toBe("\\begin{theorem}\nP.\n\n\\emph{Additional conditions.} A holds. B holds.\n\\end{theorem}");
-    expect(two.items).toEqual([expect.objectContaining({ kind: "unplaced", node: "thm:a", detail: expect.stringContaining("the condition added to it was not written into the paper") })]);
-    // a result stated in running text: a paragraph after its statement
-    expect(correctedTex("\\textbf{Theorem 1.} It is consistent.\\vsCondition{$n \\ge 2$.}\n\nThe next result.", OPTS).tex).toBe("\\textbf{Theorem 1.} It is consistent.\n\n\\emph{Additional condition.} $n \\ge 2$.\n\nThe next result.");
+    const two = correctedTex(`\\begin{theorem}\nP.\n\\vsCondition{A holds.}\\vsConditionOwner{B holds.}${at("thm:a", "condition added")}\\vsCondition{\\texttt{raw}}\\end{theorem}`, OPTS);
+    expect(two).toMatchObject({ tex: "\\begin{theorem}\nP.\n\\end{theorem}", items: [] });
+    expect(correctedTex("\\textbf{Theorem 1.} It is consistent.\\vsCondition{$n \\ge 2$.}\n\nThe next result.", OPTS).tex).toBe("\\textbf{Theorem 1.} It is consistent.\n\nThe next result.");
   });
 
   it("a corrected proof is a proof of the paper; one beside the printed proof, or with no printed proof found, is listed", () => {
@@ -123,11 +124,11 @@ describe("correctedTex — the corrected paper's source", () => {
     expect(star.items).toEqual([]);
   });
 
-  it("a corollary follows what belongs to its result: the readings and the proof set after it, and the printed proof that comes next", () => {
+  it("a corollary follows what belongs to its result: the readings (not written) and the proof set after it, and the printed proof that comes next", () => {
     const cor = `${at("thm:cor-fix-1a2b3c4d", "error (repaired)")}\\vsCorollary{thm:cor-fix-1a2b3c4d}{}{Q holds. \\vsLine\\textit{Proof.} Immediate.}`;
     const ours = correctedTex(`\\end{theorem}\n${cor}\n\\vsReading{$n\\geq 2$}\n${at("thm:a", "corrected proof; no printed proof")}\\vsProof{Trivial.}\nNext.`, { proofEnv: false });
-    expect(ours.tex).toBe("\\end{theorem}\n\n\\noindent\\textit{Remark.} $n\\geq 2$.\n\n\\noindent\\textit{Proof.} Trivial.\n\n\\noindent\\textit{Corollary.} Q holds.\n\n\\noindent\\textit{Proof.} Immediate.\n\nNext.");
-    expect(ours.corollaries).toEqual([{ node: "thm:cor-fix-1a2b3c4d", from: 7, to: 9 }]);
+    expect(ours.tex).toBe("\\end{theorem}\n\n\\noindent\\textit{Proof.} Trivial.\n\n\\noindent\\textit{Corollary.} Q holds.\n\n\\noindent\\textit{Proof.} Immediate.\n\nNext.");
+    expect(ours.corollaries).toEqual([{ node: "thm:cor-fix-1a2b3c4d", from: 5, to: 7 }]);
     const printed = correctedTex(`\\end{theorem}\n${cor}\n\n\\begin{proof}\nBy ${at("thm:a", "printed")}\\vsStep{A.} ${at("thm:a", "error (repaired)")}\\vsCorrectedStep{B.}\n\\end{proof}\n\nNext.`, { proofEnv: false });
     expect(printed.tex).toBe("\\end{theorem}\n\n\\begin{proof}\nBy B.\n\\end{proof}\n\n\\noindent\\textit{Corollary.} Q holds.\n\n\\noindent\\textit{Proof.} Immediate.\n\n\nNext.");
     // text that is not its result's proof: the corollary comes first
